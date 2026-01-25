@@ -330,13 +330,76 @@ A dedicated panel showing:
 
 ## 4. User Interface Design
 
-### 4.1 Design Principles
+### 4.1 Design Philosophy
 
+**Minimal Modern Light Mode**
+
+The UI follows a clean, minimal aesthetic with the following core principles:
+
+- **Monochromatic Base**: Primarily black (#18181b) and white with subtle grays
+- **Single Primary Accent**: Black as the primary color for strong visual hierarchy
+- **Generous Whitespace**: More spacing between elements for better readability
+- **Subtle Borders**: Thin, minimal borders (1px) with light gray tones
+- **Reduced Visual Weight**: Lighter shadows, thinner lines, minimal iconography
+- **Focus on Typography**: Clean, readable Arabic typography (Cairo font)
+- **Light Mode Only**: Consistent light theme throughout the application
 - **RTL-First**: Every component designed for Arabic reading direction
-- **Clean & Modern**: Minimalist interface with focus on content
-- **Accessibility**: WCAG 2.1 AA compliance
+- **Accessibility**: WCAG 2.1 AA compliance with high contrast ratios
 - **Responsive**: Mobile, tablet, desktop optimization
 - **Performance**: Fast load times, optimized assets
+
+### 4.2 Color Palette
+
+**Primary Colors**
+- `--foreground`: #18181b (near-black) - Primary text and actions
+- `--background`: #fafafa - Page background
+- `--card`: #ffffff - Card backgrounds
+
+**Neutral/Semantic Colors**
+- `--muted`: #f4f4f5 - Subtle backgrounds
+- `--muted-foreground`: #71717a - Secondary text
+- `--border`: #e4e4e7 - Standard borders
+- `--border-subtle`: #f4f4f5 - Very subtle borders
+- `--hover-bg`: #f4f4f5 - Hover states
+
+**Status Colors** (minimal usage)
+- `--success`: #16a34a - Success states
+- `--warning`: #ca8a04 - Warning states
+- `--danger`: #dc2626 - Error states
+
+### 4.3 Component Design Guidelines
+
+**Buttons**
+- Rounded corners: `rounded-md` (4px)
+- Primary: Black background, white text
+- Secondary: Light gray background, dark text
+- No shadows or heavy gradients
+- Subtle hover states (opacity changes)
+
+**Cards**
+- White background with minimal border
+- `rounded-lg` (8px) corners
+- No shadow by default
+- Border color changes on hover
+
+**Inputs**
+- White background
+- Subtle border (1px)
+- Minimal focus ring (1px)
+- Clean, readable labels
+
+**Typography**
+- Cairo font family
+- Lighter font weights (500-600 instead of 700-800)
+- Tighter letter-spacing for headings (-0.01em)
+- Increased line-height for body text (1.75)
+
+### 4.4 Spacing System
+
+- Section padding: 20-24 (80-96px) vertical
+- Card padding: 6 (24px)
+- Gap between elements: 3-6 (12-24px)
+- More whitespace than typical designs
 
 ### 4.2 Admin Dashboard Layout
 

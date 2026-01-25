@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User Model - Admin account
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String    // Hashed with bcrypt
+  name              String
+  emailVerified     Boolean   @default(false)
+  image             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  articles          Article[]
+  sessions          Session[]
+}
+
+// Article Model
+model Article {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String    @unique
+  content         String    @db.Text
+  excerpt         String?   @db.Text
+  featuredImageId String?
+  featuredImage   Image?    @relation("FeaturedImage", fields: [featuredImageId], references: [id])
+  status          String    @default("draft") // draft, published, scheduled, archived
+  publishedAt     DateTime?
+  scheduledAt     DateTime?
+  authorId        String
+  author          User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  views           Int       @default(0)
+  seoScore        Int       @default(0)
+  metaTitle       String?   @db.Text
+  metaDescription String?   @db.Text
+  focusKeyword    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  categories      Category[] @relation("ArticleCategories")
+  tags            Tag[]      @relation("ArticleTags")
+  images          Image[]    @relation("ArticleImages")
+  videos          Video[]
+  seoAnalysis     SeoAnalysis?
+
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([authorId])
+}
+
+// Category Model - Hierarchical structure
+model Category {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?    @db.Text
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  articles    Article[]  @relation("ArticleCategories")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([slug])
+  @@index([parentId])
+}
+
+// Tag Model
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  articles  Article[] @relation("ArticleTags")
+  createdAt DateTime  @default(now())
+
+  @@index([slug])
+}
+
+// Image Model
+model Image {
+  id              String    @id @default(cuid())
+  url             String
+  thumbnailUrl    String?
+  mediumUrl       String?
+  largeUrl        String?
+  altText         String?   @db.Text
+  caption         String?   @db.Text
+  filename        String
+  fileSize        Int
+  width           Int
+  height          Int
+  mimeType        String
+  uploadedAt      DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  articles                Article[] @relation("ArticleImages")
+  featuredInArticles      Article[] @relation("FeaturedImage")
+
+  @@index([filename])
+  @@index([uploadedAt])
+}
+
+// Video Model - YouTube integration
+model Video {
+  id          String   @id @default(cuid())
+  youtubeUrl  String
+  youtubeId   String
+  title       String?  @db.Text
+  thumbnail   String
+  privacyMode Boolean  @default(false)
+  autoplay    Boolean  @default(false)
+  startTime   Int      @default(0)
+  position    Int      // Order in article
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([youtubeId])
+  @@index([articleId])
+}
+
+// SEO Analysis Model
+model SeoAnalysis {
+  id          String   @id @default(cuid())
+  articleId   String   @unique
+  score       Int
+  suggestions Json     // Array of suggestion objects
+  criteria    Json     // Checklist status
+  analyzedAt  DateTime @default(now())
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+}
+
+// Session Model (for Better Auth)
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Login Attempt Model - For tracking failed login attempts (throttling)
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  identifier String   // IP address or email
+  success    Boolean  @default(false)
+  attemptedAt DateTime @default(now())
+  ip         String?  // Optional IP for additional tracking
+
+  @@index([identifier, attemptedAt])
+}
