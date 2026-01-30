@@ -1,6 +1,75 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
+import { prisma } from '@/lib/prisma';
+
+interface DashboardStats {
+  totalArticles: number;
+  published: number;
+  drafts: number;
+  scheduled: number;
+  totalImages: number;
+  averageSeoScore: number;
+}
+
+interface RecentArticle {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: Date;
+  author: { name: string };
+}
+
+async function getDashboardStats(): Promise<DashboardStats> {
+  const [totalArticles, published, drafts, scheduled, totalImages, avgSeoScore] = await Promise.all([
+    prisma.article.count(),
+    prisma.article.count({ where: { status: 'published' } }),
+    prisma.article.count({ where: { status: 'draft' } }),
+    prisma.article.count({ where: { status: 'scheduled' } }),
+    prisma.image.count(),
+    prisma.seoAnalysis.aggregate({
+      _avg: { score: true }
+    }),
+  ]);
+
+  return {
+    totalArticles,
+    published,
+    drafts,
+    scheduled,
+    totalImages,
+    averageSeoScore: Math.round(avgSeoScore._avg.score || 0),
+  };
+}
+
+async function getRecentArticles(): Promise<RecentArticle[]> {
+  return prisma.article.findMany({
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  });
+}
+
+async function getScheduledArticles(): Promise<RecentArticle[]> {
+  return prisma.article.findMany({
+    where: { status: 'scheduled' },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+    orderBy: { scheduledAt: 'asc' },
+    take: 5,
+  });
+}
 
 /**
  * Admin Dashboard Page
@@ -9,18 +78,11 @@ import Link from 'next/link';
  * Displays statistics, quick actions, and recent activity
  */
 export default async function DashboardPage() {
-  // TODO: Fetch real data from database
-  // const stats = await getDashboardStats();
-  // const recentArticles = await getRecentArticles();
-
-  const stats = {
-    totalArticles: 0,
-    published: 0,
-    drafts: 0,
-    scheduled: 0,
-    totalImages: 0,
-    averageSeoScore: 0,
-  };
+  const [stats, recentArticles, scheduledArticles] = await Promise.all([
+    getDashboardStats(),
+    getRecentArticles(),
+    getScheduledArticles(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -120,7 +182,7 @@ export default async function DashboardPage() {
           <CardTitle>المقالات الأخيرة</CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.totalArticles === 0 ? (
+          {recentArticles.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center p-12">
               <svg
                 className="w-16 h-16 text-secondary mb-4"
@@ -149,10 +211,28 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* TODO: Render recent articles list */}
-              <p className="text-secondary text-center py-4">
-                لا توجد مقالات حديثة
-              </p>
+              {recentArticles.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/admin/articles/${article.id}/edit`}
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <div>
+                    <h4 className="font-medium text-foreground">{article.title}</h4>
+                    <p className="text-sm text-secondary">
+                      {article.author.name} • {new Date(article.createdAt).toLocaleDateString('ar-SA')}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-1 text-xs rounded ${
+                    article.status === 'published' ? 'bg-success/10 text-success' :
+                    article.status === 'draft' ? 'bg-warning/10 text-warning' :
+                    'bg-blue-50 text-blue-600'
+                  }`}>
+                    {article.status === 'published' ? 'منشور' :
+                     article.status === 'draft' ? 'مسودة' : 'مجدول'}
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
         </CardContent>
@@ -164,7 +244,7 @@ export default async function DashboardPage() {
           <CardTitle>المقالات المجدولة</CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.scheduled === 0 ? (
+          {scheduledArticles.length === 0 ? (
             <div className="text-center py-8">
               <svg
                 className="w-16 h-16 mx-auto text-secondary mb-4"
@@ -186,7 +266,23 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* TODO: Render scheduled articles */}
+              {scheduledArticles.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/admin/articles/${article.id}/edit`}
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <div>
+                    <h4 className="font-medium text-foreground">{article.title}</h4>
+                    <p className="text-sm text-secondary">
+                      {article.author.name} • {new Date(article.createdAt).toLocaleDateString('ar-SA')}
+                    </p>
+                  </div>
+                  <span className="px-2 py-1 text-xs rounded bg-blue-50 text-blue-600">
+                    مجدول
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
         </CardContent>

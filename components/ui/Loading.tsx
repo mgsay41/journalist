@@ -55,3 +55,9 @@ export function Skeleton({ className }: SkeletonProps) {
     />
   );
 }
+
+// Export Loading as alias for LoadingScreen for convenience
+export { LoadingScreen as Loading };
+
+// Export LoadingSpinner as alias for Spinner for convenience
+export { Spinner as LoadingSpinner };

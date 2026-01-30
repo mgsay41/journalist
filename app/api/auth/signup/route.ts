@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import * as bcrypt from 'bcryptjs';
+import { auth } from '@/lib/auth';
 import { isValidEmail } from '@/lib/utils';
 
 /**
@@ -8,6 +8,7 @@ import { isValidEmail } from '@/lib/utils';
  *
  * Create the first admin user (first-time setup only)
  * This endpoint only works if no users exist in the database
+ * Uses Better Auth's built-in signUpEmail for proper password hashing
  */
 export async function POST(request: Request) {
   try {
@@ -64,30 +65,67 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create admin user
-    const user = await prisma.user.create({
-      data: {
-        name,
+    // Use Better Auth's signUpEmail for proper password hashing
+    const signUpResult = await auth.api.signUpEmail({
+      body: {
         email,
-        password: hashedPassword,
-        emailVerified: true, // Auto-verify first admin
+        password,
+        name,
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-      },
+      headers: request.headers,
+    }) as any;
+
+    console.log('[SIGNUP] SignUp result:', JSON.stringify({
+      hasUser: !!signUpResult.user,
+      userId: signUpResult.user?.id,
+    }));
+
+    // Update user to set emailVerified to true (auto-verify first admin)
+    await prisma.user.update({
+      where: { id: signUpResult.user.id },
+      data: { emailVerified: true },
     });
 
-    return NextResponse.json({
+    // Auto-login by signing in immediately after signup
+    const loginResult = await auth.api.signInEmail({
+      body: {
+        email,
+        password,
+      },
+      headers: request.headers,
+    }) as any;
+
+    console.log('[SIGNUP] Login result:', JSON.stringify({
+      hasToken: !!loginResult.token,
+      hasUser: !!loginResult.user,
+      token: loginResult.token?.substring(0, 20) + '...',
+      userId: loginResult.user?.id,
+    }));
+
+    // Create response
+    const response = NextResponse.json({
       success: true,
-      user,
+      user: loginResult.user,
       message: 'تم إنشاء حساب المسؤول بنجاح',
     });
+
+    // Set the session cookie
+    // Using default Better Auth cookie name (no custom prefix)
+    if (loginResult.token) {
+      // Set cookie with underscore (no dots to avoid encoding issues)
+      response.cookies.set('better_auth_session', loginResult.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/',
+      });
+      console.log('[SIGNUP] Cookie set successfully with token:', loginResult.token?.substring(0, 20) + '...');
+    } else {
+      console.log('[SIGNUP] WARNING: No token in login result!');
+    }
+
+    return response;
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(

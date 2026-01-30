@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,6 +15,8 @@ import { Spinner } from '@/components/ui/Loading';
  */
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const noAdmin = searchParams.get('no_admin') === 'true';
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -111,6 +113,15 @@ export default function LoginPage() {
         {/* Login Form */}
         <div className="bg-card rounded-lg shadow-lg p-8 border border-border">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* No Admin Warning */}
+            {noAdmin && (
+              <div className="bg-warning/10 border border-warning text-warning-foreground px-4 py-3 rounded-lg text-sm">
+                <p className="font-semibold mb-1">لم يتم إعداد النظام بعد</p>
+                <p>لا يوجد حساب مسؤول في النظام. يرجى إنشاء حساب مسؤول عبر قاعدة البيانات مباشرة.</p>
+                <p className="mt-2 text-xs">راجع ملف <code className="bg-muted px-1 rounded">docs/ADMIN_SETUP.md</code> للتعليمات.</p>
+              </div>
+            )}
+
             {/* General Error */}
             {errors.general && (
               <div className="bg-danger/10 border border-danger text-danger px-4 py-3 rounded-lg text-sm">

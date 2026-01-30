@@ -12,8 +12,7 @@ const globalForPrisma = globalThis as unknown as {
  * Ensures environment variables are loaded before creating the client
  */
 function getPrismaClient() {
-  // Ensure DATABASE_URL is set - use fallback if not in env
-  const databaseUrl = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Qc7RmUABf9jt@ep-autumn-mud-ahl1ihfu-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl) {
     throw new Error(

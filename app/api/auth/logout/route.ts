@@ -8,31 +8,61 @@ import { prisma } from '@/lib/prisma';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get session token from cookie
-    const token = request.cookies.get('session_token')?.value;
+    // Get the session token from cookies
+    const sessionToken = request.cookies.get('better_auth_session')?.value;
 
-    if (token) {
-      // Delete session from database
-      await prisma.session.delete({
-        where: { token },
-      }).catch(() => {
-        // Session might not exist, that's okay
-      });
+    // Delete the session from database if token exists
+    if (sessionToken) {
+      try {
+        await prisma.session.deleteMany({
+          where: { token: sessionToken },
+        });
+        console.log('[LOGOUT] Session deleted from database');
+      } catch (dbError) {
+        console.error('[LOGOUT] Failed to delete session from database:', dbError);
+      }
     }
 
-    // Create redirect response and clear session cookie
-    const response = NextResponse.redirect(new URL('/admin/login', request.url));
+    // Create redirect response
+    const response = NextResponse.redirect(new URL('/admin/login', request.url), {
+      status: 302,
+    });
 
-    response.cookies.delete('session_token');
+    // Clear all session cookies
+    const cookieOptions = {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      path: '/',
+      expires: new Date(0),
+    };
 
+    // Clear the main session cookie
+    response.cookies.set('better_auth_session', '', cookieOptions);
+
+    // Clear any legacy cookies that might exist
+    response.cookies.set('journalist_cms.session_token', '', cookieOptions);
+    response.cookies.set('journalist_cms_session_token', '', cookieOptions);
+    response.cookies.set('session_token', '', cookieOptions);
+
+    console.log('[LOGOUT] Cookies cleared, redirecting to login');
     return response;
   } catch (error) {
     console.error('Logout error:', error);
 
-    // Still clear the cookie even if there was an error
+    // If there's an error, still try to redirect and clear cookies
     const response = NextResponse.redirect(new URL('/admin/login', request.url));
 
-    response.cookies.delete('session_token');
+    const cookieOptions = {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      path: '/',
+      expires: new Date(0),
+    };
+
+    response.cookies.set('better_auth_session', '', cookieOptions);
+    response.cookies.set('journalist_cms.session_token', '', cookieOptions);
+    response.cookies.set('journalist_cms_session_token', '', cookieOptions);
+    response.cookies.set('session_token', '', cookieOptions);
 
     return response;
   }

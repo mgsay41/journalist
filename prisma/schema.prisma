@@ -13,7 +13,6 @@ datasource db {
 model User {
   id                String    @id @default(cuid())
   email             String    @unique
-  password          String    // Hashed with bcrypt
   name              String
   emailVerified     Boolean   @default(false)
   image             String?
@@ -21,6 +20,8 @@ model User {
   updatedAt         DateTime  @updatedAt
   articles          Article[]
   sessions          Session[]
+  accounts          Account[]
+  aiUsage           AiUsage[]
 }
 
 // Article Model
@@ -88,20 +89,21 @@ model Tag {
 
 // Image Model
 model Image {
-  id              String    @id @default(cuid())
-  url             String
-  thumbnailUrl    String?
-  mediumUrl       String?
-  largeUrl        String?
-  altText         String?   @db.Text
-  caption         String?   @db.Text
-  filename        String
-  fileSize        Int
-  width           Int
-  height          Int
-  mimeType        String
-  uploadedAt      DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  url                 String
+  thumbnailUrl        String?
+  mediumUrl           String?
+  largeUrl            String?
+  cloudinaryPublicId  String?   // Cloudinary public ID for management/deletion
+  altText             String?   @db.Text
+  caption             String?   @db.Text
+  filename            String
+  fileSize            Int
+  width               Int
+  height              Int
+  mimeType            String
+  uploadedAt          DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
   articles                Article[] @relation("ArticleImages")
@@ -109,6 +111,7 @@ model Image {
 
   @@index([filename])
   @@index([uploadedAt])
+  @@index([cloudinaryPublicId])
 }
 
 // Video Model - YouTube integration
@@ -143,12 +146,34 @@ model SeoAnalysis {
   @@index([articleId])
 }
 
+// Account Model (for Better Auth - required even without social providers)
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  accountId         String
+  providerId        String
+  accessToken       String?
+  refreshToken       String?
+  idToken           String?
+  expiresAt         DateTime?
+  password          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
 // Session Model (for Better Auth)
 model Session {
   id        String   @id @default(cuid())
   expiresAt DateTime
   token     String   @unique
   userId    String
+  ipAddress String?  // IP address of the user
+  userAgent String?  // User agent string
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -165,4 +190,25 @@ model LoginAttempt {
   ip         String?  // Optional IP for additional tracking
 
   @@index([identifier, attemptedAt])
+}
+
+// AI Usage Model - For tracking Gemini API usage per user
+model AiUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature      String   // e.g., "seo-suggestions", "meta-title", "grammar-check"
+  model        String   // e.g., "gemini-3-flash"
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  inputCost    Float    @default(0)  // Cost in USD (micro-dollars for precision)
+  outputCost   Float    @default(0)  // Cost in USD
+  totalCost    Float    @default(0)  // Total cost in USD
+  cached       Boolean  @default(false)  // Whether response was served from cache
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([feature])
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }

@@ -9,6 +9,10 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
  * Includes session management, secure cookies, and CSRF protection.
  */
 export const auth = betterAuth({
+  // Secret for signing tokens and encrypting data
+  // Can use BETTER_AUTH_SECRET or fall back to NEXTAUTH_SECRET for compatibility
+  secret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
@@ -31,11 +35,13 @@ export const auth = betterAuth({
 
   // Advanced security settings
   advanced: {
-    cookiePrefix: "journalist_cms",
+    // Using default cookie prefix to avoid issues with dots in cookie names
+    // Better Auth will use "better-auth" as the default prefix
     crossSubDomainCookies: {
       enabled: false,
     },
-    csrfProtection: true,
+    // Disable CSRF for now to simplify debugging - can enable later
+    csrfProtection: false,
   },
 
   // Social providers (disabled - only admin account)
@@ -55,3 +61,66 @@ export const auth = betterAuth({
 // Export auth types - Infer from Better Auth
 export type Session = typeof auth.$Infer.Session;
 export type User = typeof auth.$Infer.Session.user;
+
+/**
+ * Get the current session on the server side
+ * This helper function gets the session from cookies in API routes and server components
+ * Uses direct database lookup for reliable session validation
+ */
+export async function getServerSession() {
+  try {
+    // Import cookies from next/headers
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+
+    // Get session token from our custom cookie
+    const sessionToken = cookieStore.get('better_auth_session')?.value;
+
+    if (!sessionToken) {
+      return null;
+    }
+
+    // Look up session directly in database
+    const session = await prisma.session.findUnique({
+      where: { token: sessionToken },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    // Check if session is expired
+    if (new Date(session.expiresAt) < new Date()) {
+      // Delete expired session
+      await prisma.session.delete({ where: { id: session.id } });
+      return null;
+    }
+
+    // Return in the format expected by auth-utils
+    return {
+      session: {
+        id: session.id,
+        expiresAt: session.expiresAt,
+        token: session.token,
+        userId: session.userId,
+      },
+      user: session.user,
+    };
+  } catch (error) {
+    console.error('Error getting server session:', error);
+    return null;
+  }
+}

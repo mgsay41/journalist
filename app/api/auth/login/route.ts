@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import * as bcrypt from 'bcryptjs';
-import { isValidEmail } from '@/lib/utils';
+import { auth } from '@/lib/auth';
 import {
   checkLoginThrottle,
   recordLoginAttempt,
   getClientIp,
 } from '@/lib/login-throttle';
+import { isValidEmail } from '@/lib/utils';
+import { prisma } from '@/lib/prisma';
 
 /**
  * POST /api/auth/login
  *
- * Authenticate admin user and create session
+ * Authenticate admin user and create session using Better Auth
  */
 export async function POST(request: NextRequest) {
   try {
@@ -59,17 +59,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email
+    // Check if user exists before attempting auth (for throttling)
     const user = await prisma.user.findUnique({
       where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        name: true,
-        emailVerified: true,
-        image: true,
-      },
+      select: { id: true },
     });
 
     if (!user) {
@@ -88,10 +81,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Try to sign in using Better Auth
+    try {
+      // Better Auth returns the session data
+      const authResult = await auth.api.signInEmail({
+        body: {
+          email,
+          password,
+        },
+        headers: request.headers,
+      }) as any;
 
-    if (!isPasswordValid) {
+      // Debug: Log what Better Auth returns
+      console.log('[LOGIN] Better Auth result:', JSON.stringify({
+        hasToken: !!authResult.token,
+        hasUser: !!authResult.user,
+        token: authResult.token?.substring(0, 20) + '...',
+        userId: authResult.user?.id,
+      }));
+
+      // Record successful login and reset attempts
+      await recordLoginAttempt(email, true, ip);
+      await recordLoginAttempt(ip, true, ip);
+
+      // Create response
+      const response = NextResponse.json({
+        success: true,
+        user: authResult.user,
+      });
+
+      // Set the session cookie manually
+      // Using underscore in name to avoid encoding issues with dots
+      if (authResult.token) {
+        response.cookies.set('better_auth_session', authResult.token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24 * (remember ? 30 : 7), // 30 days if remember, else 7 days
+          path: '/',
+        });
+        console.log('[LOGIN] Cookie set successfully with token:', authResult.token?.substring(0, 20) + '...');
+      }
+
+      return response;
+    } catch (authError: any) {
+      // Better Auth threw an error (wrong password, etc.)
       // Record failed attempt for both email and IP
       await recordLoginAttempt(email, false, ip);
       await recordLoginAttempt(ip, false, ip);
@@ -107,47 +141,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Record successful login and reset attempts
-    await recordLoginAttempt(email, true, ip);
-    await recordLoginAttempt(ip, true, ip);
-
-    // Create session
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + remember ? 30 : 7); // 30 days if remember, else 7 days
-
-    // Generate session token
-    const token = generateSessionToken();
-
-    // Save session to database
-    const session = await prisma.session.create({
-      data: {
-        token,
-        userId: user.id,
-        expiresAt,
-      },
-    });
-
-    // Create response with session cookie
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-      },
-    });
-
-    // Set session cookie
-    response.cookies.set('session_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      expires: expiresAt,
-      path: '/',
-    });
-
-    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
@@ -155,13 +148,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Generate secure random session token
- */
-function generateSessionToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }

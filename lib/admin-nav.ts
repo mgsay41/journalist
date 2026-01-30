@@ -132,16 +132,23 @@ export function getBreadcrumbs(path: string): Breadcrumb[] {
     { title: 'الرئيسية', href: '/admin/dashboard' },
   ];
 
+  // Track added hrefs to avoid duplicates
+  const addedHrefs = new Set<string>(['/admin/dashboard']);
+
   for (const section of adminNavConfig) {
     for (const item of section.items) {
       if (isActivePath(item.href, path)) {
-        if (item.href !== '/admin/dashboard') {
+        // Add parent item if not already added
+        if (!addedHrefs.has(item.href)) {
           breadcrumbs.push({ title: item.title, href: item.href });
+          addedHrefs.add(item.href);
         }
         if (item.children) {
           for (const child of item.children) {
-            if (isActivePath(child.href, path) && child.href !== path) {
+            // Add child if active, not the current path, and not already added
+            if (isActivePath(child.href, path) && child.href !== path && !addedHrefs.has(child.href)) {
               breadcrumbs.push({ title: child.title, href: child.href });
+              addedHrefs.add(child.href);
             }
           }
         }

@@ -123,10 +123,10 @@ export default function SetupPage() {
 
       setSuccess(true);
 
-      // Redirect to login after success
+      // Redirect to dashboard after successful setup (user is auto-logged in)
       setTimeout(() => {
-        router.push('/admin/login');
-      }, 2000);
+        router.push('/admin/dashboard');
+      }, 1500);
     } catch (error) {
       setErrors({
         general: error instanceof Error ? error.message : 'حدث خطأ أثناء إنشاء الحساب',
@@ -208,7 +208,7 @@ export default function SetupPage() {
                 تم الإنشاء بنجاح!
               </h2>
               <p className="text-secondary mb-4">
-                تم إنشاء حساب المسؤول بنجاح. جاري تحويلك إلى صفحة تسجيل الدخول...
+                تم إنشاء حساب المسؤول بنجاح. جاري تحويلك إلى لوحة التحكم...
               </p>
               <Spinner size="sm" />
             </div>

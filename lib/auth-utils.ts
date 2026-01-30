@@ -1,8 +1,8 @@
-import { cookies } from 'next/headers';
-import { prisma } from './prisma';
+import { getServerSession } from './auth';
 
 /**
  * Auth user type (without sensitive data)
+ * Re-exported for backward compatibility
  */
 export interface AuthUser {
   id: string;
@@ -12,48 +12,25 @@ export interface AuthUser {
 }
 
 /**
- * Get current session from request cookies
+ * Get current session using Better Auth
+ * This is now a wrapper around getServerSession for backward compatibility
  */
 export async function getSession(): Promise<{ user: AuthUser; expiresAt: Date } | null> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('session_token')?.value;
+    const session = await getServerSession();
 
-    if (!token) {
-      return null;
-    }
-
-    // Find session with user
-    const session = await prisma.session.findUnique({
-      where: { token },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      return null;
-    }
-
-    // Check if session is expired
-    if (session.expiresAt < new Date()) {
-      // Delete expired session
-      await prisma.session.delete({
-        where: { id: session.id },
-      });
+    if (!session?.user) {
       return null;
     }
 
     return {
-      user: session.user,
-      expiresAt: session.expiresAt,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        image: session.user.image ?? null,
+      },
+      expiresAt: new Date(session.session.expiresAt),
     };
   } catch (error) {
     console.error('Get session error:', error);
@@ -88,51 +65,4 @@ export async function requireAuth(): Promise<AuthUser> {
   }
 
   return user;
-}
-
-/**
- * Create a new session for a user
- */
-export async function createSession(
-  userId: string,
-  rememberMe: boolean = false
-): Promise<string> {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (rememberMe ? 30 : 7));
-
-  // Generate session token
-  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  // Save session to database
-  await prisma.session.create({
-    data: {
-      token,
-      userId,
-      expiresAt,
-    },
-  });
-
-  return token;
-}
-
-/**
- * Delete a session (logout)
- */
-export async function deleteSession(token: string): Promise<void> {
-  await prisma.session.delete({
-    where: { token },
-  }).catch(() => {
-    // Session might not exist
-  });
-}
-
-/**
- * Delete all sessions for a user (logout from all devices)
- */
-export async function deleteAllSessions(userId: string): Promise<void> {
-  await prisma.session.deleteMany({
-    where: { userId },
-  });
 }
