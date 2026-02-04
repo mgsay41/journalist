@@ -105,8 +105,49 @@ export const SEO_THRESHOLDS = {
   },
 };
 
-// Score thresholds for status
+// Score thresholds for status (based on RankMath criteria)
+// Green (81-100): Ready to publish
+// Yellow (51-80): Needs improvement
+// Red (0-50): Poorly optimized
 export const SCORE_THRESHOLDS = {
-  good: 70,
-  needsImprovement: 50,
+  good: 81,
+  needsImprovement: 51,
+};
+
+// SEO Score Weights (Total: 100 points)
+// Based on ARTICLE_UX_IMPROVEMENT_PLAN.md
+export const SEO_WEIGHTS = {
+  // Basic SEO Tests (40 points)
+  basicSeo: {
+    keywordInTitle: 5,
+    keywordInMetaDescription: 5,
+    keywordInUrl: 5,
+    keywordAtBeginningOfContent: 5,
+    keywordInContent: 5,
+    contentLength: 10,
+    keywordUniqueness: 5,
+  },
+  // Additional SEO Tests (25 points)
+  additionalSeo: {
+    keywordInSubheading: 5,
+    keywordInImageAlt: 5,
+    keywordDensity: 5,
+    urlLength: 3,
+    externalLinks: 3,
+    internalLinks: 4,
+  },
+  // Title Readability Tests (15 points)
+  titleReadability: {
+    keywordAtBeginningOfTitle: 4,
+    sentimentInTitle: 4,
+    powerWordsInTitle: 4,
+    numberInTitle: 3,
+  },
+  // Content Readability Tests (20 points)
+  contentReadability: {
+    tableOfContents: 5,
+    shortParagraphs: 5,
+    mediaPresence: 5,
+    readabilityScore: 5,
+  },
 };

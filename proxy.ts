@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Middleware for authentication and route protection
+ * Proxy for authentication and route protection
  *
  * - Redirects to /admin/setup if no admin exists
  * - Protects admin routes with session validation
@@ -10,7 +10,7 @@ import type { NextRequest } from 'next/server';
  *
  * Note: Uses fetch to call API routes for Edge Runtime compatibility.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if it's an admin route
@@ -119,7 +119,7 @@ export async function middleware(request: NextRequest) {
 }
 
 /**
- * Configure which routes the middleware should run on
+ * Configure which routes the proxy should run on
  */
 export const config = {
   matcher: '/admin/:path*',

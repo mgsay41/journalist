@@ -23,7 +23,10 @@
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes, reset the database\" npx prisma db push:*)",
       "WebSearch",
       "WebFetch(domain:ai.google.dev)",
-      "WebFetch(domain:rankmath.com)"
+      "WebFetch(domain:rankmath.com)",
+      "Bash(cmd //c \"taskkill /PID 932 /F\")",
+      "Bash(if exist .nextlock del .nextlock)",
+      "Bash(find:*)"
     ]
   }
 }

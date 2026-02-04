@@ -22,6 +22,9 @@ model User {
   sessions          Session[]
   accounts          Account[]
   aiUsage           AiUsage[]
+  notifications     Notification[]
+  settings          Settings?
+  emailVerifications EmailVerification[]
 }
 
 // Article Model
@@ -43,6 +46,10 @@ model Article {
   metaTitle       String?   @db.Text
   metaDescription String?   @db.Text
   focusKeyword    String?
+  aiCompletionData Json?    // Stores AI completion results for the AI analysis page
+  isFeatured      Boolean   @default(false) // For homepage featured article
+  readingTime     Int?      // Estimated reading time in minutes
+  wordCount       Int?      // Computed word count for analytics
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -52,11 +59,18 @@ model Article {
   images          Image[]    @relation("ArticleImages")
   videos          Video[]
   seoAnalysis     SeoAnalysis?
+  previewTokens   PreviewToken[]
+  articleViews    ArticleView[]
 
   @@index([slug])
   @@index([status])
   @@index([publishedAt])
   @@index([authorId])
+  @@index([isFeatured])
+  @@index([status, publishedAt(sort: Desc)]) // For published articles sorted by date
+  @@index([status, isFeatured, publishedAt(sort: Desc)]) // For featured articles
+  @@index([authorId, status]) // For user's articles by status
+  @@index([createdAt(sort: Desc)]) // For recent articles
 }
 
 // Category Model - Hierarchical structure
@@ -74,6 +88,7 @@ model Category {
 
   @@index([slug])
   @@index([parentId])
+  @@index([name]) // For category search
 }
 
 // Tag Model
@@ -211,4 +226,125 @@ model AiUsage {
   @@index([feature])
   @@index([createdAt])
   @@index([userId, createdAt])
+  @@index([userId, feature, createdAt(sort: Desc)]) // For user AI usage analytics
+  @@index([feature, createdAt(sort: Desc)]) // For feature usage stats
+}
+
+// Notification Model - For in-app notifications
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String   // e.g., "article_published", "article_scheduled", "system"
+  title        String   // Notification title (Arabic)
+  message      String   @db.Text // Notification message (Arabic)
+  actionUrl    String?  // Optional URL to navigate to when clicked
+  actionLabel  String?  // Optional label for action button (Arabic)
+  read         Boolean  @default(false)
+  readAt       DateTime?
+  metadata     Json?    // Optional additional data (articleId, etc.)
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)]) // For user notifications sorted by date
+  @@index([read, createdAt(sort: Desc)]) // For unread notifications
+}
+
+// Preview Token Model - For secure article preview access
+model PreviewToken {
+  id           String   @id @default(cuid())
+  articleId    String
+  article      Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([token])
+  @@index([articleId])
+  @@index([expiresAt])
+}
+
+// Article View Model - For tracking article views (prevents duplicate counts)
+model ArticleView {
+  id        String   @id @default(cuid())
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  sessionId String?  // Optional session identifier for deduplication
+  ipAddress String?  // Optional IP address tracking
+  userAgent String?  // Optional user agent tracking
+  viewedAt  DateTime @default(now())
+
+  @@unique([articleId, sessionId])
+  @@index([articleId])
+  @@index([sessionId])
+  @@index([viewedAt])
+  @@index([articleId, viewedAt(sort: Desc)]) // For article views analytics
+}
+
+// Site Settings Model - For storing site-wide configuration
+model Settings {
+  id        String   @id @default(cuid())
+  userId    String   @unique // One settings record per user/admin
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // General Settings
+  siteName        String   @default("موقعي")
+  siteTagline     String?  @db.Text
+  adminEmail      String?
+
+  // Date/Time Settings
+  timezone        String   @default("Asia/Riyadh")
+  dateFormat      String   @default("DD/MM/YYYY")
+  timeFormat      String   @default("24") // "12" or "24"
+
+  // SEO Settings
+  defaultMetaTitle       String?  @db.Text
+  defaultMetaDescription String?  @db.Text
+  siteKeywords           String?  @db.Text
+  googleAnalyticsId      String?
+  googleSearchConsole    String?
+  facebookHandle         String?
+  twitterHandle          String?
+  instagramHandle        String?
+  youtubeHandle          String?
+
+  // Media Settings
+  maxUploadSize          Int      @default(10) // in MB
+  imageQuality           Int      @default(85) // 1-100
+  storageProvider        String   @default("cloudinary") // "cloudinary" or "vercel-blob"
+
+  // Publishing Settings
+  defaultArticleStatus   String   @default("draft") // "draft" or "published"
+  autoPublishEnabled     Boolean  @default(false)
+  defaultCategories      String?  // JSON array of category IDs
+  notifyOnPublish        Boolean  @default(true)
+
+  // AI Settings
+  aiModelPreference      String   @default("gemini-3-flash")
+  aiResponseLimit        Int      @default(4096) // max tokens
+  aiFeaturesEnabled      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Email Verification Model - For storing email verification tokens
+model EmailVerification {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@index([expiresAt])
 }

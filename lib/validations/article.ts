@@ -16,39 +16,50 @@ export const createArticleSchema = z.object({
     .min(1, { message: 'عنوان المقال مطلوب' })
     .max(200, { message: 'عنوان المقال طويل جداً (الحد الأقصى 200 حرف)' }),
 
-  slug: z.string()
-    .min(1, { message: 'رابط المقال مطلوب' })
-    .max(200, { message: 'رابط المقال طويل جداً' })
-    .regex(/^[a-z0-9-]+$/, { message: 'رابط المقال يجب أن يحتوي على أحرف إنجليزية صغيرة، أرقام، وشرطات فقط' })
-    .nullish(),
+  slug: z.union([
+    z.string()
+      .min(1, { message: 'رابط المقال مطلوب' })
+      .max(200, { message: 'رابط المقال طويل جداً' })
+      .regex(/^[a-z0-9-]+$/, { message: 'رابط المقال يجب أن يحتوي على أحرف إنجليزية صغيرة، أرقام، وشرطات فقط' }),
+    z.null(),
+    z.undefined(),
+  ]).optional(),
 
   content: z.string()
     .min(1, { message: 'محتوى المقال مطلوب' }),
 
-  excerpt: z.string()
-    .max(500, { message: 'المقدمة طويلة جداً (الحد الأقصى 500 حرف)' })
-    .nullish(),
+  excerpt: z.union([
+    z.string().max(500, { message: 'المقدمة طويلة جداً (الحد الأقصى 500 حرف)' }),
+    z.null(),
+    z.undefined(),
+  ]).optional(),
 
-  featuredImageId: z.string().nullish(),
+  featuredImageId: z.union([z.string(), z.null(), z.undefined()]).optional(),
 
-  categoryIds: z.array(z.string()).nullish(),
+  categoryIds: z.union([z.array(z.string()), z.null(), z.undefined()]).optional(),
 
-  tagIds: z.array(z.string())
-    .max(MAX_TAGS_PER_ARTICLE, { message: `الحد الأقصى للوسوم هو ${MAX_TAGS_PER_ARTICLE} وسوم` })
-    .nullish(),
+  tagIds: z.union([
+    z.array(z.string()).max(MAX_TAGS_PER_ARTICLE, { message: `الحد الأقصى للوسوم هو ${MAX_TAGS_PER_ARTICLE} وسوم` }),
+    z.null(),
+    z.undefined(),
+  ]).optional(),
 
   status: articleStatusEnum.default('draft'),
 
-  publishedAt: z.string().datetime().nullish(),
-  scheduledAt: z.string().datetime().nullish(),
+  publishedAt: z.union([z.string().datetime(), z.null(), z.undefined()]).optional(),
+  scheduledAt: z.union([z.string().datetime(), z.null(), z.undefined()]).optional(),
 
-  metaTitle: z.string()
-    .max(60, { message: 'عنوان الميتا طويل جداً' })
-    .nullish(),
-  metaDescription: z.string()
-    .max(160, { message: 'وصف الميتا طويل جداً' })
-    .nullish(),
-  focusKeyword: z.string().nullish(),
+  metaTitle: z.union([
+    z.string().max(60, { message: 'عنوان الميتا طويل جداً' }),
+    z.null(),
+    z.undefined(),
+  ]).optional(),
+  metaDescription: z.union([
+    z.string().max(200, { message: 'وصف الميتا طويل جداً (الحد الأقصى 200 حرف)' }),
+    z.null(),
+    z.undefined(),
+  ]).optional(),
+  focusKeyword: z.union([z.string(), z.null(), z.undefined()]).optional(),
 });
 
 export const updateArticleSchema = createArticleSchema.partial().extend({

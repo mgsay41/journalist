@@ -11,7 +11,17 @@ import { GoogleGenAI } from "@google/genai";
 
 // Available Gemini models
 export const GEMINI_MODELS = {
-  // Recommended - Gemini 2.5 Flash
+  // Recommended - Gemini 3 Flash
+  "gemini-3-flash": {
+    id: "gemini-3-flash",
+    name: "Gemini 3 Flash",
+    inputCost: 0.15, // per 1M tokens
+    outputCost: 0.60,
+    maxTokens: 8192,
+    contextWindow: 1000000,
+    description: "Latest 3.0 flash model with enhanced capabilities",
+  },
+  // Gemini 2.5 Flash
   "gemini-2.5-flash": {
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
@@ -19,7 +29,7 @@ export const GEMINI_MODELS = {
     outputCost: 0.60,
     maxTokens: 8192,
     contextWindow: 1000000,
-    description: "Latest 2.5 flash model with enhanced capabilities",
+    description: "2.5 flash model with enhanced capabilities",
   },
   // Fallback option
   "gemini-2.0-flash": {
@@ -46,7 +56,7 @@ export const GEMINI_MODELS = {
 export type GeminiModelId = keyof typeof GEMINI_MODELS;
 
 // Default model
-const DEFAULT_MODEL: GeminiModelId = "gemini-2.5-flash";
+const DEFAULT_MODEL: GeminiModelId = "gemini-3-flash";
 
 // Rate limiting configuration
 const RATE_LIMIT = {

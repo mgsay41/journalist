@@ -4,6 +4,19 @@ import { getServerSession } from '@/lib/auth';
 import { createArticleSchema, listArticlesSchema } from '@/lib/validations/article';
 import { generateSlug } from '@/lib/utils/slug';
 import { Prisma } from '@prisma/client';
+import { checkRateLimit } from '@/lib/security/rate-limit';
+import { sanitizeHtml } from '@/lib/security/sanitization';
+
+/**
+ * Calculate word count from HTML content
+ */
+function calculateWordCount(content: string): number {
+  // Strip HTML tags
+  const text = content.replace(/<[^>]*>/g, '');
+  // Split by whitespace and count
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  return words.length;
+}
 
 /**
  * GET /api/admin/articles
@@ -15,6 +28,20 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
+    }
+
+    // Rate limiting: 100 requests per minute for article listing
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 100,
+      window: 60,
+      identifier: `articles:list:${session.user.id}`,
+    });
+
+    if (rateLimitResult === null || !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
     }
 
     // Parse query parameters
@@ -162,13 +189,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
 
+    // Rate limiting: 20 article creations per minute
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 20,
+      window: 60,
+      identifier: `articles:create:${session.user.id}`,
+    });
+
+    if (rateLimitResult === null || !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
 
     // Validate input
     const validatedData = createArticleSchema.safeParse(body);
     if (!validatedData.success) {
+      // Return the first specific validation error message
+      const firstError = validatedData.error.issues[0]?.message || 'بيانات غير صالحة';
       return NextResponse.json(
-        { error: 'بيانات غير صالحة', details: validatedData.error.issues },
+        { error: firstError, details: validatedData.error.issues },
         { status: 400 }
       );
     }
@@ -188,6 +231,10 @@ export async function POST(request: NextRequest) {
       metaDescription,
       focusKeyword,
     } = validatedData.data;
+
+    // Sanitize HTML content to prevent XSS attacks
+    const sanitizedContent = sanitizeHtml(content);
+    const sanitizedExcerpt = excerpt ? sanitizeHtml(excerpt) : null;
 
     // Generate slug if not provided
     let slug = customSlug;
@@ -239,8 +286,8 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         slug,
-        content,
-        excerpt,
+        content: sanitizedContent,
+        excerpt: sanitizedExcerpt,
         featuredImageId,
         authorId: session.user.id,
         status,
@@ -249,6 +296,8 @@ export async function POST(request: NextRequest) {
         metaTitle,
         metaDescription,
         focusKeyword,
+        wordCount: calculateWordCount(sanitizedContent),
+        readingTime: Math.ceil(calculateWordCount(sanitizedContent) / 200), // ~200 words per minute
         categories: categoryIds && categoryIds.length > 0
           ? {
               connect: categoryIds.map(id => ({ id })),

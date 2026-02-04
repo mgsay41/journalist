@@ -3,6 +3,19 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
 import { updateArticleSchema, deleteArticleSchema } from '@/lib/validations/article';
 import { generateSlug } from '@/lib/utils/slug';
+import { checkRateLimit } from '@/lib/security/rate-limit';
+import { sanitizeHtml } from '@/lib/security/sanitization';
+
+/**
+ * Calculate word count from HTML content
+ */
+function calculateWordCount(content: string): number {
+  // Strip HTML tags
+  const text = content.replace(/<[^>]*>/g, '');
+  // Split by whitespace and count
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  return words.length;
+}
 
 /**
  * GET /api/admin/articles/[id]
@@ -101,6 +114,20 @@ export async function PUT(
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
 
+    // Rate limiting: 30 article updates per minute
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 30,
+      window: 60,
+      identifier: `articles:update:${session.user.id}`,
+    });
+
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -141,6 +168,13 @@ export async function PUT(
       metaDescription,
       focusKeyword,
     } = validatedData.data;
+
+    // Sanitize HTML content if provided
+    const sanitizedContent = content !== undefined ? sanitizeHtml(content) : undefined;
+    const sanitizedExcerpt = excerpt !== undefined && excerpt !== null ? sanitizeHtml(excerpt) : undefined;
+
+    // Handle aiCompletionData separately (not in validation schema)
+    const aiCompletionData = body.aiCompletionData;
 
     // Handle slug
     let slug = existingArticle.slug;
@@ -220,8 +254,13 @@ export async function PUT(
     const updateData: any = {
       ...(title !== undefined && { title }),
       ...(slug !== undefined && { slug }),
-      ...(content !== undefined && { content }),
-      ...(excerpt !== undefined && { excerpt }),
+      ...(sanitizedContent !== undefined && {
+        content: sanitizedContent,
+        // Recalculate word count and reading time when content changes
+        wordCount: calculateWordCount(sanitizedContent),
+        readingTime: Math.ceil(calculateWordCount(sanitizedContent) / 200), // ~200 words per minute
+      }),
+      ...(sanitizedExcerpt !== undefined && { excerpt: sanitizedExcerpt }),
       ...(featuredImageId !== undefined && { featuredImageId }),
       ...(status !== undefined && { status }),
       ...(finalPublishedAt !== undefined && { publishedAt: finalPublishedAt }),
@@ -229,6 +268,7 @@ export async function PUT(
       ...(metaTitle !== undefined && { metaTitle }),
       ...(metaDescription !== undefined && { metaDescription }),
       ...(focusKeyword !== undefined && { focusKeyword }),
+      ...(aiCompletionData !== undefined && { aiCompletionData: aiCompletionData === null ? null : JSON.parse(JSON.stringify(aiCompletionData)) }),
     };
 
     // Update categories if provided

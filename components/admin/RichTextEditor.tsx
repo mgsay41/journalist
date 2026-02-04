@@ -1,16 +1,23 @@
 'use client';
 
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import ImagePickerModal from './ImagePickerModal';
 import VideoPickerModal from './VideoPickerModal';
 import YouTubeExtension from './YouTubeEmbed';
+import {
+  GrammarErrorExtension,
+  SeoSuggestionExtension,
+  SuggestionTooltip,
+  type GrammarErrorAttributes,
+  type SeoSuggestionAttributes,
+} from './editor';
 
 interface ImageData {
   id: string;
@@ -34,6 +41,32 @@ interface VideoEmbedData {
   startTime: number;
 }
 
+interface GrammarIssue {
+  id: string;
+  type: 'spelling' | 'grammar' | 'punctuation' | 'style';
+  original: string;
+  correction: string;
+  explanation: string;
+  position?: { from: number; to: number };
+}
+
+interface SeoSuggestion {
+  id: string;
+  type: string;
+  original: string;
+  suggestedText: string;
+  reason: string;
+  priority: 'high' | 'medium' | 'low';
+  position?: { from: number; to: number };
+}
+
+export interface RichTextEditorRef {
+  getEditor: () => Editor | null;
+  applyGrammarMarks: (issues: GrammarIssue[]) => void;
+  applySeoMarks: (suggestions: SeoSuggestion[]) => void;
+  clearAllMarks: () => void;
+}
+
 interface RichTextEditorProps {
   content: string;
   onChange: (content: string) => void;
@@ -42,9 +75,15 @@ interface RichTextEditorProps {
   minHeight?: string;
   onImageInsert?: (image: ImageData) => void;
   onVideoInsert?: (video: VideoEmbedData) => void;
+  // Inline suggestions
+  enableInlineSuggestions?: boolean;
+  onApplyGrammarCorrection?: (id: string, correction: string) => void;
+  onIgnoreGrammarError?: (id: string) => void;
+  onApplySeoSuggestion?: (id: string, suggestedText: string) => void;
+  onIgnoreSeoSuggestion?: (id: string) => void;
 }
 
-export function RichTextEditor({
+export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(function RichTextEditor({
   content,
   onChange,
   placeholder = 'ابدأ الكتابة هنا...',
@@ -52,7 +91,12 @@ export function RichTextEditor({
   minHeight = '400px',
   onImageInsert,
   onVideoInsert,
-}: RichTextEditorProps) {
+  enableInlineSuggestions = false,
+  onApplyGrammarCorrection,
+  onIgnoreGrammarError,
+  onApplySeoSuggestion,
+  onIgnoreSeoSuggestion,
+}, ref) {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showVideoPicker, setShowVideoPicker] = useState(false);
 
@@ -93,6 +137,8 @@ export function RichTextEditor({
         },
       }),
       YouTubeExtension,
+      // Inline suggestion extensions (only add if enabled)
+      ...(enableInlineSuggestions ? [GrammarErrorExtension, SeoSuggestionExtension] : []),
     ],
     content,
     editable,
@@ -106,6 +152,99 @@ export function RichTextEditor({
       onChange(editor.getHTML());
     },
   });
+
+  // Helper function to find text position in the editor
+  const findTextPosition = useCallback((searchText: string, startFrom = 0): { from: number; to: number } | null => {
+    if (!editor) return null;
+
+    const doc = editor.state.doc;
+    let found: { from: number; to: number } | null = null;
+
+    doc.descendants((node, pos) => {
+      if (found) return false; // Stop if already found
+      if (node.isText && node.text) {
+        const index = node.text.indexOf(searchText, pos >= startFrom ? 0 : startFrom - pos);
+        if (index !== -1) {
+          const from = pos + index;
+          const to = from + searchText.length;
+          if (from >= startFrom) {
+            found = { from, to };
+            return false; // Stop searching
+          }
+        }
+      }
+    });
+
+    return found;
+  }, [editor]);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    getEditor: () => editor,
+
+    applyGrammarMarks: (issues: GrammarIssue[]) => {
+      if (!editor || !enableInlineSuggestions) return;
+
+      // Clear existing grammar marks first
+      editor.commands.clearAllGrammarErrors();
+
+      // Apply new marks
+      issues.forEach((issue) => {
+        // Find the text in the document
+        const position = issue.position || findTextPosition(issue.original);
+        if (position) {
+          editor
+            .chain()
+            .setTextSelection(position)
+            .setGrammarError({
+              id: issue.id,
+              type: issue.type,
+              correction: issue.correction,
+              explanation: issue.explanation,
+            })
+            .run();
+        }
+      });
+
+      // Reset selection
+      editor.commands.blur();
+    },
+
+    applySeoMarks: (suggestions: SeoSuggestion[]) => {
+      if (!editor || !enableInlineSuggestions) return;
+
+      // Clear existing SEO marks first
+      editor.commands.clearAllSeoSuggestions();
+
+      // Apply new marks
+      suggestions.forEach((suggestion) => {
+        // Find the text in the document
+        const position = suggestion.position || findTextPosition(suggestion.original);
+        if (position) {
+          editor
+            .chain()
+            .setTextSelection(position)
+            .setSeoSuggestion({
+              id: suggestion.id,
+              type: suggestion.type as SeoSuggestionAttributes['type'],
+              suggestedText: suggestion.suggestedText,
+              reason: suggestion.reason,
+              priority: suggestion.priority,
+            })
+            .run();
+        }
+      });
+
+      // Reset selection
+      editor.commands.blur();
+    },
+
+    clearAllMarks: () => {
+      if (!editor || !enableInlineSuggestions) return;
+      editor.commands.clearAllGrammarErrors();
+      editor.commands.clearAllSeoSuggestions();
+    },
+  }), [editor, enableInlineSuggestions, findTextPosition]);
 
   // Handle image selection from picker
   const handleImageSelect = useCallback((image: ImageData) => {
@@ -412,9 +551,20 @@ export function RichTextEditor({
         onSelect={handleVideoSelect}
         title="إدراج فيديو YouTube"
       />
+
+      {/* Suggestion Tooltip for inline grammar/SEO suggestions */}
+      {enableInlineSuggestions && (
+        <SuggestionTooltip
+          editor={editor}
+          onApplyGrammarCorrection={onApplyGrammarCorrection}
+          onIgnoreGrammarError={onIgnoreGrammarError}
+          onApplySeoSuggestion={onApplySeoSuggestion}
+          onIgnoreSeoSuggestion={onIgnoreSeoSuggestion}
+        />
+      )}
     </div>
   );
-}
+});
 
 // Custom styles for TipTap editor
 export const richTextEditorStyles = `
@@ -533,5 +683,74 @@ export const richTextEditorStyles = `
     color: #adb5bd;
     pointer-events: none;
     height: 0;
+  }
+
+  /* Grammar Error Styles */
+  .grammar-error {
+    cursor: pointer;
+    position: relative;
+    text-decoration-style: wavy;
+    text-decoration-line: underline;
+    text-underline-offset: 3px;
+    transition: background-color 0.15s ease;
+  }
+
+  .grammar-error:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+
+  .grammar-error-spelling {
+    text-decoration-color: #ef4444;
+  }
+
+  .grammar-error-grammar {
+    text-decoration-color: #f97316;
+  }
+
+  .grammar-error-punctuation {
+    text-decoration-color: #eab308;
+  }
+
+  .grammar-error-style {
+    text-decoration-color: #3b82f6;
+  }
+
+  /* SEO Suggestion Styles */
+  .seo-suggestion {
+    cursor: pointer;
+    position: relative;
+    border-radius: 2px;
+    transition: background-color 0.15s ease;
+  }
+
+  .seo-suggestion:hover {
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+
+  .seo-suggestion-high {
+    background-color: rgba(34, 197, 94, 0.15);
+    border-bottom: 2px solid #22c55e;
+  }
+
+  .seo-suggestion-high:hover {
+    background-color: rgba(34, 197, 94, 0.25);
+  }
+
+  .seo-suggestion-medium {
+    background-color: rgba(34, 197, 94, 0.1);
+    border-bottom: 1px dashed #22c55e;
+  }
+
+  .seo-suggestion-medium:hover {
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+
+  .seo-suggestion-low {
+    background-color: rgba(34, 197, 94, 0.05);
+    border-bottom: 1px dotted #22c55e;
+  }
+
+  .seo-suggestion-low:hover {
+    background-color: rgba(34, 197, 94, 0.15);
   }
 `;

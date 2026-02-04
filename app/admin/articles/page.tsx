@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Loading } from '@/components/ui/Loading';
+import { Loading, SkeletonTable } from '@/components/ui/Loading';
 import { ArticlesListClient } from '@/components/admin/ArticlesListClient';
 import { Prisma } from '@prisma/client';
 
@@ -345,7 +345,7 @@ export default async function ArticlesPage({
 
       {/* Articles Table */}
       <Card>
-        <Suspense fallback={<Loading />}>
+        <Suspense fallback={<SkeletonTable rows={10} cells={7} />}>
           {articles.length === 0 ? (
             <EmptyState
               title="لا توجد مقالات"

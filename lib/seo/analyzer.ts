@@ -5,6 +5,7 @@ import {
   CriterionStatus,
   SCORE_THRESHOLDS,
   SEO_THRESHOLDS,
+  SEO_WEIGHTS,
   SeoAnalysisResult,
   SeoCategory,
   SeoCriterion,
@@ -21,6 +22,12 @@ import {
   keywordExists,
   stripHtml,
 } from './utils';
+import {
+  analyzeTitleReadability,
+  analyzeContentReadability,
+  analyzeKeywordInSubheadings,
+  analyzeUrlLength,
+} from './tests';
 
 /**
  * Analyze article content and generate SEO score
@@ -102,6 +109,50 @@ export function analyzeArticle(article: ArticleContent): SeoAnalysisResult {
     suggestions.push(generateSuggestion(slugCriteria, 'medium'));
   }
 
+  // 10. URL length analysis
+  const urlLengthCriteria = analyzeUrlLength(article.slug);
+  criteria.push(urlLengthCriteria);
+  if (urlLengthCriteria.status !== 'passed') {
+    suggestions.push(generateSuggestion(urlLengthCriteria, 'low'));
+  }
+
+  // 11. Title readability analysis (power words, sentiment, numbers)
+  const titleReadabilityCriteria = analyzeTitleReadability(
+    article.metaTitle || article.title,
+    article.focusKeyword
+  );
+  criteria.push(...titleReadabilityCriteria);
+  titleReadabilityCriteria.forEach(c => {
+    if (c.status !== 'passed') {
+      suggestions.push(generateSuggestion(c, 'low'));
+    }
+  });
+
+  // 12. Content readability analysis (TOC, paragraph length, media)
+  const contentReadabilityCriteria = analyzeContentReadability(
+    article.content,
+    article.imageCount,
+    0 // video count - can be extended
+  );
+  criteria.push(...contentReadabilityCriteria);
+  contentReadabilityCriteria.forEach(c => {
+    if (c.status !== 'passed') {
+      suggestions.push(generateSuggestion(c, 'medium'));
+    }
+  });
+
+  // 13. Keyword in subheadings (if focus keyword provided)
+  if (article.focusKeyword) {
+    const keywordSubheadingsCriteria = analyzeKeywordInSubheadings(
+      article.content,
+      article.focusKeyword
+    );
+    criteria.push(keywordSubheadingsCriteria);
+    if (keywordSubheadingsCriteria.status !== 'passed') {
+      suggestions.push(generateSuggestion(keywordSubheadingsCriteria, 'medium'));
+    }
+  }
+
   // Calculate total score
   const totalScore = criteria.reduce((sum, c) => sum + c.score, 0);
   const maxScore = criteria.reduce((sum, c) => sum + c.maxScore, 0);
@@ -138,6 +189,7 @@ export function analyzeArticle(article: ArticleContent): SeoAnalysisResult {
 
 /**
  * Analyze title length
+ * Part of Basic SEO - contributes to content quality assessment
  */
 function analyzeTitleLength(title: string, metaTitle?: string): SeoCriterion {
   const titleToCheck = metaTitle || title;
@@ -146,7 +198,8 @@ function analyzeTitleLength(title: string, metaTitle?: string): SeoCriterion {
 
   let status: CriterionStatus = 'failed';
   let score = 0;
-  const maxScore = 15;
+  // Title length is part of the overall assessment, using 5 points (part of basic SEO)
+  const maxScore = 5;
 
   if (length >= optimalMin && length <= optimalMax) {
     status = 'passed';
@@ -185,6 +238,7 @@ function analyzeTitleLength(title: string, metaTitle?: string): SeoCriterion {
 
 /**
  * Analyze meta description
+ * Part of Basic SEO assessment
  */
 function analyzeMetaDescription(metaDescription?: string): SeoCriterion {
   const length = metaDescription?.length || 0;
@@ -192,7 +246,8 @@ function analyzeMetaDescription(metaDescription?: string): SeoCriterion {
 
   let status: CriterionStatus = 'failed';
   let score = 0;
-  const maxScore = 15;
+  // Meta description quality - 5 points
+  const maxScore = 5;
 
   if (length >= optimalMin && length <= optimalMax) {
     status = 'passed';
@@ -235,6 +290,7 @@ function analyzeMetaDescription(metaDescription?: string): SeoCriterion {
 
 /**
  * Analyze word count
+ * Part of Basic SEO - Content Length: 10 points
  */
 function analyzeWordCount(content: string): SeoCriterion {
   const wordCount = countWords(content);
@@ -242,7 +298,7 @@ function analyzeWordCount(content: string): SeoCriterion {
 
   let status: CriterionStatus = 'failed';
   let score = 0;
-  const maxScore = 20;
+  const maxScore = SEO_WEIGHTS.basicSeo.contentLength;
 
   if (wordCount >= excellentWords) {
     status = 'passed';
@@ -290,10 +346,10 @@ function analyzeHeadings(content: string): SeoCriterion[] {
   const { minH2, minH3 } = SEO_THRESHOLDS.headings;
   const criteria: SeoCriterion[] = [];
 
-  // H2 analysis
+  // H2 analysis - Part of structure/content readability
   let h2Status: CriterionStatus = 'failed';
   let h2Score = 0;
-  const h2MaxScore = 8;
+  const h2MaxScore = 3; // Reduced to be part of structure (total structure ~8pts)
 
   if (headings.h2 >= minH2) {
     h2Status = 'passed';
@@ -318,10 +374,10 @@ function analyzeHeadings(content: string): SeoCriterion[] {
     recommendationAr: headings.h2 < minH2 ? 'أضف عناوين H2 لتحسين هيكل المحتوى' : undefined,
   });
 
-  // H3 analysis
+  // H3 analysis - Part of structure
   let h3Status: CriterionStatus = 'failed';
   let h3Score = 0;
-  const h3MaxScore = 5;
+  const h3MaxScore = 2; // Reduced to be part of structure
 
   if (headings.h3 >= minH3) {
     h3Status = 'passed';
@@ -358,9 +414,9 @@ function analyzeImages(content: string, hasFeaturedImage: boolean, imageCount: n
   const totalImages = imageCount + contentImages.length;
   const criteria: SeoCriterion[] = [];
 
-  // Featured image analysis
+  // Featured image analysis - Part of Media Presence (5 pts total for media)
   let featuredStatus: CriterionStatus = hasFeaturedImage ? 'passed' : 'failed';
-  let featuredScore = hasFeaturedImage ? 10 : 0;
+  let featuredScore = hasFeaturedImage ? SEO_WEIGHTS.contentReadability.mediaPresence : 0;
 
   criteria.push({
     id: 'featured-image',
@@ -368,23 +424,23 @@ function analyzeImages(content: string, hasFeaturedImage: boolean, imageCount: n
     nameAr: 'الصورة البارزة',
     description: 'Add a featured image for your article',
     descriptionAr: 'أضف صورة بارزة للمقال',
-    weight: 10,
+    weight: SEO_WEIGHTS.contentReadability.mediaPresence,
     status: featuredStatus,
     score: featuredScore,
-    maxScore: 10,
+    maxScore: SEO_WEIGHTS.contentReadability.mediaPresence,
     value: hasFeaturedImage ? 1 : 0,
     recommendation: !hasFeaturedImage ? 'Add a featured image to improve engagement' : undefined,
     recommendationAr: !hasFeaturedImage ? 'أضف صورة بارزة لتحسين التفاعل' : undefined,
   });
 
-  // Alt text analysis
+  // Alt text analysis - Keyword in Image Alt: 5 points
   const contentImagesWithAlt = contentImages.filter(img => img.hasAlt).length;
   const totalImagesWithAlt = imagesWithAlt + contentImagesWithAlt;
   const altTextRatio = totalImages > 0 ? totalImagesWithAlt / totalImages : 1;
 
   let altStatus: CriterionStatus = 'passed';
-  let altScore = 7;
-  const altMaxScore = 7;
+  let altScore = SEO_WEIGHTS.additionalSeo.keywordInImageAlt;
+  const altMaxScore = SEO_WEIGHTS.additionalSeo.keywordInImageAlt;
 
   if (altTextRatio < 0.5) {
     altStatus = 'failed';
@@ -420,9 +476,10 @@ function analyzeLinks(content: string): SeoCriterion[] {
   const { minInternal, minExternal } = SEO_THRESHOLDS.links;
   const criteria: SeoCriterion[] = [];
 
-  // Internal links
+  // Internal links - 4 points
+  const internalMaxScore = SEO_WEIGHTS.additionalSeo.internalLinks;
   let internalStatus: CriterionStatus = links.internal >= minInternal ? 'passed' : 'warning';
-  let internalScore = links.internal >= minInternal ? 5 : Math.round(5 * 0.5);
+  let internalScore = links.internal >= minInternal ? internalMaxScore : Math.round(internalMaxScore * 0.5);
 
   criteria.push({
     id: 'internal-links',
@@ -430,18 +487,19 @@ function analyzeLinks(content: string): SeoCriterion[] {
     nameAr: 'الروابط الداخلية',
     description: `Include at least ${minInternal} internal link to other content`,
     descriptionAr: `أضف رابط داخلي واحد على الأقل لمحتوى آخر`,
-    weight: 5,
+    weight: internalMaxScore,
     status: internalStatus,
     score: internalScore,
-    maxScore: 5,
+    maxScore: internalMaxScore,
     value: links.internal,
     recommendation: links.internal < minInternal ? 'Add internal links to related articles' : undefined,
     recommendationAr: links.internal < minInternal ? 'أضف روابط داخلية لمقالات ذات صلة' : undefined,
   });
 
-  // External links
+  // External links - 3 points
+  const externalMaxScore = SEO_WEIGHTS.additionalSeo.externalLinks;
   let externalStatus: CriterionStatus = links.external >= minExternal ? 'passed' : 'warning';
-  let externalScore = links.external >= minExternal ? 5 : Math.round(5 * 0.5);
+  let externalScore = links.external >= minExternal ? externalMaxScore : Math.round(externalMaxScore * 0.5);
 
   criteria.push({
     id: 'external-links',
@@ -449,10 +507,10 @@ function analyzeLinks(content: string): SeoCriterion[] {
     nameAr: 'الروابط الخارجية',
     description: `Include at least ${minExternal} external link to authoritative sources`,
     descriptionAr: `أضف رابط خارجي واحد على الأقل لمصادر موثوقة`,
-    weight: 5,
+    weight: externalMaxScore,
     status: externalStatus,
     score: externalScore,
-    maxScore: 5,
+    maxScore: externalMaxScore,
     value: links.external,
     recommendation: links.external < minExternal ? 'Add external links to credible sources' : undefined,
     recommendationAr: links.external < minExternal ? 'أضف روابط خارجية لمصادر موثوقة' : undefined,
@@ -468,7 +526,8 @@ function analyzeKeyword(article: ArticleContent): SeoCriterion[] {
   const keyword = article.focusKeyword!;
   const criteria: SeoCriterion[] = [];
 
-  // Keyword in title
+  // Keyword in title - 5 points (Basic SEO)
+  const keywordInTitleScore = SEO_WEIGHTS.basicSeo.keywordInTitle;
   const inTitle = keywordExists(article.metaTitle || article.title, keyword);
   criteria.push({
     id: 'keyword-in-title',
@@ -476,16 +535,17 @@ function analyzeKeyword(article: ArticleContent): SeoCriterion[] {
     nameAr: 'الكلمة المفتاحية في العنوان',
     description: 'Focus keyword should appear in the title',
     descriptionAr: 'يجب أن تظهر الكلمة المفتاحية في العنوان',
-    weight: 8,
+    weight: keywordInTitleScore,
     status: inTitle ? 'passed' : 'failed',
-    score: inTitle ? 8 : 0,
-    maxScore: 8,
+    score: inTitle ? keywordInTitleScore : 0,
+    maxScore: keywordInTitleScore,
     value: inTitle ? 'نعم' : 'لا',
     recommendation: !inTitle ? 'Add your focus keyword to the title' : undefined,
     recommendationAr: !inTitle ? 'أضف الكلمة المفتاحية للعنوان' : undefined,
   });
 
-  // Keyword in first paragraph
+  // Keyword in first paragraph - 5 points (Basic SEO: keyword at beginning of content)
+  const keywordInIntroScore = SEO_WEIGHTS.basicSeo.keywordAtBeginningOfContent;
   const firstParagraph = getFirstParagraph(article.content);
   const inFirstParagraph = keywordExists(firstParagraph, keyword);
   criteria.push({
@@ -494,16 +554,17 @@ function analyzeKeyword(article: ArticleContent): SeoCriterion[] {
     nameAr: 'الكلمة المفتاحية في المقدمة',
     description: 'Focus keyword should appear in the first paragraph',
     descriptionAr: 'يجب أن تظهر الكلمة المفتاحية في الفقرة الأولى',
-    weight: 5,
+    weight: keywordInIntroScore,
     status: inFirstParagraph ? 'passed' : 'warning',
-    score: inFirstParagraph ? 5 : 2,
-    maxScore: 5,
+    score: inFirstParagraph ? keywordInIntroScore : Math.round(keywordInIntroScore * 0.4),
+    maxScore: keywordInIntroScore,
     value: inFirstParagraph ? 'نعم' : 'لا',
     recommendation: !inFirstParagraph ? 'Include your focus keyword in the first paragraph' : undefined,
     recommendationAr: !inFirstParagraph ? 'أضف الكلمة المفتاحية في الفقرة الأولى' : undefined,
   });
 
-  // Keyword in meta description
+  // Keyword in meta description - 5 points (Basic SEO)
+  const keywordInMetaScore = SEO_WEIGHTS.basicSeo.keywordInMetaDescription;
   const inMetaDesc = keywordExists(article.metaDescription || article.excerpt || '', keyword);
   criteria.push({
     id: 'keyword-in-meta',
@@ -511,22 +572,22 @@ function analyzeKeyword(article: ArticleContent): SeoCriterion[] {
     nameAr: 'الكلمة المفتاحية في الوصف',
     description: 'Focus keyword should appear in the meta description',
     descriptionAr: 'يجب أن تظهر الكلمة المفتاحية في الوصف الموجز',
-    weight: 5,
+    weight: keywordInMetaScore,
     status: inMetaDesc ? 'passed' : 'warning',
-    score: inMetaDesc ? 5 : 2,
-    maxScore: 5,
+    score: inMetaDesc ? keywordInMetaScore : Math.round(keywordInMetaScore * 0.4),
+    maxScore: keywordInMetaScore,
     value: inMetaDesc ? 'نعم' : 'لا',
     recommendation: !inMetaDesc ? 'Include your focus keyword in the meta description' : undefined,
     recommendationAr: !inMetaDesc ? 'أضف الكلمة المفتاحية في الوصف الموجز' : undefined,
   });
 
-  // Keyword density
+  // Keyword density - 5 points (Additional SEO)
   const density = calculateKeywordDensity(article.content, keyword);
   const { minDensity, maxDensity, optimalDensity } = SEO_THRESHOLDS.keyword;
 
   let densityStatus: CriterionStatus = 'warning';
-  let densityScore = 4;
-  const densityMaxScore = 7;
+  const densityMaxScore = SEO_WEIGHTS.additionalSeo.keywordDensity;
+  let densityScore = Math.round(densityMaxScore * 0.6);
 
   if (density >= minDensity && density <= maxDensity) {
     if (Math.abs(density - optimalDensity) < 0.5) {
@@ -571,14 +632,14 @@ function analyzeKeyword(article: ArticleContent): SeoCriterion[] {
 }
 
 /**
- * Analyze readability
+ * Analyze readability - 5 points (Content Readability)
  */
 function analyzeReadability(content: string): SeoCriterion {
   const readabilityScore = calculateReadabilityScore(content);
 
   let status: CriterionStatus = 'failed';
   let score = 0;
-  const maxScore = 10;
+  const maxScore = SEO_WEIGHTS.contentReadability.readabilityScore;
 
   if (readabilityScore >= 80) {
     status = 'passed';
@@ -608,7 +669,7 @@ function analyzeReadability(content: string): SeoCriterion {
 }
 
 /**
- * Analyze slug
+ * Analyze slug - 3 points (URL Length from Additional SEO)
  */
 function analyzeSlug(slug?: string): SeoCriterion {
   const hasSlug = Boolean(slug && slug.length > 0);
@@ -617,7 +678,7 @@ function analyzeSlug(slug?: string): SeoCriterion {
 
   let status: CriterionStatus = 'failed';
   let score = 0;
-  const maxScore = 5;
+  const maxScore = SEO_WEIGHTS.additionalSeo.urlLength;
 
   if (hasSlug && isValidSlug && isGoodLength) {
     status = 'passed';
@@ -663,7 +724,7 @@ function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
       id: 'content',
       name: 'Content',
       nameAr: 'المحتوى',
-      criteria: criteria.filter(c => ['title-length', 'meta-description', 'word-count', 'readability'].includes(c.id)),
+      criteria: criteria.filter(c => ['title-length', 'meta-description', 'word-count', 'readability', 'paragraph-length', 'table-of-contents'].includes(c.id)),
       score: 0,
       maxScore: 0,
     },
@@ -671,7 +732,7 @@ function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
       id: 'structure',
       name: 'Structure',
       nameAr: 'الهيكل',
-      criteria: criteria.filter(c => ['h2-headings', 'h3-headings', 'slug'].includes(c.id)),
+      criteria: criteria.filter(c => ['h2-headings', 'h3-headings', 'slug', 'url-length'].includes(c.id)),
       score: 0,
       maxScore: 0,
     },
@@ -679,7 +740,7 @@ function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
       id: 'media',
       name: 'Media',
       nameAr: 'الوسائط',
-      criteria: criteria.filter(c => ['featured-image', 'image-alt-text'].includes(c.id)),
+      criteria: criteria.filter(c => ['featured-image', 'image-alt-text', 'media-presence'].includes(c.id)),
       score: 0,
       maxScore: 0,
     },
@@ -696,6 +757,14 @@ function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
       name: 'Focus Keyword',
       nameAr: 'الكلمة المفتاحية',
       criteria: criteria.filter(c => c.id.startsWith('keyword-')),
+      score: 0,
+      maxScore: 0,
+    },
+    {
+      id: 'title-readability',
+      name: 'Title Readability',
+      nameAr: 'قابلية قراءة العنوان',
+      criteria: criteria.filter(c => ['title-sentiment', 'title-power-words', 'title-number'].includes(c.id)),
       score: 0,
       maxScore: 0,
     },

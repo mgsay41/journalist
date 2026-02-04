@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useTransition, useRef } from 'react';
+import { useState, useCallback, useEffect, useTransition, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -11,11 +11,28 @@ import { Card } from '@/components/ui/Card';
 import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { TagAutoSuggest } from '@/components/admin/TagAutoSuggest';
 import { SeoScorePanel } from '@/components/admin/SeoScorePanel';
-import { AiPanel } from '@/components/admin/AiPanel';
 import { Alert } from '@/components/ui/Alert';
 import { Loading } from '@/components/ui/Loading';
 import { generateSlug } from '@/lib/utils/slug';
 import { MAX_TAGS_PER_ARTICLE } from '@/lib/validations/article';
+
+// Helper function to extract image information from content
+function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
+  if (!content) return { imageCount: 0, imagesWithAlt: 0 };
+
+  // Match all img tags
+  const imgRegex = /<img[^>]*>/gi;
+  const images = content.match(imgRegex) || [];
+  const imageCount = images.length;
+
+  // Count images with non-empty alt text
+  const imagesWithAlt = images.filter(img => {
+    const altMatch = img.match(/alt=["']([^"']+)["']/i);
+    return altMatch && altMatch[1].trim().length > 0;
+  }).length;
+
+  return { imageCount, imagesWithAlt };
+}
 
 interface Article {
   id: string;
@@ -347,6 +364,9 @@ export default function EditArticlePage() {
   const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
   const readingTime = Math.ceil(wordCount / 200);
 
+  // Extract image information from content for SEO analysis
+  const imageInfo = useMemo(() => extractImageInfo(content), [content]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -646,27 +666,6 @@ export default function EditArticlePage() {
               </div>
             </Card>
 
-            {/* AI Panel */}
-            <AiPanel
-              title={title}
-              content={content}
-              excerpt={excerpt}
-              metaTitle={metaTitle}
-              metaDescription={metaDescription}
-              focusKeyword={focusKeyword}
-              onMetaTitleChange={setMetaTitle}
-              onMetaDescriptionChange={setMetaDescription}
-              onFocusKeywordChange={setFocusKeyword}
-              onContentInsert={(text, position) => {
-                if (position === 'start') {
-                  setContent(text + '\n\n' + content);
-                } else if (position === 'end') {
-                  setContent(content + '\n\n' + text);
-                }
-              }}
-              onContentReplace={setContent}
-            />
-
             {/* SEO Score Panel */}
             <SeoScorePanel
               title={title}
@@ -676,9 +675,9 @@ export default function EditArticlePage() {
               metaDescription={metaDescription}
               focusKeyword={focusKeyword}
               slug={slug}
-              hasFeaturedImage={false}
-              imageCount={0}
-              imagesWithAlt={0}
+              hasFeaturedImage={imageInfo.imageCount > 0}
+              imageCount={imageInfo.imageCount}
+              imagesWithAlt={imageInfo.imagesWithAlt}
               onFocusKeywordChange={setFocusKeyword}
               onMetaTitleChange={setMetaTitle}
               onMetaDescriptionChange={setMetaDescription}

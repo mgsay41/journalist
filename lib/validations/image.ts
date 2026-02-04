@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/lib/cloudinary';
+import { ALLOWED_IMAGE_TYPES, DEFAULT_MAX_FILE_SIZE } from '@/lib/cloudinary';
 
 // Image upload validation schema
 export const imageUploadSchema = z.object({
@@ -7,8 +7,8 @@ export const imageUploadSchema = z.object({
     (file) => ALLOWED_IMAGE_TYPES.includes(file.type),
     { message: 'نوع الملف غير مدعوم. الأنواع المدعومة: JPEG, PNG, GIF, WebP' }
   ).refine(
-    (file) => file.size <= MAX_FILE_SIZE,
-    { message: `حجم الملف كبير جداً. الحد الأقصى هو ${MAX_FILE_SIZE / (1024 * 1024)} ميجابايت` }
+    (file) => file.size <= DEFAULT_MAX_FILE_SIZE,
+    { message: `حجم الملف كبير جداً. الحد الأقصى هو ${DEFAULT_MAX_FILE_SIZE / (1024 * 1024)} ميجابايت` }
   ),
 });
 

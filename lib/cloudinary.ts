@@ -23,8 +23,11 @@ export const ALLOWED_IMAGE_TYPES = [
   'image/webp',
 ];
 
-// Maximum file size (10MB)
-export const MAX_FILE_SIZE = 10 * 1024 * 1024;
+// Default maximum file size (10MB) - can be overridden by user settings
+export const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// Default image quality (1-100) - can be overridden by user settings
+export const DEFAULT_IMAGE_QUALITY = 85;
 
 // Folder name in Cloudinary
 export const CLOUDINARY_FOLDER = 'journalist-cms';
@@ -50,19 +53,21 @@ export interface ProcessedImageUrls {
  * Upload an image to Cloudinary
  * @param fileBuffer - The image file buffer
  * @param filename - Original filename for reference
+ * @param quality - Optional quality setting (1-100), defaults to auto:good
  * @returns Cloudinary upload response
  */
 export async function uploadToCloudinary(
   fileBuffer: Buffer,
-  filename: string
+  filename: string,
+  quality?: number
 ): Promise<UploadApiResponse> {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: CLOUDINARY_FOLDER,
         resource_type: 'image',
-        // Auto-optimize the image
-        quality: 'auto:good',
+        // Use provided quality setting or auto optimization
+        quality: quality ? `${quality}` : 'auto:good',
         fetch_format: 'auto',
         // Add original filename as context
         context: `original_filename=${filename}`,
@@ -85,29 +90,32 @@ export async function uploadToCloudinary(
 /**
  * Generate URLs for different image sizes using Cloudinary transformations
  * @param publicId - The Cloudinary public ID
+ * @param quality - Optional quality setting (1-100), defaults to auto:good
  * @returns Object with URLs for all sizes
  */
-export function generateImageUrls(publicId: string): ProcessedImageUrls {
+export function generateImageUrls(publicId: string, quality?: number): ProcessedImageUrls {
+  const qualitySetting = quality ? `${quality}` : 'auto:good';
+
   const original = cloudinary.url(publicId, {
-    quality: 'auto:good',
+    quality: qualitySetting,
     fetch_format: 'auto',
   });
 
   const thumbnail = cloudinary.url(publicId, {
     ...IMAGE_SIZES.thumbnail,
-    quality: 'auto:good',
+    quality: qualitySetting,
     fetch_format: 'auto',
   });
 
   const medium = cloudinary.url(publicId, {
     ...IMAGE_SIZES.medium,
-    quality: 'auto:good',
+    quality: qualitySetting,
     fetch_format: 'auto',
   });
 
   const large = cloudinary.url(publicId, {
     ...IMAGE_SIZES.large,
-    quality: 'auto:good',
+    quality: qualitySetting,
     fetch_format: 'auto',
   });
 
@@ -127,11 +135,13 @@ export async function deleteFromCloudinary(publicId: string): Promise<{ result: 
  * Validate image file
  * @param mimeType - The MIME type of the file
  * @param fileSize - The file size in bytes
+ * @param maxFileSize - Optional maximum file size in bytes (defaults to DEFAULT_MAX_FILE_SIZE)
  * @returns Object with valid status and optional error message
  */
 export function validateImage(
   mimeType: string,
-  fileSize: number
+  fileSize: number,
+  maxFileSize?: number
 ): { valid: boolean; error?: string } {
   if (!ALLOWED_IMAGE_TYPES.includes(mimeType)) {
     return {
@@ -140,10 +150,11 @@ export function validateImage(
     };
   }
 
-  if (fileSize > MAX_FILE_SIZE) {
+  const maxSize = maxFileSize || DEFAULT_MAX_FILE_SIZE;
+  if (fileSize > maxSize) {
     return {
       valid: false,
-      error: `حجم الملف كبير جداً. الحد الأقصى هو ${MAX_FILE_SIZE / (1024 * 1024)} ميجابايت`,
+      error: `حجم الملف كبير جداً. الحد الأقصى هو ${maxSize / (1024 * 1024)} ميجابايت`,
     };
   }
 

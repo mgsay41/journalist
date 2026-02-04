@@ -92,12 +92,17 @@ export async function POST(request: NextRequest) {
         headers: request.headers,
       }) as any;
 
+      // Better Auth returns { session, user } or { token, user } depending on version
+      const sessionToken = authResult.session?.token || authResult.token;
+      const userData = authResult.user;
+
       // Debug: Log what Better Auth returns
       console.log('[LOGIN] Better Auth result:', JSON.stringify({
-        hasToken: !!authResult.token,
-        hasUser: !!authResult.user,
-        token: authResult.token?.substring(0, 20) + '...',
-        userId: authResult.user?.id,
+        hasSession: !!authResult.session,
+        hasToken: !!sessionToken,
+        hasUser: !!userData,
+        token: sessionToken?.substring(0, 20) + '...',
+        userId: userData?.id,
       }));
 
       // Record successful login and reset attempts
@@ -107,20 +112,22 @@ export async function POST(request: NextRequest) {
       // Create response
       const response = NextResponse.json({
         success: true,
-        user: authResult.user,
+        user: userData,
       });
 
       // Set the session cookie manually
       // Using underscore in name to avoid encoding issues with dots
-      if (authResult.token) {
-        response.cookies.set('better_auth_session', authResult.token, {
+      if (sessionToken) {
+        response.cookies.set('better_auth_session', sessionToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           maxAge: 60 * 60 * 24 * (remember ? 30 : 7), // 30 days if remember, else 7 days
           path: '/',
         });
-        console.log('[LOGIN] Cookie set successfully with token:', authResult.token?.substring(0, 20) + '...');
+        console.log('[LOGIN] Cookie set successfully with token:', sessionToken?.substring(0, 20) + '...');
+      } else {
+        console.error('[LOGIN] No session token received from Better Auth');
       }
 
       return response;

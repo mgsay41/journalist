@@ -73,10 +73,17 @@ export async function getServerSession() {
     const { cookies } = await import('next/headers');
     const cookieStore = await cookies();
 
-    // Get session token from our custom cookie
-    const sessionToken = cookieStore.get('better_auth_session')?.value;
+    // Get session token - try both cookie names (Better Auth default and our custom)
+    const sessionToken =
+      cookieStore.get('better-auth.session_token')?.value ||
+      cookieStore.get('better_auth_session')?.value;
 
     if (!sessionToken) {
+      // Debug: log available cookies in development
+      if (process.env.NODE_ENV === 'development') {
+        const allCookies = cookieStore.getAll();
+        console.log('Available cookies:', allCookies.map(c => c.name));
+      }
       return null;
     }
 
@@ -99,13 +106,14 @@ export async function getServerSession() {
     });
 
     if (!session) {
+      console.log('Session not found in database for token:', sessionToken.substring(0, 10) + '...');
       return null;
     }
 
     // Check if session is expired
     if (new Date(session.expiresAt) < new Date()) {
       // Delete expired session
-      await prisma.session.delete({ where: { id: session.id } });
+      await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
       return null;
     }
 
@@ -120,7 +128,12 @@ export async function getServerSession() {
       user: session.user,
     };
   } catch (error) {
-    console.error('Error getting server session:', error);
+    // Improved error logging
+    if (error instanceof Error) {
+      console.error('Error getting server session:', error.message);
+    } else {
+      console.error('Error getting server session:', error);
+    }
     return null;
   }
 }

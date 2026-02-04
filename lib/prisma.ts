@@ -10,6 +10,7 @@ const globalForPrisma = globalThis as unknown as {
 /**
  * Get or create PrismaClient instance
  * Ensures environment variables are loaded before creating the client
+ * Uses singleton pattern to prevent multiple instances in development
  */
 function getPrismaClient() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -32,9 +33,11 @@ function getPrismaClient() {
   });
 }
 
-// Always create a new client to avoid cache issues in development
-export const prisma = getPrismaClient();
+// Use singleton pattern to prevent multiple instances
+const prisma = globalForPrisma.prisma ?? getPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
+
+export { prisma };

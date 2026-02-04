@@ -1,177 +1,367 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import Link from 'next/link';
+import { Suspense } from 'react';
+import { PublicLayout, ArticleCard, ArticleCardSkeleton, LazyImage } from '@/components/public';
+import { SkeletonHero } from '@/components/ui/Skeleton';
+import { prisma } from '@/lib/prisma';
 
-export default function HomePage() {
-  const buttonStyles = "inline-flex items-center justify-center gap-2 font-medium rounded-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-foreground focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 text-base";
+async function getHomepageData() {
+  // Fetch categories for navigation
+  const categories = await prisma.category.findMany({
+    where: {
+      articles: {
+        some: {
+          status: 'published',
+          publishedAt: { lte: new Date() },
+        },
+      },
+    },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  // Fetch popular tags for footer
+  const popularTags = await prisma.tag.findMany({
+    where: {
+      articles: {
+        some: {
+          status: 'published',
+          publishedAt: { lte: new Date() },
+        },
+      },
+    },
+    orderBy: {
+      articles: { _count: 'desc' },
+    },
+    take: 9,
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  return {
+    categories,
+    popularTags,
+  };
+}
+
+async function getHeroArticle() {
+  // Fetch featured article
+  const featuredArticle = await prisma.article.findFirst({
+    where: {
+      status: 'published',
+      publishedAt: { lte: new Date() },
+      isFeatured: true,
+    },
+    orderBy: { publishedAt: 'desc' },
+    include: {
+      categories: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      featuredImage: {
+        select: {
+          id: true,
+          url: true,
+          altText: true,
+        },
+      },
+      author: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  // Fallback: if no featured article, get the most recent
+  return featuredArticle || await prisma.article.findFirst({
+    where: {
+      status: 'published',
+      publishedAt: { lte: new Date() },
+    },
+    orderBy: { publishedAt: 'desc' },
+    include: {
+      categories: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      featuredImage: {
+        select: {
+          id: true,
+          url: true,
+          altText: true,
+        },
+      },
+      author: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+}
+
+async function getRecentArticles(excludeId: string | null) {
+  // Fetch recent articles (exclude hero article)
+  const whereClause: any = {
+    status: 'published',
+    publishedAt: { lte: new Date() },
+  };
+
+  if (excludeId) {
+    whereClause.id = { not: excludeId };
+  }
+
+  return await prisma.article.findMany({
+    where: whereClause,
+    orderBy: { publishedAt: 'desc' },
+    take: 9,
+    include: {
+      categories: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      featuredImage: {
+        select: {
+          id: true,
+          url: true,
+          altText: true,
+        },
+      },
+      author: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+}
+
+async function HeroSection() {
+  const heroArticle = await getHeroArticle();
+
+  const formatDate = new Intl.DateTimeFormat('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  if (!heroArticle) {
+    return null;
+  }
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Hero Section - Minimal */}
-      <section className="border-b border-border">
-        <div className="container mx-auto px-4 py-24 md:py-32">
-          <div className="max-w-2xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold mb-6 text-foreground tracking-tight">
-              نظام إدارة المحتوى للصحفيين
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-xl mx-auto">
-              منصة عربية متكاملة لإدارة المقالات والمحتوى مع دعم كامل للتحسين من محركات البحث
-              والمساعد الذكي باستخدام الذكاء الاصطناعي
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-              <Link
-                href="/admin/login"
-                className={`${buttonStyles} bg-foreground text-background hover:bg-foreground/90`}
-              >
-                تسجيل الدخول
-              </Link>
-              <Link
-                href="/about"
-                className={`${buttonStyles} border border-border bg-background hover:bg-muted`}
-              >
-                عن النظام
-              </Link>
+    <section className="border-b border-border">
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* Image */}
+          {heroArticle.featuredImage && (
+            <div className="relative aspect-[4/3] lg:aspect-[3/2] overflow-hidden rounded-lg">
+              <LazyImage
+                src={heroArticle.featuredImage.url}
+                alt={heroArticle.featuredImage.altText || heroArticle.title}
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover"
+                priority // Hero image should load immediately
+              />
+              {heroArticle.categories.length > 0 && (
+                <div className="absolute top-4 right-4">
+                  <span className="px-4 py-2 bg-background/90 backdrop-blur-sm text-sm font-medium rounded-md">
+                    {heroArticle.categories[0].name}
+                  </span>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* Content */}
+          <div className={`space-y-4 ${!heroArticle.featuredImage ? 'lg:col-span-2' : ''}`}>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              {heroArticle.publishedAt && (
+                <time dateTime={heroArticle.publishedAt.toISOString()}>
+                  {formatDate.format(heroArticle.publishedAt)}
+                </time>
+              )}
+              {heroArticle.readingTime && (
+                <>
+                  <span>•</span>
+                  <span>{heroArticle.readingTime} دقيقة قراءة</span>
+                </>
+              )}
+            </div>
+
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">
+              <a href={`/article/${heroArticle.slug}`} className="hover:text-foreground/80 transition-colors">
+                {heroArticle.title}
+              </a>
+            </h1>
+
+            {heroArticle.excerpt && (
+              <p className="text-lg text-muted-foreground leading-relaxed line-clamp-3">
+                {heroArticle.excerpt}
+              </p>
+            )}
+
+            {heroArticle.author && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>بواسطة</span>
+                <span className="font-medium text-foreground">{heroArticle.author.name}</span>
+              </div>
+            )}
+
+            <a
+              href={`/article/${heroArticle.slug}`}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-foreground text-background font-medium rounded-md hover:bg-foreground/90 transition-colors"
+            >
+              اقرأ المقال
+              <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </a>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
-      {/* Features Section - Minimal */}
-      <section className="py-20 md:py-24 bg-background">
-        <div className="container mx-auto px-4">
-          <h2 className="text-2xl md:text-3xl font-semibold text-center mb-16 tracking-tight">
-            المميزات الرئيسية
+async function RecentArticlesSection() {
+  // First get hero article to exclude it
+  const heroArticle = await getHeroArticle();
+  const recentArticles = await getRecentArticles(heroArticle?.id || null);
+
+  return (
+    <section className="py-12 md:py-16">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground">
+            أحدث المقالات
           </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-                <CardTitle>إدارة المقالات</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  محرر نصوص غني داعم للغة العربية مع إمكانيات متقدمة للتنسيق والإدراج
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            {/* Feature 2 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <CardTitle>تحسين محركات البحث</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  تحليل شامل لمحتواك مع اقتراحات ذكية لتحسين ظهورك في محركات البحث
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            {/* Feature 3 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <CardTitle>مساعد ذكي</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  استفد من الذكاء الاصطناعي لإنشاء محتوى أفضل وتوفير الوقت في الكتابة
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            {/* Feature 4 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <CardTitle>إدارة الوسائط</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  ألبوم صور متكامل مع دعم الفيديو ومعاينة فورية للمحتوى
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            {/* Feature 5 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <CardTitle>الجدولة والنشر</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  خطط محتواك مسبقاً وانشر مقالاتك في الأوقات المثالية للوصول
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            {/* Feature 6 */}
-            <Card className="border border-border-subtle hover:border-border transition-colors">
-              <CardHeader>
-                <div className="w-10 h-10 border border-border rounded-md flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <CardTitle>الإحصائيات والتحليلات</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>
-                  تابع أداء مقالاتك واحصل على رؤى قيمة لتحسين محتواك
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section - Minimal */}
-      <section className="py-20 border-t border-border bg-muted/30">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-2xl md:text-3xl font-semibold mb-4 tracking-tight">
-            جاهز للبدء؟
-          </h2>
-          <p className="text-muted-foreground mb-10 text-lg max-w-md mx-auto">
-            سجل دخولك الآن وابدأ في إنشاء محتوى عربي مميز
-          </p>
-          <Link
-            href="/admin/login"
-            className={`${buttonStyles} bg-foreground text-background hover:bg-foreground/90`}
+          <a
+            href="/archive"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
           >
-            تسجيل الدخول
-          </Link>
+            عرض الكل
+            <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
         </div>
-      </section>
 
-      {/* Footer - Minimal */}
-      <footer className="py-8 border-t border-border">
-        <div className="container mx-auto px-4 text-center text-muted-foreground text-sm">
-          <p>© {new Date().getFullYear()} نظام إدارة المحتوى للصحفيين. جميع الحقوق محفوظة.</p>
+        {recentArticles.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentArticles.map((article) => (
+              <ArticleCard
+                key={article.id}
+                article={{
+                  id: article.id,
+                  title: article.title,
+                  slug: article.slug,
+                  excerpt: article.excerpt,
+                  featuredImage: article.featuredImage?.url || null,
+                  publishedAt: article.publishedAt,
+                  readingTime: article.readingTime,
+                  categories: article.categories.map((category) => ({
+                    id: category.id,
+                    name: category.name,
+                    slug: category.slug,
+                  })),
+                  author: article.author ? {
+                    name: article.author.name,
+                  } : null,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">لا توجد مقالات منشورة بعد</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CategoriesSection({ categories }: { categories: Array<{ id: string; name: string; slug: string }> }) {
+  if (categories.length === 0) return null;
+
+  return (
+    <section className="py-12 border-t border-border bg-muted/30">
+      <div className="container mx-auto px-4">
+        <h2 className="text-2xl md:text-3xl font-semibold text-foreground text-center mb-8">
+          تصفح حسب القسم
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {categories.slice(0, 6).map((category) => (
+            <a
+              key={category.id}
+              href={`/category/${category.slug}`}
+              className="p-4 border border-border-subtle rounded-lg text-center hover:border-foreground hover:bg-background transition-all group"
+            >
+              <span className="text-sm font-medium text-foreground group-hover:text-foreground/80 transition-colors">
+                {category.name}
+              </span>
+            </a>
+          ))}
         </div>
-      </footer>
-    </main>
+      </div>
+    </section>
+  );
+}
+
+export default async function HomePage() {
+  const data = await getHomepageData();
+
+  return (
+    <PublicLayout categories={data.categories} popularTags={data.popularTags}>
+      {/* Hero Section - Featured Article */}
+      <Suspense fallback={<SkeletonHero />}>
+        <HeroSection />
+      </Suspense>
+
+      {/* Recent Articles Section */}
+      <Suspense
+        fallback={
+          <section className="py-12 md:py-16">
+            <div className="container mx-auto px-4">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl md:text-3xl font-semibold text-foreground">
+                  أحدث المقالات
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <ArticleCardSkeleton key={i} />
+                ))}
+              </div>
+            </div>
+          </section>
+        }
+      >
+        <RecentArticlesSection />
+      </Suspense>
+
+      {/* Categories Section */}
+      <CategoriesSection categories={data.categories} />
+    </PublicLayout>
   );
 }

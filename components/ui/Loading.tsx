@@ -40,24 +40,19 @@ export function LoadingScreen({ message = 'جاري التحميل...' }: Loadin
   );
 }
 
-export interface SkeletonProps {
-  className?: string;
-}
-
-export function Skeleton({ className }: SkeletonProps) {
-  return (
-    <div
-      className={cn(
-        'animate-pulse bg-muted rounded',
-        className
-      )}
-      aria-hidden="true"
-    />
-  );
-}
-
 // Export Loading as alias for LoadingScreen for convenience
 export { LoadingScreen as Loading };
 
 // Export LoadingSpinner as alias for Spinner for convenience
 export { Spinner as LoadingSpinner };
+
+// Re-export Skeleton components for convenience
+export {
+  Skeleton,
+  SkeletonCard,
+  SkeletonStatsCard,
+  SkeletonTableRow,
+  SkeletonTable,
+  SkeletonHero,
+} from './Skeleton';
+export type { SkeletonProps, SkeletonCardProps } from './Skeleton';

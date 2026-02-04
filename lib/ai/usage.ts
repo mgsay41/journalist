@@ -21,7 +21,18 @@ export type AiFeature =
   | "generate-conclusion"
   | "grammar-check"
   | "alt-text"
-  | "related-topics";
+  | "related-topics"
+  | "complete-article" // Complete Article AI analysis
+  // UX Enhancement Features
+  | "outline-generation"
+  | "auto-tagging"
+  | "headline-optimization"
+  | "writing-assistant-autocomplete"
+  | "writing-assistant-improve-word"
+  | "writing-assistant-fix-passive"
+  | "writing-assistant-suggest-transitions"
+  | "writing-assistant-expand-text"
+  | "writing-assistant-summarize-text";
 
 // Usage record interface
 export interface UsageRecord {

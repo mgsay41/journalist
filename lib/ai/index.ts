@@ -77,3 +77,21 @@ export type {
   UserUsageStats,
   AllUsersStats,
 } from "./usage";
+
+// Re-export article completion service
+export {
+  completeArticle,
+  validateArticleForCompletion,
+} from "./article-completion";
+
+export type {
+  CompleteArticleResult,
+  CompleteArticleInput,
+  SuggestedCategory,
+  SuggestedTag,
+  MetaTitleOption,
+  MetaDescriptionOption,
+  ContentAnalysis,
+  GrammarIssue as ArticleGrammarIssue,
+  SeoAnalysis as ArticleSeoAnalysis,
+} from "./article-completion";
