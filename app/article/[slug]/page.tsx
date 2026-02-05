@@ -7,6 +7,8 @@ import { RelatedArticles } from '@/components/public/RelatedArticles';
 import { ArticleViewTracker } from '@/components/public/ArticleViewTracker';
 import { ReadingProgress } from '@/components/public/ReadingProgress';
 import { TableOfContentsSticky } from '@/components/public/TableOfContents';
+import { ReadingSettings } from '@/components/public/FontSizeControls';
+import { TextToSpeech } from '@/components/public/TextToSpeech';
 import type { Metadata } from 'next';
 
 interface ArticlePageProps {
@@ -330,6 +332,175 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
+      {/* Print Styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            /* Hide elements that shouldn't print */
+            .no-print,
+            nav,
+            aside,
+            #reading-progress,
+            [data-reading-settings],
+            .social-share,
+            .related-articles {
+              display: none !important;
+            }
+
+            /* Reset page margins */
+            @page {
+              margin: 2cm;
+            }
+
+            body {
+              background: white;
+              color: black;
+              font-size: 12pt;
+              line-height: 1.5;
+            }
+
+            /* Article container */
+            article {
+              max-width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+
+            /* Article header */
+            header h1 {
+              font-size: 18pt;
+              page-break-after: avoid;
+              color: black;
+            }
+
+            /* Article metadata */
+            header .text-muted-foreground {
+              color: #666;
+            }
+
+            /* Featured image */
+            figure img {
+              max-width: 100%;
+              height: auto;
+              page-break-inside: avoid;
+            }
+
+            figcaption {
+              font-size: 10pt;
+              font-style: italic;
+              color: #666;
+            }
+
+            /* Article content */
+            #article-content {
+              font-size: 12pt;
+              line-height: 1.6;
+            }
+
+            #article-content h1,
+            #article-content h2,
+            #article-content h3,
+            #article-content h4,
+            #article-content h5,
+            #article-content h6 {
+              page-break-after: avoid;
+              color: black;
+              margin-top: 1.5em;
+              margin-bottom: 0.5em;
+            }
+
+            #article-content h1 { font-size: 18pt; }
+            #article-content h2 { font-size: 16pt; }
+            #article-content h3 { font-size: 14pt; }
+
+            #article-content p {
+              margin-bottom: 1em;
+              orphans: 3;
+              widows: 3;
+            }
+
+            #article-content img {
+              max-width: 100%;
+              height: auto;
+              page-break-inside: avoid;
+            }
+
+            #article-content blockquote {
+              page-break-inside: avoid;
+              border-left: 3px solid #ccc;
+              padding-left: 1em;
+              margin: 1.5em 0;
+            }
+
+            #article-content pre,
+            #article-content code {
+              background: #f5f5f5;
+              border: 1px solid #ddd;
+              page-break-inside: avoid;
+            }
+
+            #article-content table {
+              page-break-inside: avoid;
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            #article-content table th,
+            #article-content table td {
+              border: 1px solid #ddd;
+              padding: 0.5em;
+            }
+
+            #article-content ul,
+            #article-content ol {
+              page-break-inside: avoid;
+            }
+
+            #article-content a {
+              color: #000;
+              text-decoration: underline;
+            }
+
+            #article-content a[href^="http"]::after {
+              content: " (" attr(href) ")";
+              font-size: 0.8em;
+              word-break: break-all;
+            }
+
+            /* Tags */
+            .flex.flex-wrap.gap-2 a {
+              border: 1px solid #ccc;
+              padding: 0.2em 0.5em;
+              display: inline-block;
+              page-break-inside: avoid;
+            }
+
+            /* Page breaks */
+            .page-break-before {
+              page-break-before: always;
+            }
+
+            .page-break-after {
+              page-break-after: always;
+            }
+
+            .page-break-inside-avoid {
+              page-break-inside: avoid;
+            }
+
+            /* Article URL at the end */
+            #article-content::after {
+              content: "مقتبس من: ${process.env.NEXT_PUBLIC_APP_URL || ''}/article/${slug}";
+              display: block;
+              margin-top: 2em;
+              font-size: 10pt;
+              color: #666;
+              page-break-before: avoid;
+            }
+          }
+        `
+      }} />
+
       {/* Breadcrumb */}
       {article.categories.length > 0 && (
         <nav className="border-b border-border bg-muted/30">
@@ -360,6 +531,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         </nav>
       )}
 
+      {/* Reading Settings - Fixed position controls */}
+      <ReadingSettings position="fixed" showLabel={false} />
+
       <article className="py-8 md:py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
@@ -387,23 +561,26 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               </h1>
 
               {/* Meta */}
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
-                {article.author && (
-                  <div className="flex items-center gap-2">
-                    <span>بواسطة</span>
-                    <span className="font-medium text-foreground">{article.author.name}</span>
-                  </div>
-                )}
-                <span>•</span>
-                <time dateTime={article.publishedAt?.toISOString()}>
-                  {formatDate.format(article.publishedAt!)}
-                </time>
-                {article.readingTime && (
-                  <>
-                    <span>•</span>
-                    <span>{article.readingTime} دقيقة قراءة</span>
-                  </>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground mb-6">
+                <div className="flex flex-wrap items-center gap-4">
+                  {article.author && (
+                    <div className="flex items-center gap-2">
+                      <span>بواسطة</span>
+                      <span className="font-medium text-foreground">{article.author.name}</span>
+                    </div>
+                  )}
+                  <span>•</span>
+                  <time dateTime={article.publishedAt?.toISOString()}>
+                    {formatDate.format(article.publishedAt!)}
+                  </time>
+                  {article.readingTime && (
+                    <>
+                      <span>•</span>
+                      <span>{article.readingTime} دقيقة قراءة</span>
+                    </>
+                  )}
+                </div>
+                <TextToSpeech content={article.content} title={article.title} />
               </div>
 
               {/* Featured Image */}
@@ -478,7 +655,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
       {/* Related Articles */}
       {relatedArticles.length > 0 && (
-        <section className="border-t border-border bg-muted/30 py-12">
+        <section className="related-articles border-t border-border bg-muted/30 py-12">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
               <RelatedArticles articles={formattedRelatedArticles} />

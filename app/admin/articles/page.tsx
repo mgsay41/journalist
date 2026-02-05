@@ -4,11 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Loading, SkeletonTable } from '@/components/ui/Loading';
 import { ArticlesListClient } from '@/components/admin/ArticlesListClient';
+import { ArticlesFilters } from '@/components/admin/ArticlesFilters';
 import { Prisma } from '@prisma/client';
 
 interface SearchParams {
@@ -233,105 +232,9 @@ export default async function ArticlesPage({
       {/* Filters Card */}
       <Card>
         <div className="p-6 space-y-4">
-          <form className="space-y-4">
-            {/* First Row - Search and Status */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Search */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">البحث</label>
-                <Input
-                  name="search"
-                  type="search"
-                  placeholder="البحث في المقالات..."
-                  defaultValue={params.search}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* Status Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-1">الحالة</label>
-                <Select
-                  name="status"
-                  defaultValue={params.status || ''}
-                  options={[
-                    { value: '', label: 'جميع الحالات' },
-                    { value: 'draft', label: 'مسودة' },
-                    { value: 'published', label: 'منشورة' },
-                    { value: 'scheduled', label: 'مجدولة' },
-                    { value: 'archived', label: 'مؤرشفة' },
-                  ]}
-                />
-              </div>
-
-              {/* Category Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-1">التصنيف</label>
-                <Select
-                  name="categoryId"
-                  defaultValue={params.categoryId || ''}
-                  options={[
-                    { value: '', label: 'جميع التصنيفات' },
-                    ...categories.map(cat => ({ value: cat.id, label: cat.name })),
-                  ]}
-                />
-              </div>
-            </div>
-
-            {/* Second Row - Tag and Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Tag Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-1">الوسم</label>
-                <Select
-                  name="tagId"
-                  defaultValue={params.tagId || ''}
-                  options={[
-                    { value: '', label: 'جميع الوسوم' },
-                    ...tags.map(tag => ({ value: tag.id, label: tag.name })),
-                  ]}
-                />
-              </div>
-
-              {/* Date From */}
-              <div>
-                <label className="block text-sm font-medium mb-1">من تاريخ</label>
-                <Input
-                  name="dateFrom"
-                  type="date"
-                  defaultValue={params.dateFrom}
-                />
-              </div>
-
-              {/* Date To */}
-              <div>
-                <label className="block text-sm font-medium mb-1">إلى تاريخ</label>
-                <Input
-                  name="dateTo"
-                  type="date"
-                  defaultValue={params.dateTo}
-                />
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex items-end gap-2">
-                <Button type="submit" variant="secondary" className="flex-1">
-                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  بحث
-                </Button>
-                {hasFilters && (
-                  <Link
-                    href="/admin/articles"
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-md hover:bg-muted-foreground/10 transition-colors border"
-                  >
-                    مسح الفلاتر
-                  </Link>
-                )}
-              </div>
-            </div>
-          </form>
+          <Suspense fallback={<div className="h-40 animate-pulse bg-muted/30 rounded-lg" />}>
+            <ArticlesFilters categories={categories} tags={tags} />
+          </Suspense>
 
           {/* Results Count */}
           <div className="text-sm text-muted-foreground border-t pt-4">
@@ -360,7 +263,11 @@ export default async function ArticlesPage({
               }}
             />
           ) : (
-            <ArticlesListClient articles={serializedArticles} />
+            <ArticlesListClient
+              articles={serializedArticles}
+              categories={categories}
+              tags={tags}
+            />
           )}
         </Suspense>
       </Card>

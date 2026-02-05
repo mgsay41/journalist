@@ -39,7 +39,6 @@ export const WritingAssistantExtension = Extension.create({
 
   addOptions() {
     return {
-      ...this.options,
       onSuggestionApply: null,
       onSuggestionDismiss: null,
     };

@@ -21,13 +21,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || "overview";
+    const period = (searchParams.get("period") || "all") as "today" | "week" | "month" | "all";
     const limit = parseInt(searchParams.get("limit") || "10");
     const days = parseInt(searchParams.get("days") || "30");
     const months = parseInt(searchParams.get("months") || "6");
 
     switch (type) {
       case "overview":
-        const overview = await getAnalyticsOverview();
+        const overview = await getAnalyticsOverview(period);
         return NextResponse.json(overview);
 
       case "top-articles":
@@ -57,6 +58,31 @@ export async function GET(request: NextRequest) {
       case "average-length":
         const avgLength = await getAverageArticleLength();
         return NextResponse.json({ averageLength: avgLength });
+
+      case "all":
+        // Return all analytics data in one response
+        const [overviewResult, topArticlesResult, viewsChartResult, statusDistResult, categoryDistResult, topTagsResult, publishingFreqResult, avgLengthResult] =
+          await Promise.all([
+            getAnalyticsOverview(period),
+            getTopArticles({ limit }),
+            getViewsChartData(days),
+            getStatusDistribution(),
+            getCategoryDistribution(),
+            getMostUsedTags(limit),
+            getPublishingFrequency(months),
+            getAverageArticleLength(),
+          ]);
+
+        return NextResponse.json({
+          overview: overviewResult,
+          topArticles: topArticlesResult,
+          viewsChart: viewsChartResult,
+          statusDist: statusDistResult,
+          categoryDist: categoryDistResult,
+          topTags: topTagsResult,
+          publishingFreq: publishingFreqResult,
+          avgLength: avgLengthResult,
+        });
 
       default:
         return NextResponse.json({ error: "نوع غير صالح" }, { status: 400 });

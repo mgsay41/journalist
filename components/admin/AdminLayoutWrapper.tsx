@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { AdminTopBar } from '@/components/admin/AdminTopBar';
+import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
 import type { Breadcrumb } from '@/lib/admin-nav';
 
 interface AdminLayoutWrapperProps {
@@ -39,6 +40,9 @@ export function AdminLayoutWrapper({
           {children}
         </main>
       </div>
+
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts showHint={true} />
     </div>
   );
 }

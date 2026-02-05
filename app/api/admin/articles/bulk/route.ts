@@ -4,8 +4,10 @@ import { getServerSession } from '@/lib/auth';
 import { z } from 'zod';
 
 const bulkActionSchema = z.object({
-  action: z.enum(['delete', 'publish', 'draft', 'archive']),
+  action: z.enum(['delete', 'publish', 'draft', 'archive', 'edit']),
   articleIds: z.array(z.string()).min(1, { message: 'يجب اختيار مقال واحد على الأقل' }),
+  categoryIds: z.array(z.string()).optional(),
+  tagIds: z.array(z.string()).optional(),
 });
 
 /**
@@ -30,10 +32,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, articleIds } = validatedData.data;
+    const { action, articleIds, categoryIds, tagIds } = validatedData.data;
     let result;
 
     switch (action) {
+      case 'edit':
+        // Bulk edit categories and/or tags
+        if (!categoryIds && !tagIds) {
+          return NextResponse.json(
+            { error: 'يجب تحديد التصنيفات أو الوسوم' },
+            { status: 400 }
+          );
+        }
+
+        // Update articles with new categories and tags
+        for (const articleId of articleIds) {
+          // Disconnect existing categories if new ones provided
+          if (categoryIds && categoryIds.length > 0) {
+            await prisma.article.update({
+              where: { id: articleId },
+              data: {
+                categories: {
+                  set: categoryIds.map(id => ({ id })),
+                },
+              },
+            });
+          }
+
+          // Add new tags (append, don't replace)
+          if (tagIds && tagIds.length > 0) {
+            const article = await prisma.article.findUnique({
+              where: { id: articleId },
+              select: { tags: { select: { id: true } } },
+            });
+
+            if (article) {
+              const existingTagIds = article.tags.map(t => t.id);
+              const newTagIds = [...new Set([...existingTagIds, ...tagIds])];
+
+              await prisma.article.update({
+                where: { id: articleId },
+                data: {
+                  tags: {
+                    set: newTagIds.map(id => ({ id })),
+                  },
+                },
+              });
+            }
+          }
+        }
+
+        result = { count: articleIds.length };
+        break;
+
       case 'delete':
         // Soft delete articles (using archived status since there's no deletedAt field)
         result = await prisma.article.updateMany({
@@ -87,6 +138,7 @@ export async function POST(request: NextRequest) {
       publish: 'نشر',
       draft: 'تحويل إلى مسودة',
       archive: 'أرشفة',
+      edit: 'تعديل',
     };
 
     return NextResponse.json({

@@ -15,3 +15,12 @@ export {
 } from './SeoSuggestionExtension';
 
 export { SuggestionTooltip } from './SuggestionTooltip';
+
+// Writing Assistant
+export {
+  WritingAssistantExtension,
+  WritingAssistantMenu,
+  AiWritingToolbar,
+  writingAssistantStyles,
+  type AiSuggestionAttributes,
+} from './WritingAssistant';

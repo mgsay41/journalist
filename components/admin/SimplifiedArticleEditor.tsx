@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/Button';
 // localStorage key for draft persistence
 const DRAFT_STORAGE_KEY = 'article-draft-simplified';
 const LOCAL_SAVE_DELAY = 1000; // 1 second debounce
+const SERVER_SAVE_INTERVAL = 30000; // 30 seconds for server saves
 
 interface DraftData {
   title: string;
   content: string;
+  articleId?: string; // Track the article ID for server saves
   savedAt: number;
 }
 
@@ -75,8 +77,15 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
   const [hasDraft, setHasDraft] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
 
+  // Server auto-save state
+  const [articleId, setArticleId] = useState<string | undefined>();
+  const [serverSaving, setServerSaving] = useState(false);
+  const [serverLastSaved, setServerLastSaved] = useState<Date | null>(null);
+  const [serverSaveError, setServerSaveError] = useState(false);
+
   // Refs
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const serverSaveRef = useRef<NodeJS.Timeout | null>(null);
   const initializedRef = useRef(false);
   const editorRef = useRef<RichTextEditorRef>(null);
 
@@ -108,6 +117,7 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
         setHasDraft(true);
         setTitle(draft.title || '');
         setContent(draft.content || '');
+        setArticleId(draft.articleId);
         setLastSaved(new Date(draft.savedAt));
         setDraftLoaded(true);
       }
@@ -131,6 +141,7 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
         const draft: DraftData = {
           title,
           content,
+          articleId,
           savedAt: Date.now(),
         };
         localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
@@ -149,7 +160,84 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
         clearTimeout(autoSaveRef.current);
       }
     };
-  }, [title, content, onSaveDraft]);
+  }, [title, content, articleId, onSaveDraft]);
+
+  // Server-side auto-save function
+  const saveToServer = useCallback(async () => {
+    // Only save to server if we have meaningful content
+    if (!title.trim() || !content.trim()) return;
+
+    setServerSaving(true);
+    setServerSaveError(false);
+
+    try {
+      const response = await fetch('/api/admin/articles/auto-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articleId,
+          title: title.trim(),
+          content: content.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Server save failed');
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.article) {
+        // Update article ID if this was a new article
+        if (data.article.id && !articleId) {
+          setArticleId(data.article.id);
+          // Update localStorage with the new article ID
+          try {
+            const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+            if (savedDraft) {
+              const draft: DraftData = JSON.parse(savedDraft);
+              draft.articleId = data.article.id;
+              localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+            }
+          } catch (e) {
+            console.error('Failed to update draft with article ID:', e);
+          }
+        }
+        setServerLastSaved(new Date());
+      }
+    } catch (err) {
+      console.error('Server save error:', err);
+      setServerSaveError(true);
+    } finally {
+      setServerSaving(false);
+    }
+  }, [title, content, articleId]);
+
+  // Periodic server saves
+  useEffect(() => {
+    if (!initializedRef.current) return;
+
+    // Initial server save after 5 seconds if we have content
+    const initialSaveTimeout = setTimeout(() => {
+      if (title.trim() && content.trim() && !articleId) {
+        saveToServer();
+      }
+    }, 5000);
+
+    // Set up periodic saves
+    serverSaveRef.current = setInterval(() => {
+      if (title.trim() && content.trim()) {
+        saveToServer();
+      }
+    }, SERVER_SAVE_INTERVAL);
+
+    return () => {
+      clearTimeout(initialSaveTimeout);
+      if (serverSaveRef.current) {
+        clearInterval(serverSaveRef.current);
+      }
+    };
+  }, [initializedRef, title, content, articleId, saveToServer]);
 
   // Clear draft
   const clearDraft = useCallback(() => {
@@ -157,6 +245,9 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       setHasDraft(false);
       setLastSaved(null);
+      setArticleId(undefined);
+      setServerLastSaved(null);
+      setServerSaveError(false);
     } catch (err) {
       console.error('Failed to clear draft:', err);
     }
@@ -354,6 +445,7 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
         {/* Auto-save status */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-border">
           <div className="flex items-center gap-3 text-sm">
+            {/* Local save status */}
             {autoSaving ? (
               <span className="flex items-center gap-2 text-muted-foreground bg-muted px-3 py-1.5 rounded-lg">
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -372,6 +464,37 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
             ) : (
               <span className="text-muted-foreground">لم يتم الحفظ بعد</span>
             )}
+
+            {/* Separator if both statuses are shown */}
+            {(lastSaved || autoSaving) && (serverSaving || serverLastSaved || serverSaveError) && (
+              <span className="w-px h-4 bg-border"></span>
+            )}
+
+            {/* Server save status */}
+            {serverSaving ? (
+              <span className="flex items-center gap-2 text-primary bg-primary/10 px-3 py-1.5 rounded-lg">
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                جاري الحفظ على الخادم...
+              </span>
+            ) : serverSaveError ? (
+              <span className="flex items-center gap-2 text-danger bg-danger/10 px-3 py-1.5 rounded-lg">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                فشل الحفظ على الخادم
+              </span>
+            ) : serverLastSaved ? (
+              <span className="flex items-center gap-2 text-info bg-info/10 px-3 py-1.5 rounded-lg" title="محفوظ بأمان على الخادم">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                </svg>
+                محفوظ على الخادم: {serverLastSaved.toLocaleTimeString('ar-SA')}
+              </span>
+            ) : null}
           </div>
 
           {hasDraft && (
@@ -454,6 +577,10 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
                   اكتب 50 كلمة على الأقل في محتوى المقال
                 </li>
               )}
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-info shrink-0" />
+                يتم الحفظ التلقائي محلياً كل ثانية وعلى الخادم كل 30 ثانية
+              </li>
             </ul>
             <p className="text-sm text-muted-foreground border-t border-border pt-4">
               عند النقر على &quot;إكمال المقال&quot;، سيقوم الذكاء الاصطناعي بتحليل المحتوى وتوليد:

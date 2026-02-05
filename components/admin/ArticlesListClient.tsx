@@ -28,6 +28,8 @@ interface Article {
 
 interface ArticlesListClientProps {
   articles: Article[];
+  categories: Array<{ id: string; name: string; slug: string }>;
+  tags: Array<{ id: string; name: string; slug: string }>;
 }
 
 function getStatusBadge(status: string) {
@@ -51,7 +53,7 @@ function formatDate(date: string | null) {
   }).format(new Date(date));
 }
 
-export function ArticlesListClient({ articles }: ArticlesListClientProps) {
+export function ArticlesListClient({ articles, categories, tags }: ArticlesListClientProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const handleSelectAll = useCallback(() => {
@@ -193,6 +195,8 @@ export function ArticlesListClient({ articles }: ArticlesListClientProps) {
       <BulkActionsBar
         selectedIds={selectedIds}
         onClearSelection={handleClearSelection}
+        categories={categories}
+        tags={tags}
       />
     </>
   );

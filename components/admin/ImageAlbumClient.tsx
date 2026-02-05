@@ -632,11 +632,14 @@ function ImageDetailModal({
   const [altText, setAltText] = useState('');
   const [caption, setCaption] = useState('');
   const [saving, setSaving] = useState(false);
+  const [generatingAltText, setGeneratingAltText] = useState(false);
+  const [altTextError, setAltTextError] = useState<string | null>(null);
 
   useEffect(() => {
     if (image) {
       setAltText(image.altText || '');
       setCaption(image.caption || '');
+      setAltTextError(null);
     }
   }, [image]);
 
@@ -645,6 +648,37 @@ function ImageDetailModal({
     setSaving(true);
     await onUpdate(image.id, { altText, caption });
     setSaving(false);
+  };
+
+  const handleGenerateAltText = async () => {
+    if (!image) return;
+    setGeneratingAltText(true);
+    setAltTextError(null);
+
+    try {
+      const response = await fetch('/api/admin/ai/image-alt-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: image.url,
+          filename: image.filename,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل في توليد النص البديل');
+      }
+
+      if (data.altText) {
+        setAltText(data.altText);
+      }
+    } catch (error) {
+      setAltTextError(error instanceof Error ? error.message : 'حدث خطأ أثناء توليد النص البديل');
+    } finally {
+      setGeneratingAltText(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -732,13 +766,44 @@ function ImageDetailModal({
 
           {/* Edit Form */}
           <div className="space-y-4">
-            <Input
-              label="النص البديل (Alt Text)"
-              value={altText}
-              onChange={(e) => setAltText(e.target.value)}
-              placeholder="وصف الصورة للقارئ الآلي"
-              helperText="مهم لإمكانية الوصول وتحسين محركات البحث"
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  النص البديل (Alt Text)
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleGenerateAltText}
+                  disabled={generatingAltText}
+                  className="text-xs"
+                >
+                  {generatingAltText ? (
+                    <>
+                      <Spinner size="sm" />
+                      <span className="mr-2">جارٍ التوليد...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      توليد بالذكاء الاصطناعي
+                    </>
+                  )}
+                </Button>
+              </div>
+              <Input
+                value={altText}
+                onChange={(e) => setAltText(e.target.value)}
+                placeholder="وصف الصورة للقارئ الآلي"
+                helperText="مهم لإمكانية الوصول وتحسين محركات البحث"
+              />
+              {altTextError && (
+                <p className="text-xs text-red-500 mt-1">{altTextError}</p>
+              )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

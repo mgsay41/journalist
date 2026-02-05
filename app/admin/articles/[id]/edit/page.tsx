@@ -11,6 +11,10 @@ import { Card } from '@/components/ui/Card';
 import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { TagAutoSuggest } from '@/components/admin/TagAutoSuggest';
 import { SeoScorePanel } from '@/components/admin/SeoScorePanel';
+import { AiOutliner } from '@/components/admin/AiOutliner';
+import { HeadlineOptimizer } from '@/components/admin/HeadlineOptimizer';
+import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
+import { DistractionMode } from '@/components/admin/DistractionMode';
 import { Alert } from '@/components/ui/Alert';
 import { Loading } from '@/components/ui/Loading';
 import { generateSlug } from '@/lib/utils/slug';
@@ -98,6 +102,13 @@ export default function EditArticlePage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
+
+  // AI Tools state
+  const [showAiTools, setShowAiTools] = useState(false);
+  const [selectedCategoryName, setSelectedCategoryName] = useState('');
+
+  // Distraction mode state
+  const [isDistractionMode, setIsDistractionMode] = useState(false);
 
   // Dynamic options from database
   const [categoriesOptions, setCategoriesOptions] = useState<CategoryOption[]>([]);
@@ -413,6 +424,17 @@ export default function EditArticlePage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsDistractionMode(true)}
+                title="وضع التركيز (Ctrl+Shift+D)"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5 5m11 5l-5 5m4-4h4m0 0v-4m0 4l-5-5" />
+                </svg>
+              </Button>
               <Link
                 href={`/article/${article?.slug}`}
                 target="_blank"
@@ -485,8 +507,31 @@ export default function EditArticlePage() {
                   />
                   <div className="flex justify-between mt-1 text-xs text-muted-foreground">
                     <span>{title.length} / 200</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiTools(!showAiTools)}
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      أدوات الذكاء الاصطناعي
+                    </button>
                   </div>
                 </div>
+
+                {/* Headline Optimizer */}
+                {title && (
+                  <div className="border-t pt-4">
+                    <HeadlineOptimizer
+                      headline={title}
+                      content={content}
+                      category={selectedCategoryName}
+                      onHeadlineSelect={(newHeadline) => setTitle(newHeadline)}
+                      autoAnalyze={true}
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -524,6 +569,37 @@ export default function EditArticlePage() {
                 </div>
               </div>
             </Card>
+
+            {/* AI Tools Panel */}
+            {showAiTools && (
+              <Card className="border-primary/20">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      أدوات الذكاء الاصطناعي
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiTools(false)}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <AiOutliner
+                    onContentInsert={(insertedContent) => {
+                      setContent(content + '\n\n' + insertedContent);
+                    }}
+                  />
+                </div>
+              </Card>
+            )}
 
             {/* Rich Text Editor */}
             <Card>
@@ -662,6 +738,9 @@ export default function EditArticlePage() {
                   tagsData={tagsOptions}
                   onTagsDataChange={setTagsOptions}
                   maxTags={MAX_TAGS_PER_ARTICLE}
+                  articleTitle={title}
+                  articleContent={content}
+                  enableAiSuggestions={true}
                 />
               </div>
             </Card>
@@ -685,6 +764,69 @@ export default function EditArticlePage() {
           </div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts
+        onShortcutTriggered={(shortcut) => {
+          switch (shortcut) {
+            case 'save':
+              saveArticle('draft');
+              break;
+            case 'publish':
+              saveArticle('published');
+              break;
+          }
+        }}
+      />
+
+      {/* Distraction Mode */}
+      <DistractionMode
+        isOpen={isDistractionMode}
+        onClose={() => setIsDistractionMode(false)}
+        title={title}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => saveArticle('draft')}
+              disabled={isPending}
+            >
+              {isPending ? 'جاري الحفظ...' : 'حفظ'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => saveArticle('published')}
+              disabled={isPending}
+            >
+              {isPending ? 'جاري النشر...' : 'نشر'}
+            </Button>
+          </>
+        }
+      >
+        {/* Main Editor in Distraction Mode */}
+        <div className="space-y-6">
+          <div>
+            <Input
+              type="text"
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="عنوان المقال..."
+              className="text-2xl font-semibold border-0 focus:ring-0 px-0"
+              maxLength={200}
+            />
+          </div>
+
+          <RichTextEditor
+            content={content}
+            onChange={setContent}
+            placeholder="ابدأ الكتابة هنا..."
+            minHeight="calc(100vh - 300px)"
+          />
+        </div>
+      </DistractionMode>
     </div>
   );
 }

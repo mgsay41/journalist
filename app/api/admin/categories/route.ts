@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
           name: cat.name,
           slug: cat.slug,
           description: cat.description,
+          color: cat.color,
           parentId: cat.parentId,
           parent: cat.parent,
           children: cat.children,
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
         name: cat.name,
         slug: cat.slug,
         description: cat.description,
+        color: cat.color,
         parentId: cat.parentId,
         parent: cat.parent,
         children: cat.children,
@@ -161,6 +163,7 @@ export async function POST(request: NextRequest) {
         name,
         slug,
         description: description || null,
+        color: (body as any).color || '#3b82f6',
         parentId: parentId || null,
       },
       include: {

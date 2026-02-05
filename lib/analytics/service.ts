@@ -71,9 +71,10 @@ export async function recordArticleView(
 }
 
 /**
- * Get analytics overview stats
+ * Get analytics overview stats with optional time period filtering
+ * @param period - Time period for trend comparison: 'today' | 'week' | 'month' | 'all'
  */
-export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
+export async function getAnalyticsOverview(period: 'today' | 'week' | 'month' | 'all' = 'all'): Promise<AnalyticsOverview & { trends?: AnalyticsTrends }> {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   // Create new Date instances to avoid mutating the original
@@ -81,6 +82,18 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   weekDate.setDate(weekDate.getDate() - weekDate.getDay());
   const startOfWeek = new Date(weekDate.setHours(0, 0, 0, 0));
   const startOfDay = new Date(new Date(now).setHours(0, 0, 0, 0));
+
+  // Calculate previous period for trend comparison
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const previousWeekStart = new Date(startOfWeek);
+  previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+  const previousWeekEnd = new Date(startOfWeek);
+  previousWeekEnd.setDate(previousWeekEnd.getDate() - 1);
+  const previousDayStart = new Date(startOfDay);
+  previousDayStart.setDate(previousDayStart.getDate() - 1);
+  const previousDayEnd = new Date(startOfDay);
+  previousDayEnd.setMilliseconds(previousDayEnd.getMilliseconds() - 1);
 
   const [
     totalViewsResult,
@@ -91,6 +104,13 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     publishedArticles,
     avgReadingTimeResult,
     avgSeoScoreResult,
+    // Previous period data for trends
+    prevMonthViewsResult,
+    prevWeekViewsResult,
+    prevDayViewsResult,
+    prevMonthArticlesResult,
+    prevWeekArticlesResult,
+    prevDayArticlesResult,
   ] = await Promise.all([
     // Total views (all time)
     prisma.article.aggregate({
@@ -149,18 +169,115 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
         status: "published",
       },
     }),
+
+    // Previous month views (for trend)
+    prisma.article.aggregate({
+      _sum: { views: true },
+      where: {
+        status: "published",
+        publishedAt: { gte: previousMonthStart, lte: previousMonthEnd },
+      },
+    }),
+
+    // Previous week views (for trend)
+    prisma.article.aggregate({
+      _sum: { views: true },
+      where: {
+        status: "published",
+        publishedAt: { gte: previousWeekStart, lte: previousWeekEnd },
+      },
+    }),
+
+    // Previous day views (for trend)
+    prisma.article.aggregate({
+      _sum: { views: true },
+      where: {
+        status: "published",
+        publishedAt: { gte: previousDayStart, lte: previousDayEnd },
+      },
+    }),
+
+    // Previous month articles (for trend)
+    prisma.article.count({
+      where: {
+        status: "published",
+        publishedAt: { gte: previousMonthStart, lte: previousMonthEnd },
+      },
+    }),
+
+    // Previous week articles (for trend)
+    prisma.article.count({
+      where: {
+        status: "published",
+        publishedAt: { gte: previousWeekStart, lte: previousWeekEnd },
+      },
+    }),
+
+    // Previous day articles (for trend)
+    prisma.article.count({
+      where: {
+        status: "published",
+        publishedAt: { gte: previousDayStart, lte: previousDayEnd },
+      },
+    }),
   ]);
 
-  return {
+  const overview = {
     totalViews: totalViewsResult._sum.views || 0,
     viewsThisMonth: viewsThisMonthResult._sum.views || 0,
     viewsThisWeek: viewsThisWeekResult._sum.views || 0,
     viewsToday: viewsTodayResult._sum.views || 0,
-    totalArticles,
+    totalArticles: publishedArticles,
     publishedArticles,
     averageReadingTime: Math.round(avgReadingTimeResult._avg.readingTime || 0),
     averageSeoScore: Math.round(avgSeoScoreResult._avg.seoScore || 0),
   };
+
+  // Calculate trends based on period
+  const trends: AnalyticsTrends = {
+    viewsTrend: calculateTrend(
+      period === 'month' ? viewsThisMonthResult._sum.views || 0 :
+      period === 'week' ? viewsThisWeekResult._sum.views || 0 :
+      period === 'today' ? viewsTodayResult._sum.views || 0 :
+      overview.totalViews,
+      period === 'month' ? prevMonthViewsResult._sum.views || 0 :
+      period === 'week' ? prevWeekViewsResult._sum.views || 0 :
+      period === 'today' ? prevDayViewsResult._sum.views || 0 :
+      prevWeekViewsResult._sum.views || 0
+    ),
+    articlesTrend: calculateTrend(
+      period === 'month' ? 0 : // Articles don't reset monthly
+      period === 'week' ? 0 :
+      period === 'today' ? 0 :
+      overview.publishedArticles,
+      period === 'month' ? prevMonthArticlesResult :
+      period === 'week' ? prevWeekArticlesResult :
+      period === 'today' ? prevDayArticlesResult :
+      prevWeekArticlesResult
+    ),
+  };
+
+  return { ...overview, trends };
+}
+
+/**
+ * Calculate trend percentage
+ */
+function calculateTrend(current: number, previous: number): { value: number; direction: 'up' | 'down' | 'neutral' } {
+  if (previous === 0) {
+    return { value: current > 0 ? 100 : 0, direction: current > 0 ? 'up' : 'neutral' };
+  }
+  const change = ((current - previous) / previous) * 100;
+  const direction = change > 0 ? 'up' : change < 0 ? 'down' : 'neutral';
+  return { value: Math.abs(Math.round(change)), direction };
+}
+
+/**
+ * Analytics trends interface
+ */
+export interface AnalyticsTrends {
+  viewsTrend: { value: number; direction: 'up' | 'down' | 'neutral' };
+  articlesTrend: { value: number; direction: 'up' | 'down' | 'neutral' };
 }
 
 /**
@@ -469,4 +586,129 @@ export async function getAverageArticleLength(): Promise<number> {
   }
 
   return Math.round(totalWords / articles.length);
+}
+
+/**
+ * Get mini chart data for dashboard sparklines
+ * Returns daily data points for the specified period
+ */
+export async function getMiniChartData(
+  type: 'views' | 'articles',
+  period: 'today' | 'week' | 'month' | 'all' = 'all',
+  dataPoints: number = 7
+): Promise<number[]> {
+  const now = new Date();
+  let startDate: Date;
+  let days: number;
+
+  // Determine date range based on period
+  switch (period) {
+    case 'today':
+      days = 24; // Hourly data for today
+      startDate = new Date(now);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'week':
+      days = 7;
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 6);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'month':
+      days = dataPoints; // Use specified data points (default 7 for last 7 days of month)
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - (dataPoints - 1));
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    default: // 'all'
+      days = dataPoints;
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - (dataPoints - 1));
+      startDate.setHours(0, 0, 0, 0);
+  }
+
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + days);
+  endDate.setMilliseconds(endDate.getMilliseconds() - 1);
+
+  const data: number[] = new Array(days).fill(0);
+
+  if (type === 'views') {
+    // Get all views in the date range in a single query
+    const views = await prisma.articleView.findMany({
+      where: {
+        viewedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        viewedAt: true,
+      },
+    });
+
+    // Group by day/hour
+    for (const view of views) {
+      const viewDate = new Date(view.viewedAt);
+
+      if (period === 'today') {
+        // Hourly grouping for today
+        const hour = viewDate.getHours();
+        if (hour >= 0 && hour < 24) {
+          data[hour]++;
+        }
+      } else {
+        // Daily grouping
+        const dayDiff = Math.floor((viewDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (dayDiff >= 0 && dayDiff < days) {
+          data[dayDiff]++;
+        }
+      }
+    }
+  } else if (type === 'articles') {
+    // Get all published articles in the date range in a single query
+    const articles = await prisma.article.findMany({
+      where: {
+        status: 'published',
+        publishedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        publishedAt: true,
+      },
+    });
+
+    // Group by day
+    for (const article of articles) {
+      if (article.publishedAt) {
+        const dayDiff = Math.floor((article.publishedAt.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (dayDiff >= 0 && dayDiff < days) {
+          data[dayDiff]++;
+        }
+      }
+    }
+  }
+
+  return data;
+}
+
+/**
+ * Get chart data for dashboard stats cards
+ * Returns both views and articles chart data for the specified period
+ */
+export async function getDashboardChartsData(
+  period: 'today' | 'week' | 'month' | 'all' = 'all',
+  dataPoints: number = 7
+): Promise<{
+  viewsChart: number[];
+  articlesChart: number[];
+}> {
+  const [viewsChart, articlesChart] = await Promise.all([
+    getMiniChartData('views', period, dataPoints),
+    getMiniChartData('articles', period, dataPoints),
+  ]);
+
+  return { viewsChart, articlesChart };
 }

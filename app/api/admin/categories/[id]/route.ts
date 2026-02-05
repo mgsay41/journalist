@@ -106,6 +106,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { name, slug, description, parentId } = validation.data;
     const updateData: Record<string, unknown> = {};
 
+    // Handle color update
+    if (body.color !== undefined) {
+      updateData.color = body.color;
+    }
+
     // Check for duplicate name if changing
     if (name && name !== existingCategory.name) {
       const existingByName = await prisma.category.findUnique({

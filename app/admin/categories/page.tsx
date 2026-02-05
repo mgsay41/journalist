@@ -7,7 +7,7 @@ import { CategoriesListClient } from '@/components/admin/CategoriesListClient';
 
 async function getCategories() {
   const categories = await prisma.category.findMany({
-    orderBy: { name: 'asc' },
+    orderBy: [{ order: 'asc' }, { name: 'asc' }],
     include: {
       parent: {
         select: {
@@ -37,6 +37,8 @@ async function getCategories() {
     name: cat.name,
     slug: cat.slug,
     description: cat.description,
+    color: cat.color,
+    order: cat.order,
     parentId: cat.parentId,
     parent: cat.parent,
     children: cat.children,

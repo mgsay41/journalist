@@ -12,6 +12,8 @@ import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { TagAutoSuggest } from '@/components/admin/TagAutoSuggest';
 import { SeoScorePanel } from '@/components/admin/SeoScorePanel';
 import { AiPanel } from '@/components/admin/AiPanel';
+import { AiOutliner } from '@/components/admin/AiOutliner';
+import { HeadlineOptimizer } from '@/components/admin/HeadlineOptimizer';
 import { Alert } from '@/components/ui/Alert';
 import { generateSlug } from '@/lib/utils/slug';
 import { MAX_TAGS_PER_ARTICLE } from '@/lib/validations/article';
@@ -92,6 +94,10 @@ export default function ClassicNewArticlePage() {
   const [hasDraft, setHasDraft] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+  // AI Tools state
+  const [showAiTools, setShowAiTools] = useState(false);
+  const [selectedCategoryName, setSelectedCategoryName] = useState('');
 
   const [categoriesOptions, setCategoriesOptions] = useState<CategoryOption[]>([]);
   const [tagsOptions, setTagsOptions] = useState<TagOption[]>([]);
@@ -415,8 +421,31 @@ export default function ClassicNewArticlePage() {
                   />
                   <div className="flex justify-between mt-1 text-xs text-muted-foreground">
                     <span>{title.length} / 200</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiTools(!showAiTools)}
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      أدوات الذكاء الاصطناعي
+                    </button>
                   </div>
                 </div>
+
+                {/* Headline Optimizer */}
+                {title && (
+                  <div className="border-t pt-4">
+                    <HeadlineOptimizer
+                      headline={title}
+                      content={content}
+                      category={selectedCategoryName}
+                      onHeadlineSelect={(newHeadline) => setTitle(newHeadline)}
+                      autoAnalyze={true}
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -448,6 +477,37 @@ export default function ClassicNewArticlePage() {
                 </div>
               </div>
             </Card>
+
+            {/* AI Tools Panel */}
+            {showAiTools && (
+              <Card className="border-primary/20">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      أدوات الذكاء الاصطناعي
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiTools(false)}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <AiOutliner
+                    onContentInsert={(insertedContent) => {
+                      setContent(content + '\n\n' + insertedContent);
+                    }}
+                  />
+                </div>
+              </Card>
+            )}
 
             <Card>
               <div className="p-6">
@@ -553,6 +613,9 @@ export default function ClassicNewArticlePage() {
                   tagsData={tagsOptions}
                   onTagsDataChange={setTagsOptions}
                   maxTags={MAX_TAGS_PER_ARTICLE}
+                  articleTitle={title}
+                  articleContent={content}
+                  enableAiSuggestions={true}
                 />
               </div>
             </Card>

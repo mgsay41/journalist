@@ -3,6 +3,9 @@ import { PublicLayout, ArticleCard, ArticleCardSkeleton, LazyImage } from '@/com
 import { SkeletonHero } from '@/components/ui/Skeleton';
 import { prisma } from '@/lib/prisma';
 
+// Force dynamic rendering to skip prerendering during build
+export const dynamic = 'force-dynamic';
+
 async function getHomepageData() {
   // Fetch categories for navigation
   const categories = await prisma.category.findMany({

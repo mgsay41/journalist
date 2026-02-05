@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import { RootErrorBoundary } from "@/components/RootErrorBoundary";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 // Cairo font - excellent for Arabic text
@@ -45,7 +46,9 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className="font-sans antialiased">
-        <RootErrorBoundary>{children}</RootErrorBoundary>
+        <Providers>
+          <RootErrorBoundary>{children}</RootErrorBoundary>
+        </Providers>
       </body>
     </html>
   );

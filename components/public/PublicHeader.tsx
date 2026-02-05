@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { DarkModeToggle } from './DarkModeToggle';
 
 interface PublicHeaderProps {
   categories?: Array<{ id: string; name: string; slug: string }>;
@@ -43,6 +44,9 @@ export function PublicHeader({ categories = [] }: PublicHeaderProps) {
 
           {/* Search Button */}
           <div className="flex items-center space-x-4 space-x-reverse">
+            {/* Dark Mode Toggle */}
+            <DarkModeToggle variant="icon" />
+
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors"
