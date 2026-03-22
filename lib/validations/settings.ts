@@ -44,6 +44,26 @@ export const profileSettingsSchema = z.object({
     .url({ message: 'رابط الصورة غير صالح' })
     .optional()
     .nullable(),
+  bio: z
+    .string()
+    .max(500, { message: 'النبذة يجب أن لا تتجاوز 500 حرف' })
+    .optional()
+    .nullable(),
+  authorTitle: z
+    .string()
+    .max(100, { message: 'المسمى الوظيفي يجب أن لا يتجاوز 100 حرف' })
+    .optional()
+    .nullable(),
+  twitterUrl: z
+    .string()
+    .url({ message: 'رابط تويتر غير صالح' })
+    .optional()
+    .nullable(),
+  linkedinUrl: z
+    .string()
+    .url({ message: 'رابط لينكدإن غير صالح' })
+    .optional()
+    .nullable(),
 });
 
 // Password Change Schema
@@ -147,8 +167,8 @@ export const publishingSettingsSchema = z.object({
 // AI Settings Schema
 export const aiSettingsSchema = z.object({
   aiModelPreference: z
-    .enum(['gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'], {
-      message: 'النموذج يجب أن يكون gemini-3-flash أو gemini-2.5-flash أو gemini-2.5-pro'
+    .enum(['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], {
+      message: 'النموذج يجب أن يكون من نماذج Gemini المتاحة'
     }),
   aiResponseLimit: z
     .number()
@@ -270,8 +290,8 @@ export const updateSettingsSchema = z.object({
 
   // AI
   aiModelPreference: z
-    .enum(['gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'], {
-      message: 'النموذج يجب أن يكون gemini-3-flash أو gemini-2.5-flash أو gemini-2.5-pro'
+    .enum(['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], {
+      message: 'النموذج يجب أن يكون من نماذج Gemini المتاحة'
     })
     .optional(),
   aiResponseLimit: z
@@ -283,6 +303,21 @@ export const updateSettingsSchema = z.object({
   aiFeaturesEnabled: z
     .boolean({ message: 'يجب أن تكون قيمة منطقية' })
     .optional(),
+
+  // Breaking News
+  breakingNewsEnabled: z
+    .boolean({ message: 'يجب أن تكون قيمة منطقية' })
+    .optional(),
+  breakingNewsText: z
+    .string()
+    .max(300, { message: 'نص الخبر العاجل يجب أن لا يتجاوز 300 حرف' })
+    .optional()
+    .nullable(),
+  breakingNewsUrl: z
+    .string()
+    .url({ message: 'رابط الخبر العاجل غير صالح' })
+    .optional()
+    .nullable(),
 });
 
 // Type exports

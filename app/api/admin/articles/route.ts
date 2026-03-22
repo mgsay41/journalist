@@ -6,6 +6,9 @@ import { generateSlug } from '@/lib/utils/slug';
 import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHtml } from '@/lib/security/sanitization';
+import { withMonitoring } from '@/lib/monitoring/middleware';
+import { recordQuery } from '@/lib/monitoring/performance';
+import { withAuthCsrf } from '@/lib/security/middleware';
 
 /**
  * Calculate word count from HTML content
@@ -118,7 +121,7 @@ export async function GET(request: NextRequest) {
     // Count total matching articles
     const total = await prisma.article.count({ where });
 
-    // Fetch articles with pagination
+    // Fetch articles with pagination — content excluded from list view (use single-article endpoint for full content)
     const articles = await prisma.article.findMany({
       where,
       skip: (page - 1) * limit,
@@ -126,7 +129,21 @@ export async function GET(request: NextRequest) {
       orderBy: {
         [sortBy]: sortOrder,
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        excerpt: true,
+        status: true,
+        publishedAt: true,
+        scheduledAt: true,
+        isFeatured: true,
+        seoScore: true,
+        readingTime: true,
+        wordCount: true,
+        views: true,
+        createdAt: true,
+        updatedAt: true,
         author: {
           select: {
             id: true,
@@ -180,8 +197,9 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/admin/articles
  * Create a new article
+ * Phase 2 Frontend Audit - Added CSRF protection
  */
-export async function POST(request: NextRequest) {
+export const POST = withAuthCsrf(async (request: NextRequest) => {
   try {
     // Verify authentication
     const session = await getServerSession();
@@ -338,4 +356,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

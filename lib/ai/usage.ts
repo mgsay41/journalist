@@ -32,7 +32,12 @@ export type AiFeature =
   | "writing-assistant-fix-passive"
   | "writing-assistant-suggest-transitions"
   | "writing-assistant-expand-text"
-  | "writing-assistant-summarize-text";
+  | "writing-assistant-summarize-text"
+  // SEO Auto-Fix Features
+  | "auto-fix-internal-links"
+  | "auto-fix-external-links"
+  | "auto-fix-long-paragraphs"
+  | "auto-fix-seo-issues";
 
 // Usage record interface
 export interface UsageRecord {

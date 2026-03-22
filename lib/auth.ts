@@ -20,7 +20,9 @@ export const auth = betterAuth({
   // Email and password authentication
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false, // Only one admin, no verification needed
+    // Single-admin CMS: email verification disabled by default.
+    // Set REQUIRE_EMAIL_VERIFICATION=true in production if multiple users are added.
+    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
   },
 
   // Session configuration
@@ -40,8 +42,10 @@ export const auth = betterAuth({
     crossSubDomainCookies: {
       enabled: false,
     },
-    // Disable CSRF for now to simplify debugging - can enable later
-    csrfProtection: false,
+    // CSRF protection enabled for security (Phase 1 Backend Audit)
+    csrfProtection: true,
+    // Configure CSRF check path
+    csrfCheckPath: '/api/auth/csrf',
   },
 
   // Social providers (disabled - only admin account)
@@ -79,11 +83,6 @@ export async function getServerSession() {
       cookieStore.get('better_auth_session')?.value;
 
     if (!sessionToken) {
-      // Debug: log available cookies in development
-      if (process.env.NODE_ENV === 'development') {
-        const allCookies = cookieStore.getAll();
-        console.log('Available cookies:', allCookies.map(c => c.name));
-      }
       return null;
     }
 
@@ -106,7 +105,6 @@ export async function getServerSession() {
     });
 
     if (!session) {
-      console.log('Session not found in database for token:', sessionToken.substring(0, 10) + '...');
       return null;
     }
 

@@ -5,6 +5,10 @@ import { updateArticleSchema, deleteArticleSchema } from '@/lib/validations/arti
 import { generateSlug } from '@/lib/utils/slug';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHtml } from '@/lib/security/sanitization';
+import { withAuthCsrf } from '@/lib/security/middleware';
+import { z } from 'zod';
+
+const idSchema = z.string().cuid();
 
 /**
  * Calculate word count from HTML content
@@ -15,6 +19,37 @@ function calculateWordCount(content: string): number {
   // Split by whitespace and count
   const words = text.split(/\s+/).filter(w => w.length > 0);
   return words.length;
+}
+
+/**
+ * Convert empty strings to undefined for proper validation with Zod partial()
+ * This is needed because Zod's .partial() makes fields optional, but if a value
+ * is provided (including empty string), it still must pass the original validation.
+ *
+ * Also sanitizes slugs that may contain invalid characters (e.g., Arabic text).
+ */
+function sanitizeRequestBody(body: any): any {
+  const sanitized: any = {};
+  for (const [key, value] of Object.entries(body)) {
+    // Convert empty strings to undefined so they're treated as "not provided"
+    if (value === '') {
+      sanitized[key] = undefined;
+    } else if (key === 'slug' && typeof value === 'string') {
+      // Sanitize slug: if it doesn't match the required format (lowercase letters, numbers, hyphens only),
+      // regenerate it using the title or keep undefined to let the server generate it
+      const isValidSlug = /^[a-z0-9-]+$/.test(value);
+      if (isValidSlug) {
+        sanitized[key] = value;
+      } else {
+        // Invalid slug - we'll let the server generate it from the title
+        // Set to undefined so the server handles it
+        sanitized[key] = undefined;
+      }
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
 }
 
 /**
@@ -33,6 +68,11 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    // Validate ID format
+    if (!idSchema.safeParse(id).success) {
+      return NextResponse.json({ error: 'المقال غير موجود' }, { status: 404 });
+    }
 
     // Fetch article
     const article = await prisma.article.findUnique({
@@ -102,11 +142,12 @@ export async function GET(
 /**
  * PUT /api/admin/articles/[id]
  * Update an existing article
+ * Phase 2 Frontend Audit - Added CSRF protection
  */
-export async function PUT(
+export const PUT = withAuthCsrf(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
     // Verify authentication
     const session = await getServerSession();
@@ -131,10 +172,13 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    // Check if article exists
+    // Sanitize request body - convert empty strings to undefined for proper validation
+    const sanitizedBody = sanitizeRequestBody(body);
+
+    // Check if article exists and belongs to the current user
     const existingArticle = await prisma.article.findUnique({
       where: { id },
-      select: { id: true, slug: true },
+      select: { id: true, slug: true, authorId: true },
     });
 
     if (!existingArticle) {
@@ -144,11 +188,22 @@ export async function PUT(
       );
     }
 
+    if (existingArticle.authorId !== session.user.id) {
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 });
+    }
+
     // Validate input
-    const validatedData = updateArticleSchema.safeParse({ ...body, id });
+    const validatedData = updateArticleSchema.safeParse({ ...sanitizedBody, id });
     if (!validatedData.success) {
+      // Log detailed validation error for debugging
+      console.error('Article update validation failed:', {
+        body: JSON.stringify(sanitizedBody, null, 2),
+        issues: validatedData.error.issues,
+      });
+      // Return the first specific validation error message
+      const firstError = validatedData.error.issues[0]?.message || 'بيانات غير صالحة';
       return NextResponse.json(
-        { error: 'بيانات غير صالحة', details: validatedData.error.issues },
+        { error: firstError, details: validatedData.error.issues },
         { status: 400 }
       );
     }
@@ -320,16 +375,17 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * DELETE /api/admin/articles/[id]
  * Delete an article (soft delete to archived, or permanent delete)
+ * Phase 2 Frontend Audit - Added CSRF protection
  */
-export async function DELETE(
+export const DELETE = withAuthCsrf(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
     // Verify authentication
     const session = await getServerSession();
@@ -349,10 +405,10 @@ export async function DELETE(
       );
     }
 
-    // Check if article exists
+    // Check if article exists and belongs to the current user
     const existingArticle = await prisma.article.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, authorId: true },
     });
 
     if (!existingArticle) {
@@ -360,6 +416,10 @@ export async function DELETE(
         { error: 'المقال غير موجود' },
         { status: 404 }
       );
+    }
+
+    if (existingArticle.authorId !== session.user.id) {
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 });
     }
 
     const { permanent } = validatedData.data;
@@ -394,4 +454,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

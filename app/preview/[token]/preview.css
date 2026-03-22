@@ -81,9 +81,9 @@
   font-weight: 500;
   font-style: italic;
   color: #3f3f46;
-  border-right-width: 0.25rem;
-  border-right-color: #18181b;
-  padding-right: 1rem;
+  border-inline-start-width: 0.25rem;
+  border-inline-start-color: #18181b;
+  padding-inline-start: 1rem;
   margin-top: 1.5em;
   margin-bottom: 1.5em;
 }
@@ -92,7 +92,7 @@
 .prose ol {
   margin-top: 1.25em;
   margin-bottom: 1.25em;
-  padding-right: 1.625rem;
+  padding-inline-start: 1.625rem;
 }
 
 .prose li {

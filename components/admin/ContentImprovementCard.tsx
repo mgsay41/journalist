@@ -3,6 +3,50 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { hapticSuccess, hapticPress } from '@/lib/mobile/haptic-feedback';
+
+interface ContentAnalysis {
+  hasStrongIntro: boolean;
+  hasConclusion: boolean;
+  suggestedIntro: string | null;
+  suggestedConclusion: string | null;
+  tone: 'formal' | 'professional' | 'casual';
+  targetAudience: string;
+}
+
+interface GrammarIssue {
+  type: 'spelling' | 'grammar' | 'punctuation' | 'style';
+  original: string;
+  correction: string;
+  explanation: string;
+}
+
+interface SeoSuggestion {
+  type: 'keyword-intro' | 'keyword-heading' | 'internal-link' | 'external-link' | 'paragraph-length' | 'image-alt';
+  issue: string;
+  suggestion: string;
+  priority: 'high' | 'medium' | 'low';
+  autoFixable?: boolean;
+  fixData?: {
+    action: string;
+    value: string;
+  };
+}
+
+interface ContentImprovementCardProps {
+  contentAnalysis: ContentAnalysis;
+  grammarIssues: GrammarIssue[];
+  seoSuggestions?: SeoSuggestion[];
+  focusKeyword?: string;
+  onAddIntro?: (text: string) => void;
+  onAddConclusion?: (text: string) => void;
+  onApplyGrammarFix?: (original: string, correction: string) => void;
+  onApplyAllGrammarFixes?: () => void;
+  onApplySeoFix?: (suggestion: SeoSuggestion) => void;
+  onAiFixSeoIssue?: (type: 'internal-links' | 'external-links' | 'long-paragraphs') => Promise<void>;
+  articleTitle?: string;
+  isAiFixing?: boolean;
+}
 
 interface ContentAnalysis {
   hasStrongIntro: boolean;
@@ -54,12 +98,18 @@ export function ContentImprovementCard({
   onApplyGrammarFix,
   onApplyAllGrammarFixes,
   onApplySeoFix,
+  onAiFixSeoIssue,
+  articleTitle = '',
+  isAiFixing = false,
 }: ContentImprovementCardProps) {
   const [expandedGrammar, setExpandedGrammar] = useState(false);
   const [expandedSeo, setExpandedSeo] = useState(false);
   const [dismissedIntro, setDismissedIntro] = useState(false);
   const [dismissedConclusion, setDismissedConclusion] = useState(false);
   const [appliedSeoFixes, setAppliedSeoFixes] = useState<string[]>([]);
+  const [showIntroSuccess, setShowIntroSuccess] = useState(false);
+  const [showConclusionSuccess, setShowConclusionSuccess] = useState(false);
+  const [aiFixingType, setAiFixingType] = useState<string | null>(null);
 
   const getToneLabel = (tone: string) => {
     switch (tone) {
@@ -180,6 +230,25 @@ export function ContentImprovementCard({
     }
   };
 
+  const handleAiFix = async (type: 'internal-links' | 'external-links' | 'long-paragraphs') => {
+    if (!onAiFixSeoIssue) return;
+    setAiFixingType(type);
+    try {
+      await onAiFixSeoIssue(type);
+      hapticPress();
+      // Remove the fixed suggestions from the list
+      setAppliedSeoFixes(prev => [...prev, `ai-fixed-${type}`]);
+    } catch (error) {
+      console.error('AI fix error:', error);
+    } finally {
+      setAiFixingType(null);
+    }
+  };
+
+  const isFixingThisType = (type: 'internal-links' | 'external-links' | 'long-paragraphs') => {
+    return aiFixingType === type || (isAiFixing && aiFixingType !== null);
+  };
+
   // Filter out applied SEO fixes
   const activeSeoSuggestions = seoSuggestions.filter(
     s => !appliedSeoFixes.includes(s.type + s.issue)
@@ -258,12 +327,31 @@ export function ContentImprovementCard({
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    onClick={() => onAddIntro?.(contentAnalysis.suggestedIntro!)}
+                    onClick={() => {
+                      hapticPress();
+                      onAddIntro?.(contentAnalysis.suggestedIntro!);
+                      setShowIntroSuccess(true);
+                      setTimeout(() => {
+                        setDismissedIntro(true);
+                        setShowIntroSuccess(false);
+                      }, 1500);
+                    }}
                   >
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    إضافة المقدمة
+                    {showIntroSuccess ? (
+                      <>
+                        <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        تمت الإضافة
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        إضافة المقدمة
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="sm"
@@ -295,12 +383,31 @@ export function ContentImprovementCard({
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    onClick={() => onAddConclusion?.(contentAnalysis.suggestedConclusion!)}
+                    onClick={() => {
+                      hapticPress();
+                      onAddConclusion?.(contentAnalysis.suggestedConclusion!);
+                      setShowConclusionSuccess(true);
+                      setTimeout(() => {
+                        setDismissedConclusion(true);
+                        setShowConclusionSuccess(false);
+                      }, 1500);
+                    }}
                   >
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    إضافة الخاتمة
+                    {showConclusionSuccess ? (
+                      <>
+                        <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        تمت الإضافة
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        إضافة الخاتمة
+                      </>
+                    )}
                   </Button>
                   <Button
                     size="sm"
@@ -415,44 +522,82 @@ export function ContentImprovementCard({
             <div className="space-y-2">
               {activeSeoSuggestions
                 .slice(0, expandedSeo ? undefined : 3)
-                .map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className="p-3 bg-success/5 border border-success/20 rounded-lg"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-success">
-                            {getSeoTypeIcon(suggestion.type)}
-                          </span>
-                          <span className="text-sm font-medium text-foreground">
-                            {getSeoTypeLabel(suggestion.type)}
-                          </span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${getPriorityColor(suggestion.priority)}`}>
-                            {suggestion.priority === 'high' ? 'مهم' : suggestion.priority === 'medium' ? 'متوسط' : 'منخفض'}
-                          </span>
+                .map((suggestion, index) => {
+                  const isAiFixable = suggestion.type === 'internal-link' || suggestion.type === 'external-link' || suggestion.type === 'paragraph-length';
+                  const aiFixTypeMap: Record<string, 'internal-links' | 'external-links' | 'long-paragraphs'> = {
+                    'internal-link': 'internal-links',
+                    'external-link': 'external-links',
+                    'paragraph-length': 'long-paragraphs',
+                  };
+                  const aiFixType = isAiFixable ? aiFixTypeMap[suggestion.type] : null;
+
+                  return (
+                    <div
+                      key={index}
+                      className="p-3 bg-success/5 border border-success/20 rounded-lg"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-success">
+                              {getSeoTypeIcon(suggestion.type)}
+                            </span>
+                            <span className="text-sm font-medium text-foreground">
+                              {getSeoTypeLabel(suggestion.type)}
+                            </span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${getPriorityColor(suggestion.priority)}`}>
+                              {suggestion.priority === 'high' ? 'مهم' : suggestion.priority === 'medium' ? 'متوسط' : 'منخفض'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {suggestion.issue}
+                          </p>
+                          <p className="text-sm text-foreground bg-success/10 p-2 rounded">
+                            <strong>الاقتراح:</strong> {suggestion.suggestion}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          {suggestion.issue}
-                        </p>
-                        <p className="text-sm text-foreground bg-success/10 p-2 rounded">
-                          <strong>الاقتراح:</strong> {suggestion.suggestion}
-                        </p>
+                        <div className="flex flex-col gap-2 shrink-0">
+                          {isAiFixable && onAiFixSeoIssue && aiFixType && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => handleAiFix(aiFixType)}
+                              disabled={isFixingThisType(aiFixType)}
+                              className="gap-1.5"
+                            >
+                              {isFixingThisType(aiFixType) ? (
+                                <>
+                                  <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                  جاري الإصلاح...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                  إصلاح بالذكاء
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          {suggestion.autoFixable && onApplySeoFix && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleApplySeoFix(suggestion)}
+                              className="text-xs"
+                            >
+                              تطبيق يدوي
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      {suggestion.autoFixable && onApplySeoFix && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleApplySeoFix(suggestion)}
-                          className="shrink-0"
-                        >
-                          تطبيق
-                        </Button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
               {activeSeoSuggestions.length > 3 && (
                 <button

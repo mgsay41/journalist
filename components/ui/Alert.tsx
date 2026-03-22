@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export type AlertVariant = 'info' | 'success' | 'warning' | 'error';
@@ -130,119 +130,6 @@ export function Alert({
           </svg>
         </button>
       )}
-    </div>
-  );
-}
-
-// Toast notification container and system
-export interface Toast {
-  id: string;
-  variant: AlertVariant;
-  title?: string;
-  message: string;
-  duration?: number;
-}
-
-interface ToastContainerProps {
-  toasts: Toast[];
-  onRemove: (id: string) => void;
-}
-
-export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
-  return (
-    <div
-      className="fixed top-4 left-4 z-[100] flex flex-col gap-2 max-w-md w-full pointer-events-none"
-      dir="rtl"
-    >
-      {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
-          <Alert
-            variant={toast.variant}
-            title={toast.title}
-            onClose={() => onRemove(toast.id)}
-            className="shadow-lg"
-          >
-            {toast.message}
-          </Alert>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Hook for managing toasts
-export function useToast() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-
-  const showToast = (
-    variant: AlertVariant,
-    message: string,
-    title?: string,
-    duration = 5000
-  ) => {
-    const id = Math.random().toString(36).substring(7);
-    const newToast: Toast = { id, variant, title, message, duration };
-
-    setToasts((prev) => [...prev, newToast]);
-
-    if (duration > 0) {
-      setTimeout(() => {
-        removeToast(id);
-      }, duration);
-    }
-
-    return id;
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  return {
-    toasts,
-    showToast,
-    removeToast,
-    success: (message: string, title?: string) =>
-      showToast('success', message, title),
-    error: (message: string, title?: string) =>
-      showToast('error', message, title),
-    warning: (message: string, title?: string) =>
-      showToast('warning', message, title),
-    info: (message: string, title?: string) =>
-      showToast('info', message, title),
-  };
-}
-
-// Simple Toast notification component
-export interface ToastProps {
-  type: 'success' | 'error' | 'warning' | 'info';
-  message: string;
-  onClose: () => void;
-  duration?: number;
-}
-
-export function Toast({ type, message, onClose, duration = 5000 }: ToastProps) {
-  useEffect(() => {
-    if (duration > 0) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, duration);
-      return () => clearTimeout(timer);
-    }
-  }, [duration, onClose]);
-
-  const variantMap: Record<string, AlertVariant> = {
-    success: 'success',
-    error: 'error',
-    warning: 'warning',
-    info: 'info',
-  };
-
-  return (
-    <div className="fixed top-4 left-4 z-[100] max-w-md w-full" dir="rtl">
-      <Alert variant={variantMap[type]} onClose={onClose} className="shadow-lg">
-        {message}
-      </Alert>
     </div>
   );
 }

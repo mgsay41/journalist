@@ -1,5 +1,8 @@
 import { v2 as cloudinary, UploadApiResponse, UploadApiErrorResponse } from 'cloudinary';
 
+// Re-export Cloudinary types
+export type { UploadApiResponse, UploadApiErrorResponse };
+
 // Configure Cloudinary with environment variables
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

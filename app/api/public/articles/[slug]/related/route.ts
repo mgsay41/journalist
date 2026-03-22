@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const slugSchema = z.string().min(1).max(255).regex(/^[a-z0-9-]+$/, 'Invalid slug format');
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +10,13 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+
+    // Validate slug format before hitting the database
+    const slugValidation = slugSchema.safeParse(slug);
+    if (!slugValidation.success) {
+      return NextResponse.json({ error: 'المقال غير موجود' }, { status: 404 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '4');
 
@@ -30,7 +40,7 @@ export async function GET(
 
     if (!currentArticle) {
       return NextResponse.json(
-        { error: 'Article not found' },
+        { error: 'المقال غير موجود' },
         { status: 404 }
       );
     }
@@ -97,11 +107,13 @@ export async function GET(
       })),
     }));
 
-    return NextResponse.json({ articles: formattedArticles });
+    return NextResponse.json({ articles: formattedArticles }, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error('Error fetching related articles:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch related articles' },
+      { error: 'خطأ في جلب المقالات ذات الصلة' },
       { status: 500 }
     );
   }

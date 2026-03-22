@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
-import { SparklineChart, getTrendColor, getTrendFillColor } from '@/components/admin/SparklineChart';
+import { SparklineChart } from '@/components/admin/SparklineChart';
+import { getTrendFillColor } from '@/lib/utils/trend-colors';
 import { getDashboardChartsData } from '@/lib/analytics/service';
 
 interface DashboardStats {
@@ -197,13 +197,23 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          لوحة التحكم
-        </h1>
-        <p className="text-secondary">
-          مرحباً بك في نظام إدارة المحتوى للصحفيين
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-1">
+            لوحة التحكم
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {new Intl.DateTimeFormat('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}
+          </p>
+        </div>
+        <Link href="/admin/articles/new">
+          <Button variant="primary" size="sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            مقال جديد
+          </Button>
+        </Link>
       </div>
 
       {/* Stats Cards with Period Selector */}
@@ -479,19 +489,12 @@ interface StatsCardProps {
   chartType?: 'views' | 'articles';
 }
 
-function StatsCard({ title, value, icon, color, suffix, trend, chartData, chartType }: StatsCardProps) {
-  const colorClasses = {
-    primary: 'text-primary',
+function StatsCard({ title, value, icon, color, suffix, trend, chartData }: StatsCardProps) {
+  const valueColorClasses = {
+    primary: 'text-foreground',
     success: 'text-success',
     warning: 'text-warning',
     info: 'text-blue-600',
-  };
-
-  const bgClasses = {
-    primary: 'bg-primary/10',
-    success: 'bg-success/10',
-    warning: 'bg-warning/10',
-    info: 'bg-blue-50',
   };
 
   const icons = {
@@ -504,75 +507,66 @@ function StatsCard({ title, value, icon, color, suffix, trend, chartData, chartT
     seo: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   };
 
-  // Determine chart color based on trend and card color
   const chartColor = trend
     ? getTrendFillColor(trend.direction, color !== 'warning')
-    : colorClasses[color].includes('primary')
-      ? '#3b82f6'
-      : colorClasses[color].includes('success')
-        ? '#10b981'
-        : colorClasses[color].includes('warning')
-          ? '#f59e0b'
-          : '#3b82f6';
+    : '#C8892A';
 
   return (
-    <Card>
-      <CardContent className="p-6">
+    <Card className="group hover:border-accent transition-colors duration-200 cursor-default">
+      <CardContent className="p-5">
         <div className="space-y-3">
-          {/* Header with icon */}
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-secondary mb-1">{title}</p>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-3xl font-bold ${colorClasses[color]}`}>
-                  {value}
-                </span>
-                {suffix && (
-                  <span className="text-sm text-secondary">{suffix}</span>
-                )}
-                {trend && (
-                  <div className={`flex items-center gap-1 text-xs font-medium ${getTrendColor(trend.direction, color !== 'warning')}`}>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {trend.direction === 'up' && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                      )}
-                      {trend.direction === 'down' && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                      )}
-                      {trend.direction === 'neutral' && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                      )}
-                    </svg>
-                    {trend.value > 0 && `${trend.value}%`}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className={`w-12 h-12 rounded-lg ${bgClasses[color]} flex items-center justify-center`}>
-              <svg
-                className={`w-6 h-6 ${colorClasses[color]}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={icons[icon as keyof typeof icons] || icons.total}
-                />
-              </svg>
-            </div>
+          {/* Label + icon */}
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-none pt-0.5">
+              {title}
+            </p>
+            <svg
+              className="w-4 h-4 text-muted-foreground/30 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d={icons[icon as keyof typeof icons] || icons.total}
+              />
+            </svg>
           </div>
 
-          {/* Mini chart */}
+          {/* Large number + trend pill */}
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className={`text-4xl font-bold tracking-tight leading-none ${valueColorClasses[color]}`}>
+              {value.toLocaleString('ar-SA')}
+            </span>
+            {suffix && (
+              <span className="text-sm text-muted-foreground">{suffix}</span>
+            )}
+            {trend && trend.value > 0 && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  trend.direction === 'up'
+                    ? 'bg-success/10 text-success'
+                    : trend.direction === 'down'
+                    ? 'bg-danger/10 text-danger'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '—'}
+                {trend.value}%
+              </span>
+            )}
+          </div>
+
+          {/* Sparkline */}
           {chartData && chartData.length > 0 && (
-            <div className="h-8">
+            <div className="h-10">
               <SparklineChart
                 data={chartData}
                 width={240}
-                height={32}
-                strokeWidth={2}
+                height={40}
+                strokeWidth={1.5}
                 color={chartColor}
                 showFill={true}
                 showDots={false}

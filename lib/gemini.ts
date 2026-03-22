@@ -8,20 +8,11 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
+import { Redis } from "@upstash/redis";
 
 // Available Gemini models
 export const GEMINI_MODELS = {
-  // Recommended - Gemini 3 Flash
-  "gemini-3-flash": {
-    id: "gemini-3-flash",
-    name: "Gemini 3 Flash",
-    inputCost: 0.15, // per 1M tokens
-    outputCost: 0.60,
-    maxTokens: 8192,
-    contextWindow: 1000000,
-    description: "Latest 3.0 flash model with enhanced capabilities",
-  },
-  // Gemini 2.5 Flash
+  // Recommended - Gemini 2.5 Flash
   "gemini-2.5-flash": {
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
@@ -29,9 +20,9 @@ export const GEMINI_MODELS = {
     outputCost: 0.60,
     maxTokens: 8192,
     contextWindow: 1000000,
-    description: "2.5 flash model with enhanced capabilities",
+    description: "Latest 2.5 flash model with enhanced capabilities",
   },
-  // Fallback option
+  // Stable 2.0 Flash
   "gemini-2.0-flash": {
     id: "gemini-2.0-flash",
     name: "Gemini 2.0 Flash",
@@ -40,6 +31,16 @@ export const GEMINI_MODELS = {
     maxTokens: 8192,
     contextWindow: 1000000,
     description: "Stable and fast flash model",
+  },
+  // Flash 1.5
+  "gemini-1.5-flash": {
+    id: "gemini-1.5-flash",
+    name: "Gemini 1.5 Flash",
+    inputCost: 0.075,
+    outputCost: 0.30,
+    maxTokens: 8192,
+    contextWindow: 1000000,
+    description: "Fast and efficient flash model",
   },
   // Pro model for complex tasks
   "gemini-1.5-pro": {
@@ -56,7 +57,7 @@ export const GEMINI_MODELS = {
 export type GeminiModelId = keyof typeof GEMINI_MODELS;
 
 // Default model
-const DEFAULT_MODEL: GeminiModelId = "gemini-3-flash";
+const DEFAULT_MODEL: GeminiModelId = "gemini-2.5-flash";
 
 // Rate limiting configuration
 const RATE_LIMIT = {
@@ -108,7 +109,20 @@ class RateLimiter {
   }
 }
 
-// Response cache with TTL
+// ---------------------------------------------------------------------------
+// Upstash Redis client for Gemini response cache — lazy init
+// ---------------------------------------------------------------------------
+let _redis: Redis | null | undefined;
+
+function getRedis(): Redis | null {
+  if (_redis !== undefined) return _redis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  _redis = url && token ? new Redis({ url, token }) : null;
+  return _redis;
+}
+
+// Response cache with TTL — uses Redis in production, in-memory in dev
 interface CacheEntry {
   response: string;
   timestamp: number;
@@ -117,13 +131,14 @@ interface CacheEntry {
 class ResponseCache {
   private cache = new Map<string, CacheEntry>();
   private readonly ttl: number;
+  private readonly ttlSeconds: number;
 
   constructor(ttlHours = 24) {
     this.ttl = ttlHours * 60 * 60 * 1000;
+    this.ttlSeconds = ttlHours * 60 * 60;
   }
 
   private generateKey(prompt: string, model: string): string {
-    // Simple hash function for cache key
     let hash = 0;
     const str = `${model}:${prompt}`;
     for (let i = 0; i < str.length; i++) {
@@ -134,29 +149,35 @@ class ResponseCache {
     return hash.toString(36);
   }
 
-  get(prompt: string, model: string): string | null {
-    const key = this.generateKey(prompt, model);
+  async get(prompt: string, model: string): Promise<string | null> {
+    const key = `gemini:cache:${this.generateKey(prompt, model)}`;
+    const redis = getRedis();
+
+    if (redis) {
+      return await redis.get<string>(key);
+    }
+
+    // In-memory fallback
     const entry = this.cache.get(key);
-
     if (!entry) return null;
-
-    // Check if expired
     if (Date.now() - entry.timestamp > this.ttl) {
       this.cache.delete(key);
       return null;
     }
-
     return entry.response;
   }
 
-  set(prompt: string, model: string, response: string): void {
-    const key = this.generateKey(prompt, model);
-    this.cache.set(key, {
-      response,
-      timestamp: Date.now(),
-    });
+  async set(prompt: string, model: string, response: string): Promise<void> {
+    const key = `gemini:cache:${this.generateKey(prompt, model)}`;
+    const redis = getRedis();
 
-    // Clean up old entries periodically
+    if (redis) {
+      await redis.set(key, response, { ex: this.ttlSeconds });
+      return;
+    }
+
+    // In-memory fallback
+    this.cache.set(key, { response, timestamp: Date.now() });
     if (this.cache.size > 1000) {
       this.cleanup();
     }
@@ -246,7 +267,7 @@ export async function generateContent(
 
   // Check cache first
   if (useCache) {
-    const cached = responseCache.get(prompt, model);
+    const cached = await responseCache.get(prompt, model);
     if (cached) {
       return {
         text: cached,
@@ -293,7 +314,7 @@ export async function generateContent(
 
     // Cache the response
     if (useCache) {
-      responseCache.set(prompt, model, text);
+      await responseCache.set(prompt, model, text);
     }
 
     return {

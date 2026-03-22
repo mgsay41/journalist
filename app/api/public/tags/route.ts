@@ -41,11 +41,13 @@ export async function GET() {
       articleCount: tag._count.articles,
     }));
 
-    return NextResponse.json({ tags: formattedTags });
+    return NextResponse.json({ tags: formattedTags }, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error('Error fetching tags:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch tags' },
+      { error: 'خطأ في جلب الوسوم' },
       { status: 500 }
     );
   }

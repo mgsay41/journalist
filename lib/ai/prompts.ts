@@ -1206,3 +1206,376 @@ ${tagList || "لا توجد وسوم"}
 - انسخ أسماء الوسوم بالضبط من القائمة المتاحة
 - لا تقترح وسوماً جديدة`;
 }
+
+// ============================================
+// AI Image Generation Prompts (Phase 17.5.2)
+// ============================================
+
+/**
+ * Image Prompt Generation for Featured Image
+ * Generates detailed prompts for AI image generation
+ */
+export function buildImagePromptGeneration(data: {
+  title: string;
+  content: string;
+  category?: string;
+  style?: 'professional' | 'casual' | 'artistic' | 'minimalist' | 'editorial';
+  aspectRatio?: '16:9' | '4:3' | '1:1';
+}): string {
+  const styleDescriptions = {
+    professional: 'احترافي للصحافة والإعلام - ألوان هادئة، إضاءة ساطعة، تكوين متوازن',
+    casual: 'بسيط وودود - ألوان دافئة، جو مريح، إحساس بالقرب',
+    artistic: 'فني وإبداعي - تكوين جريء، ألوان غنية، تأثيرات بصرية مميزة',
+    minimalist: 'بسيط وأنيق - مساحة سلبية كبيرة، عناصر قليلة، تركيز على الموضوع',
+    editorial: 'تحريري للصحافة والمجلات - صورة احترافية عالية الجودة، تكوين درامي',
+  };
+
+  const aspectHints = {
+    '16:9': 'عرضية بانورامية مناسبة للهيدر',
+    '4:3': 'أفقية قياسية مناسبة للمقالات',
+    '1:1': 'مربعة مثالية للمنصات الاجتماعية',
+  };
+
+  return `أنشئ وصفاً تفصيلياً لصورة غلاف مميزة (Featured Image) للمقال التالي:
+
+العنوان: ${data.title}
+${data.category ? `التصنيف: ${data.category}` : ''}
+
+محتوى المقال (أول 1000 كلمة):
+${data.content.substring(0, 2000)}
+
+الأسلوب المطلوب: ${styleDescriptions[data.style || 'professional']}
+نسبة الأبعاد: ${aspectHints[data.aspectRatio || '16:9']}
+
+المطلوب:
+1. أنشئ وصفاً تفصيلياً باللغة الإنجليزية لاستخدامه في توليد الصور (لأن معظم مولّدات الصور تعمل بالإنجليزية)
+2. أنشئ وصفاً باللغة العربية لعرضه على المستخدم
+3. قترح عناصر بصرية رئيسية يجب أن تتضمنها الصورة
+4. حدد الألوان الرئيسية المناسبة للمقال
+
+قواعد الوصف الإنجليزي:
+- ابدأ بالموضوع الرئيسي
+- أضف التفاصيل البيئية (الإضاءة، الخلفية، التكوين)
+- حدد الأسلوب الفني (photorealistic, digital art, illustration, إلخ)
+- أضف كلمات مفتاحية للجودة (high quality, detailed, professional, 8k)
+- اجعل الوصف موجزاً وقوياً (50-100 كلمة)
+- تجنب الكلمات التي قد تُرفض (nsfw, violent, إلخ)
+
+أعد JSON فقط بالشكل التالي:
+{
+  "englishPrompt": "Detailed English prompt for AI image generation, describing the main subject, environment, lighting, style, and composition. Include quality keywords.",
+  "arabicDescription": "وصف تفصيلي باللغة العربية يشرح محتوى الصورة المقترحة",
+  "visualElements": [
+    "عنصر بصري 1",
+    "عنصر بصري 2",
+    "عنصر بصري 3"
+  ],
+  "colorPalette": [
+    "لون رئيسي 1",
+    "لون رئيسي 2",
+    "لون رئيسي 3"
+  ],
+  "styleKeywords": ["photorealistic", "professional", "high quality"],
+  "compositionHint": "نصيحة مختصرة عن تكوين الصورة",
+  "mood": "الجو العام للصورة (درامي، هادئ، مشرق، إلخ)"
+}
+
+مهم جداً:
+- أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده
+- الوصف الإنجليزي يجب أن يكون جاهزاً مباشرة للاستخدام مع مولّدات الصور
+- استخدم كلمات وصفية دقيقة وواضحة`;
+}
+
+/**
+ * Image Prompt Enhancement
+ * Enhances an existing image prompt with more details
+ */
+export function buildImagePromptEnhancement(data: {
+  basePrompt: string;
+  articleContext: string;
+  improvements?: string[];
+}): string {
+  return `حسّن وصف الصورة التالي لجعلها أكثر احترافية وجاذبية:
+
+الوصف الأصلي:
+${data.basePrompt}
+
+سياق المقال:
+${data.articleContext.substring(0, 500)}
+
+${data.improvements?.length ? `التحسينات المطلوبة:\n${data.improvements.join('\n')}` : ''}
+
+المطلوب:
+1. حسّن الوصف مع الحفاظ على الموضوع الأساسي
+2. أضف تفاصيل عن الإضاءة والتكوين
+3. حدد الأسلوب الفني بشكل أوضح
+4. أضف كلمات مفتاحية للجودة
+
+أعد JSON فقط بالشكل التالي:
+{
+  "enhancedEnglishPrompt": "Enhanced English prompt with more details",
+  "arabicDescription": "وصف عربي للصورة المحسّنة",
+  "changes": ["تغيير 1", "تغيير 2"],
+  "qualityKeywords": ["keyword1", "keyword2"]
+}
+
+مهم جداً: أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده.`;
+}
+
+/**
+ * Multiple Image Prompt Variations
+ * Generates multiple prompt variations for the same article
+ */
+export function buildImagePromptVariations(data: {
+  title: string;
+  content: string;
+  category?: string;
+  count?: number; // Number of variations (default 3)
+}): string {
+  const numVariations = data.count || 3;
+
+  return `أنشئ ${numVariations} خيارات مختلفة لصورة الغلاف للمقال التالي:
+
+العنوان: ${data.title}
+${data.category ? `التصنيف: ${data.category}` : ''}
+
+محتوى المقال (أول 800 كلمة):
+${data.content.substring(0, 1600)}
+
+لكل خيار، حدد:
+- اتجاه بصري مختلف (مثال: التركيز على شخص vs. التركيز على مفهوم تجريدي)
+- أسلوب فني مختلف (photorealistic, illustration, mixed media)
+- مزاج مختلف (درامي، مبهج، هادئ، ملهم)
+
+أعد JSON فقط بالشكل التالي:
+{
+  "variations": [
+    {
+      "id": "option-1",
+      "englishPrompt": "Detailed English prompt for this option",
+      "arabicDescription": "وصف عربي لهذا الخيار",
+      "style": "photorealistic|illustration|digital-art|mixed-media",
+      "mood": "dramatic|uplifting|calm|inspiring|professional",
+      "focusArea": "person|object|concept|scene|abstract",
+      "recommendedFor": "نوع المقالات المناسبة لهذا الخيار"
+    }
+  ]
+}
+
+مهم جداً:
+- أعد JSON صالح ومكتمل فقط
+- يجب أن يكون كل خيار مميزاً وله أسلوب مختلف`;
+}
+
+// ============================================
+// SEO Auto-Fix Prompts (Phase 18)
+// ============================================
+
+/**
+ * Auto-Fix Internal Links Prompt
+ * Adds relevant internal links to the content
+ */
+export function buildAutoFixInternalLinksPrompt(data: {
+  title: string;
+  content: string;
+  availableArticles: Array<{ title: string; slug: string; category: string }>;
+  targetCount?: number; // Number of links to add (default 2-3)
+}): string {
+  const targetCount = data.targetCount || 3;
+
+  const articlesList = data.availableArticles.length > 0
+    ? data.availableArticles.slice(0, 50).map((a, i) => `${i + 1}. "${a.title}" (/${a.slug}) - التصنيف: ${a.category}`).join('\n')
+    : 'لا توجد مقالات أخرى في الموقع';
+
+  return `أضف روابط داخلية ذات صلة بالمقال التالي:
+
+عنوان المقال الحالي: ${data.title}
+
+المحتوى:
+${data.content.substring(0, 4000)}
+
+=== المقالات المتاحة في الموقع للربط بها ===
+${articlesList}
+
+المطلوب:
+1. اقرأ المحتوى بعناية لفهم الموضوعات الرئيسية
+2. اختر ${targetCount} مقالات ذات صلة من القائمة أعلاه
+3. حدد المواضع المناسبة لإضافة الروابط (حيث تكون طبيعية وذات صلة)
+4. أضف الروابط بصيغة HTML: <a href="/slug">النص المرتبط</a>
+
+مهم جداً:
+- اختر فقط المقالات التي لها علاقة حقيقية بالمحتوى
+- يجب أن يكون النص المرتبط طبيعياً وجزءاً من الجملة
+- لا تضف روابط في العناوين (H1, H2, H3)
+- حافظ على تنسيق HTML الحالي
+- أعد المحتوى كاملاً مع الروابط المضافة
+
+أعد JSON فقط بالشكل التالي:
+{
+  "modifiedContent": "المحتوى الكامل مع الروابط المضافة بصيغة HTML",
+  "addedLinks": [
+    {
+      "articleTitle": "عنوان المقال المرتبط",
+      "linkUrl": "/article-slug",
+      "anchorText": "النص المرتبط",
+      "position": "مكان إضافة الرابط في المحتوى",
+      "reason": "سبب اختيار هذا الرابط"
+    }
+  ],
+  "linksCount": 2
+}
+
+مهم جداً: أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده`;
+}
+
+/**
+ * Auto-Fix External Links Prompt
+ * Adds relevant external links to authoritative sources
+ */
+export function buildAutoFixExternalLinksPrompt(data: {
+  title: string;
+  content: string;
+  targetCount?: number; // Number of links to add (default 1-2)
+}): string {
+  const targetCount = data.targetCount || 2;
+
+  return `أضف روابط خارجية لمصادر موثوقة للمقال التالي:
+
+عنوان المقال: ${data.title}
+
+المحتوى:
+${data.content.substring(0, 4000)}
+
+المطلوب:
+1. حدد المواضع التي تحتاج إلى مرجع أو مصدر خارجي موثوق
+2. أضف ${targetCount} روابط خارجية لمصادر موثوقة (مثل: مواقع حكومية، جامعات، منظمات دولية، مصادر موثوقة في المجال)
+3. استخدم روابط حقيقية لمصادر معروفة (مثل: wikipedia.org, who.int, un.org, إلخ)
+4. أضف الروابط بصيغة HTML: <a href="https://example.com" target="_blank" rel="nofollow">النص المرتبط</a>
+
+قواعد مهمة:
+- اختر مصادر موثوقة ومعروفة
+- يجب أن يكون الرابط ذا صلة مباشرة بالموضوع
+- استخدم rel="nofollow" للروابط الخارجية
+- استخدم target="_blank" لفتح الرابط في نافذة جديدة
+- لا تضف روابط في العناوين
+
+أعد JSON فقط بالشكل التالي:
+{
+  "modifiedContent": "المحتوى الكامل مع الروابط المضافة بصيغة HTML",
+  "addedLinks": [
+    {
+      "url": "https://example.com",
+      "anchorText": "النص المرتبط",
+      "sourceType": "wikipedia|government|organization|news|research",
+      "position": "مكان إضافة الرابط",
+      "reason": "سبب اختيار هذا المصدر"
+    }
+  ],
+  "linksCount": 2
+}
+
+مهم جداً: أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده`;
+}
+
+/**
+ * Auto-Fix Long Paragraphs Prompt
+ * Splits long paragraphs into smaller, more readable ones
+ */
+export function buildAutoFixLongParagraphsPrompt(data: {
+  content: string;
+  maxWords?: number; // Maximum words per paragraph (default 80)
+}): string {
+  const maxWords = data.maxWords || 80;
+
+  return `قسّم الفقرات الطويلة في المحتوى التالي إلى فقرات أصغر:
+
+المحتوى:
+${data.content}
+
+المطلوب:
+1. اقرأ المحتوى بعناية
+2. اكتشف الفقرات التي تزيد عن ${maxWords} كلمة
+3. قسّم هذه الفقرات إلى فقرات أصغر (كل فقرة 40-${maxWords} كلمة)
+4. حافظ على تدفق المحتوى وترابطه
+5. احتفظ بجميع المعلومات الأصلية
+6. استخدم عبارات انتقالية حيث يكون ذلك مناسباً
+7. حافظ على تنسيق HTML الحالي (<p> tags)
+
+أعد JSON فقط بالشكل التالي:
+{
+  "modifiedContent": "المحتوى الكامل بعد تقسيم الفقرات الطويلة",
+  "splitParagraphs": [
+    {
+      "originalPosition": "موقع الفقرة الأصلية",
+      "originalWordCount": 150,
+      "newParagraphsCount": 2,
+      "splitReason": "سبب التقسيم"
+    }
+  ],
+  "totalParagraphsModified": 1
+}
+
+مهم جداً:
+- أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده
+- حافظ على جميع المعلومات الأصلية
+- لا تحذف أي محتوى`;
+}
+
+/**
+ * Combined Auto-Fix Prompt
+ * Fixes multiple SEO issues at once
+ */
+export function buildAutoFixSeoIssuesPrompt(data: {
+  title: string;
+  content: string;
+  issuesToFix: Array<'internal-links' | 'external-links' | 'long-paragraphs'>;
+  availableArticles?: Array<{ title: string; slug: string; category: string }>;
+}): string {
+  const fixInternalLinks = data.issuesToFix.includes('internal-links');
+  const fixExternalLinks = data.issuesToFix.includes('external-links');
+  const fixLongParagraphs = data.issuesToFix.includes('long-paragraphs');
+
+  let instructions = `عدّل المحتوى التالي لإصلاح مشاكل SEO:\n\nعنوان المقال: ${data.title}\n\nالمحتوى:\n${data.content.substring(0, 4000)}\n\n`;
+
+  if (fixInternalLinks && data.availableArticles && data.availableArticles.length > 0) {
+    const articlesList = data.availableArticles.slice(0, 30).map((a, i) => `${i + 1}. "${a.title}" (/${a.slug})`).join('\n');
+    instructions += `=== مقالات للربط الداخلي ===\n${articlesList}\n\n`;
+  }
+
+  instructions += 'المطلوب:\n';
+
+  const fixes: string[] = [];
+  if (fixInternalLinks) {
+    fixes.push('- إضافة 2-3 روابط داخلية ذات صلة من المقالات المتاحة');
+  }
+  if (fixExternalLinks) {
+    fixes.push('- إضافة 1-2 رابط خارجي لمصادر موثوقة');
+  }
+  if (fixLongParagraphs) {
+    fixes.push('- تقسيم الفقرات الطويلة (أكثر من 80 كلمة) إلى فقرات أصغر');
+  }
+
+  instructions += fixes.map(f => `  ${f}`).join('\n');
+
+  instructions += '\n\nقواعد عامة:\n';
+  instructions += '- حافظ على جميع المعلومات الأصلية\n';
+  instructions += '- لا تحذف أي محتوى\n';
+  instructions += '- احتفظ بتنسيق HTML الحالي\n';
+  instructions += '- اجعل التعديلات طبيعية وسلسة\n';
+  instructions += '- للروابط الخارجية استخدم: <a href="url" target="_blank" rel="nofollow">نص</a>\n';
+
+  instructions += '\nأعد JSON فقط بالشكل التالي:\n';
+  instructions += `{
+  "modifiedContent": "المحتوى الكامل بعد التعديلات",
+  "changes": {
+    "internalLinksAdded": ${fixInternalLinks ? '[]' : '0'},
+    "externalLinksAdded": ${fixExternalLinks ? '[]' : '0'},
+    "paragraphsSplit": ${fixLongParagraphs ? '0' : 'false'}
+  },
+  "summary": "ملخص التعديلات التي تم إجراؤها"
+}
+
+مهم جداً: أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده`;
+
+  return instructions;
+}

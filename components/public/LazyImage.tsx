@@ -137,14 +137,9 @@ export function LazyImage({
         {/* Skeleton/shimmer effect */}
         <div
           className={cn(
-            'absolute inset-0 bg-muted',
-            fill ? 'absolute inset-0' : 'rounded-lg'
+            'animate-shimmer absolute inset-0',
+            fill ? '' : 'rounded-lg'
           )}
-          style={{
-            background: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.5s infinite',
-          }}
         />
         {isInView && (
           <Image
@@ -170,16 +165,6 @@ export function LazyImage({
             }}
           />
         )}
-        <style jsx>{`
-          @keyframes shimmer {
-            0% {
-              background-position: 200% 0;
-            }
-            100% {
-              background-position: -200% 0;
-            }
-          }
-        `}</style>
       </div>
     );
   }

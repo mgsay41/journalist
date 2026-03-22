@@ -30,22 +30,25 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
-
-  // Initialize theme from localStorage or default
-  useEffect(() => {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return defaultTheme;
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-      if (stored && ['light', 'dark', 'system'].includes(stored)) {
-        setThemeState(stored);
-      }
-    } catch (e) {
-      console.error('Failed to read theme from localStorage:', e);
-    }
-  }, []);
+      if (stored && ['light', 'dark', 'system'].includes(stored)) return stored;
+    } catch {}
+    return defaultTheme;
+  });
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+      if (stored === 'dark') return 'dark';
+      if (stored === 'light') return 'light';
+    } catch {}
+    return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
+  });
 
-  // Update resolved theme based on theme preference
+  // Apply resolved theme class to document root
   useEffect(() => {
     const root = document.documentElement;
     let resolved: 'light' | 'dark' = 'light';

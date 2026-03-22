@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { generateContent, isGeminiConfigured } from "@/lib/gemini";
 import { z } from "zod";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 
 const requestSchema = z.object({
   imageUrl: z.string().url({ message: "رابط الصورة غير صالح" }),
@@ -21,6 +22,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "غير مصرح بالوصول" },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting: 20 AI requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 20,
+      window: 3600,
+      identifier: `ai:image-alt-text:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
       );
     }
 
@@ -58,7 +72,7 @@ The alt text should:
 Return only the alt text in Arabic, without any additional explanation or formatting.`;
 
     const result = await generateContent(prompt, {
-      model: "gemini-3-flash",
+      model: "gemini-2.5-flash",
       maxTokens: 100,
       temperature: 0.3,
     });

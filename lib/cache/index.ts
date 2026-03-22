@@ -1,12 +1,15 @@
 import { unstable_cache } from 'next/cache';
+import { LRUCache } from 'lru-cache';
 
 /**
  * Cache utilities for performance optimization
  *
- * This module provides caching strategies for:
- * - Database queries
- * - API responses
- * - Computed data
+ * Phase 2 Backend Audit - Enhanced with:
+ * - Database query caching
+ * - API response caching
+ * - Computed data caching
+ * - Cache statistics tracking
+ * - LRU eviction policy
  */
 
 // Cache duration constants (in seconds)
@@ -19,6 +22,47 @@ export const CACHE_DURATIONS = {
   DAY: 86400,
   WEEK: 604800,
 } as const;
+
+/**
+ * Cache statistics for monitoring
+ */
+interface CacheStats {
+  hits: number;
+  misses: number;
+  sets: number;
+  deletes: number;
+  size: number;
+  hitRate: number;
+}
+
+// Global cache statistics
+const stats: CacheStats = {
+  hits: 0,
+  misses: 0,
+  sets: 0,
+  deletes: 0,
+  size: 0,
+  hitRate: 0,
+};
+
+/**
+ * Update cache statistics
+ */
+function updateStats(type: 'hit' | 'miss' | 'set' | 'delete', cacheSize?: number): void {
+  if (type === 'hit') {
+    stats.hits++;
+  } else if (type === 'miss') {
+    stats.misses++;
+  } else if (type === 'set') {
+    stats.sets++;
+  } else if (type === 'delete') {
+    stats.deletes++;
+  }
+
+  stats.size = cacheSize ?? memoryCache.getSize();
+  const total = stats.hits + stats.misses;
+  stats.hitRate = total > 0 ? (stats.hits / total) * 100 : 0;
+}
 
 /**
  * Create a cached version of an async function with revalidation
@@ -72,71 +116,70 @@ export const CACHE_TAGS = {
 } as const;
 
 /**
- * Simple in-memory cache for frequently accessed data
- * This uses a Map with TTL (time-to-live) support
+ * Simple in-memory LRU cache for frequently accessed data.
+ * Uses the lru-cache package for O(1) get/set/eviction.
  */
 class MemoryCache {
-  private cache = new Map<string, { value: any; expires: number }>();
+  private lru = new LRUCache<string, { value: unknown; expires: number }>({ max: 1000 });
 
-  /**
-   * Get a value from cache
-   */
+  getSize(): number {
+    return this.lru.size;
+  }
+
   get<T>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    // Check if expired
-    if (Date.now() > entry.expires) {
-      this.cache.delete(key);
+    const entry = this.lru.get(key);
+    if (!entry) {
+      updateStats('miss', this.lru.size);
       return null;
     }
-
+    if (Date.now() > entry.expires) {
+      this.lru.delete(key);
+      updateStats('miss', this.lru.size);
+      return null;
+    }
+    updateStats('hit', this.lru.size);
     return entry.value as T;
   }
 
-  /**
-   * Set a value in cache with TTL
-   */
   set<T>(key: string, value: T, ttlSeconds: number = CACHE_DURATIONS.FIFTEEN_MINUTES): void {
-    this.cache.set(key, {
-      value,
-      expires: Date.now() + ttlSeconds * 1000,
-    });
+    this.lru.set(key, { value, expires: Date.now() + ttlSeconds * 1000 });
+    updateStats('set', this.lru.size);
   }
 
-  /**
-   * Delete a value from cache
-   */
   delete(key: string): void {
-    this.cache.delete(key);
-  }
-
-  /**
-   * Clear all cache entries
-   */
-  clear(): void {
-    this.cache.clear();
-  }
-
-  /**
-   * Delete entries matching a pattern
-   */
-  deletePattern(pattern: string): void {
-    const regex = new RegExp(pattern);
-    for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
-        this.cache.delete(key);
-      }
+    if (this.lru.has(key)) {
+      this.lru.delete(key);
+      updateStats('delete', this.lru.size);
     }
   }
 
-  /**
-   * Get cache statistics
-   */
+  clear(): void {
+    const size = this.lru.size;
+    this.lru.clear();
+    for (let i = 0; i < size; i++) {
+      updateStats('delete', this.lru.size);
+    }
+  }
+
+  deletePattern(pattern: string): void {
+    const regex = new RegExp(pattern);
+    let deleted = 0;
+    for (const key of this.lru.keys()) {
+      if (regex.test(key)) {
+        this.lru.delete(key);
+        deleted++;
+      }
+    }
+    for (let i = 0; i < deleted; i++) {
+      updateStats('delete', this.lru.size);
+    }
+  }
+
   getStats() {
     return {
-      size: this.cache.size,
-      keys: Array.from(this.cache.keys()),
+      size: this.lru.size,
+      maxEntries: 1000,
+      keys: Array.from(this.lru.keys()),
     };
   }
 }
@@ -249,4 +292,61 @@ export function cacheAnalyticsData<T>(
   revalidate: number = CACHE_DURATIONS.FIVE_MINUTES
 ) {
   return createCachedFn(fn, [CACHE_TAGS.ANALYTICS, key], revalidate)();
+}
+
+/**
+ * Get cache statistics for monitoring
+ * Phase 2 Backend Audit - Performance monitoring
+ */
+export function getCacheStats(): CacheStats {
+  return { ...stats };
+}
+
+/**
+ * Reset cache statistics
+ */
+export function resetCacheStats(): void {
+  stats.hits = 0;
+  stats.misses = 0;
+  stats.sets = 0;
+  stats.deletes = 0;
+  stats.size = memoryCache.getSize();
+  stats.hitRate = 0;
+}
+
+/**
+ * Get cache performance report
+ */
+export function getCacheReport(): {
+  stats: CacheStats;
+  efficiency: string;
+  recommendations: string[];
+} {
+  const hitRate = stats.hitRate;
+  const efficiency =
+    hitRate >= 80 ? 'excellent' :
+    hitRate >= 60 ? 'good' :
+    hitRate >= 40 ? 'fair' :
+    'poor';
+
+  const recommendations: string[] = [];
+
+  if (hitRate < 40) {
+    recommendations.push('Consider increasing cache TTL for frequently accessed data');
+    recommendations.push('Review cache key patterns - may be too specific');
+  }
+
+  if (stats.size > 800) {
+    recommendations.push('Cache is near capacity. Consider increasing maxEntries or using Redis.');
+  }
+
+  if (stats.misses > stats.hits * 2) {
+    recommendations.push('High miss rate detected. Review cache strategy.');
+  }
+
+  return {
+    stats: getCacheStats(),
+    efficiency,
+    recommendations,
+  };
 }

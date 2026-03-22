@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Loading } from '@/components/ui/Loading';
+import { gooeyToast } from 'goey-toast';
 
 // Types
 interface Settings {
@@ -34,6 +35,9 @@ interface Settings {
   aiModelPreference: string;
   aiResponseLimit: number;
   aiFeaturesEnabled: boolean;
+  breakingNewsEnabled: boolean;
+  breakingNewsText: string | null;
+  breakingNewsUrl: string | null;
 }
 
 interface UserProfile {
@@ -41,6 +45,10 @@ interface UserProfile {
   name: string;
   email: string;
   image: string | null;
+  bio: string | null;
+  authorTitle: string | null;
+  twitterUrl: string | null;
+  linkedinUrl: string | null;
 }
 
 interface Category {
@@ -90,9 +98,10 @@ const STORAGE_PROVIDERS = [
 ];
 
 const AI_MODELS = [
-  { value: 'gemini-3-flash', label: 'Gemini 3 Flash (موصى به)' },
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (موصى به)' },
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
 ];
 
 const AI_RESPONSE_LIMITS = [
@@ -107,7 +116,6 @@ const AI_RESPONSE_LIMITS = [
 export function SettingsTabs({ initialSettings, initialProfile, categories }: SettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabName>('general');
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
 
@@ -131,7 +139,6 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
-    setSaveSuccess(false);
 
     try {
       const response = await fetch('/api/admin/settings', {
@@ -146,11 +153,10 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
         throw new Error(data.error || 'فشل حفظ الإعدادات');
       }
 
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      gooeyToast.success('تم حفظ الإعدادات بنجاح');
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert(error instanceof Error ? error.message : 'حدث خطأ أثناء حفظ الإعدادات');
+      gooeyToast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء حفظ الإعدادات');
     } finally {
       setIsSaving(false);
     }
@@ -158,7 +164,6 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    setSaveSuccess(false);
 
     try {
       const response = await fetch('/api/admin/profile', {
@@ -173,11 +178,10 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
         throw new Error(data.error || 'فشل حفظ الملف الشخصي');
       }
 
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      gooeyToast.success('تم حفظ الملف الشخصي بنجاح');
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert(error instanceof Error ? error.message : 'حدث خطأ أثناء حفظ الملف الشخصي');
+      gooeyToast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء حفظ الملف الشخصي');
     } finally {
       setIsSaving(false);
     }
@@ -212,9 +216,8 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
         throw new Error(data.error || 'فشل تغيير كلمة المرور');
       }
 
-      setPasswordSuccess('تم تغيير كلمة المرور بنجاح');
+      gooeyToast.success('تم تغيير كلمة المرور بنجاح');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setTimeout(() => setPasswordSuccess(''), 3000);
     } catch (error) {
       console.error('Error changing password:', error);
       setPasswordError(error instanceof Error ? error.message : 'حدث خطأ أثناء تغيير كلمة المرور');
@@ -252,13 +255,6 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
           ))}
         </nav>
       </div>
-
-      {/* Success Message */}
-      {saveSuccess && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-800 text-sm">تم حفظ الإعدادات بنجاح</p>
-        </div>
-      )}
 
       {/* Tab Content */}
       <div className="min-h-[400px]">
@@ -315,6 +311,42 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
                   value={settings.timeFormat}
                   onChange={(e) => updateSetting('timeFormat', e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Breaking News Section */}
+            <div className="pt-6 border-t">
+              <h3 className="text-base font-semibold mb-4">الخبر العاجل</h3>
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.breakingNewsEnabled}
+                    onChange={(e) => updateSetting('breakingNewsEnabled', e.target.checked)}
+                    className="w-4 h-4 rounded border-border"
+                  />
+                  <span className="text-sm font-medium">تفعيل شريط الأخبار العاجلة</span>
+                </label>
+
+                {settings.breakingNewsEnabled && (
+                  <>
+                    <Input
+                      label="نص الخبر العاجل"
+                      value={settings.breakingNewsText || ''}
+                      onChange={(e) => updateSetting('breakingNewsText', e.target.value || null)}
+                      placeholder="اكتب نص الخبر العاجل هنا..."
+                      helperText="يظهر في شريط أحمر أعلى الموقع"
+                    />
+                    <Input
+                      label="رابط الخبر (اختياري)"
+                      type="url"
+                      value={settings.breakingNewsUrl || ''}
+                      onChange={(e) => updateSetting('breakingNewsUrl', e.target.value || null)}
+                      placeholder="https://..."
+                      helperText="رابط المقال المتعلق بالخبر العاجل"
+                    />
+                  </>
+                )}
 
                 <div className="flex justify-end pt-4">
                   <Button
@@ -357,6 +389,39 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
                   value={profile.image || ''}
                   onChange={(e) => updateProfile('image', e.target.value || null)}
                   helperText="رابط صورة الملف الشخصي (اختياري)"
+                />
+
+                <Input
+                  label="المسمى الوظيفي"
+                  value={profile.authorTitle || ''}
+                  onChange={(e) => updateProfile('authorTitle', e.target.value || null)}
+                  placeholder="مثال: محرر أول، مراسل صحفي..."
+                  helperText="يظهر أسفل اسمك في صفحات المقالات"
+                />
+
+                <Textarea
+                  label="نبذة شخصية"
+                  value={profile.bio || ''}
+                  onChange={(e) => updateProfile('bio', e.target.value || null)}
+                  rows={3}
+                  placeholder="اكتب نبذة مختصرة عنك..."
+                  helperText="تظهر في نهاية كل مقال (حتى 500 حرف)"
+                />
+
+                <Input
+                  label="رابط تويتر / X"
+                  type="url"
+                  value={profile.twitterUrl || ''}
+                  onChange={(e) => updateProfile('twitterUrl', e.target.value || null)}
+                  placeholder="https://x.com/username"
+                />
+
+                <Input
+                  label="رابط لينكدإن"
+                  type="url"
+                  value={profile.linkedinUrl || ''}
+                  onChange={(e) => updateProfile('linkedinUrl', e.target.value || null)}
+                  placeholder="https://linkedin.com/in/username"
                 />
 
                 <div className="flex justify-end pt-4">
@@ -403,12 +468,6 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
                 {passwordError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded">
                     <p className="text-red-800 text-sm">{passwordError}</p>
-                  </div>
-                )}
-
-                {passwordSuccess && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded">
-                    <p className="text-green-800 text-sm">{passwordSuccess}</p>
                   </div>
                 )}
 

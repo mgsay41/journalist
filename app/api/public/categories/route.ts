@@ -39,11 +39,13 @@ export async function GET() {
       articleCount: category._count.articles,
     }));
 
-    return NextResponse.json({ categories: formattedCategories });
+    return NextResponse.json({ categories: formattedCategories }, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error('Error fetching categories:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch categories' },
+      { error: 'خطأ في جلب التصنيفات' },
       { status: 500 }
     );
   }

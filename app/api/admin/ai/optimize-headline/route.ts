@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth';
 import { generateContent } from '@/lib/gemini';
 import { recordAiUsage, isGeminiConfigured } from '@/lib/ai';
 import { z } from 'zod';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 const requestSchema = z.object({
   headline: z.string().min(1, 'Headline is required'),
@@ -15,6 +16,19 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limiting: 20 AI requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 20,
+      window: 3600,
+      identifier: `ai:optimize-headline:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
     }
 
     if (!isGeminiConfigured()) {
@@ -85,11 +99,11 @@ ${category ? `التصنيف: ${category}` : ''}
 
 مهم جداً: أعد JSON صالح ومكتمل فقط، بدون أي نص قبله أو بعده.`;
 
-    // Call AI API
+    // Call AI API (cache enabled: same headline input produces same optimization)
     const result = await generateContent(prompt, {
       maxTokens: 8192,
       temperature: 0.8,
-      useCache: false,
+      useCache: true,
     });
 
     // Parse response
@@ -108,7 +122,7 @@ ${category ? `التصنيف: ${category}` : ''}
       await recordAiUsage({
         userId: session.user.id,
         feature: 'headline-optimization',
-        model: 'gemini-3-flash',
+        model: result.model as import('@/lib/gemini').GeminiModelId,
         inputTokens: result.tokensUsed.input || 0,
         outputTokens: result.tokensUsed.output || 0,
         cached: result.cached || false,

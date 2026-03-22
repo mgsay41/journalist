@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 interface AnalyticsStatsCardProps {
   title: string;
   value: string | number;
@@ -6,7 +8,7 @@ interface AnalyticsStatsCardProps {
   icon?: React.ReactNode;
 }
 
-export function AnalyticsStatsCard({
+function AnalyticsStatsCardComponent({
   title,
   value,
   change,
@@ -43,3 +45,18 @@ export function AnalyticsStatsCard({
     </div>
   );
 }
+
+// Custom comparison function - only re-render if values actually change
+function arePropsEqual(
+  prevProps: AnalyticsStatsCardProps,
+  nextProps: AnalyticsStatsCardProps
+): boolean {
+  return (
+    prevProps.title === nextProps.title &&
+    prevProps.value === nextProps.value &&
+    prevProps.change === nextProps.change &&
+    prevProps.changeType === nextProps.changeType
+  );
+}
+
+export const AnalyticsStatsCard = memo(AnalyticsStatsCardComponent, arePropsEqual);

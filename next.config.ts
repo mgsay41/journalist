@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+// Phase 3 - Bundle Analysis: Configure bundle analyzer
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const nextConfig: NextConfig = {
   // Image optimization configuration
@@ -26,9 +32,13 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 60, // Cache images for 60 seconds
   },
 
-  // Performance optimizations
+  // Performance optimizations & Security
   experimental: {
     optimizePackageImports: ['@/components/ui', '@/components/admin', '@/components/public'],
+    // Phase 1 Backend Audit - Security: Request size limits (2MB)
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
   },
 
   // Compiler optimizations
@@ -44,8 +54,6 @@ const nextConfig: NextConfig = {
 
   // Turbopack configuration (Next.js 16+)
   turbopack: {
-    // Set root directory to avoid lockfile conflicts from sibling projects
-    root: 'C:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website',
     // Enable code splitting
     rules: {
       '*.svg': {
@@ -57,9 +65,22 @@ const nextConfig: NextConfig = {
 
   // Security headers
   async headers() {
+    // 'unsafe-inline' is required for Next.js App Router streaming SSR:
+    // React uses inline <script> tags (e.g. $RC()) to swap Suspense fallbacks
+    // with streamed content. Without this, Suspense skeletons are never replaced.
+    // 'unsafe-eval' is additionally required in development for HMR / fast refresh.
+    const isDev = process.env.NODE_ENV === 'development';
+    const scriptSrc = [
+      "'self'",
+      "'unsafe-inline'",
+      ...(isDev ? ["'unsafe-eval'"] : []),
+      "https://cdn.jsdelivr.net",
+      "https://cdn.tailwindcss.com",
+    ].join(' ');
+
     const ContentSecurityPolicy = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
+      `script-src ${scriptSrc}`,
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
       "img-src 'self' data: blob: https://res.cloudinary.com https://lh3.googleusercontent.com https://i.ytimg.com https://*.ytimg.com",
       "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com",
@@ -130,7 +151,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: '/api/:path*',
+        // Public read-only API routes — safe to cache at CDN
+        source: '/api/public/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -138,8 +160,36 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Admin and auth API routes — must never be cached in shared caches
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store',
+          },
+          // CORS: restrict API routes to the configured app origin
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, x-csrf-token',
+          },
+          {
+            key: 'Access-Control-Allow-Credentials',
+            value: 'true',
+          },
+        ],
+      },
     ];
   },
 };
 
-export default nextConfig;
+// Phase 3 - Bundle Analysis: Wrap config with analyzer
+export default withBundleAnalyzer(nextConfig);

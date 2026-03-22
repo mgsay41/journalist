@@ -116,6 +116,7 @@ export function TagAutoSuggest({
     try {
       const response = await fetch('/api/admin/ai/auto-tags', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: articleTitle,

@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
         name: true,
         email: true,
         image: true,
+        bio: true,
+        authorTitle: true,
+        twitterUrl: true,
+        linkedinUrl: true,
         createdAt: true,
       },
     });
@@ -63,7 +67,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { name, email, image } = validation.data;
+    const { name, email, image, bio, authorTitle, twitterUrl, linkedinUrl } = validation.data;
 
     // Check if email is being changed and if it's already taken
     const existingUser = await prisma.user.findUnique({
@@ -107,18 +111,26 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    // Update user profile (name and image only, email changed separately after verification)
+    // Update user profile (name, image, bio, etc. — email changed separately after verification)
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         name,
         image,
+        bio: bio ?? null,
+        authorTitle: authorTitle ?? null,
+        twitterUrl: twitterUrl ?? null,
+        linkedinUrl: linkedinUrl ?? null,
       },
       select: {
         id: true,
         name: true,
         email: true,
         image: true,
+        bio: true,
+        authorTitle: true,
+        twitterUrl: true,
+        linkedinUrl: true,
         updatedAt: true,
       },
     });

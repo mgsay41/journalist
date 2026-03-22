@@ -2,11 +2,13 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pg_trgm]
 }
 
 // User Model - Admin account
@@ -16,8 +18,16 @@ model User {
   name              String
   emailVerified     Boolean   @default(false)
   image             String?
+  // Author bio fields
+  bio               String?   @db.Text
+  authorTitle       String?   // e.g. "محرر أول", "مراسل صحفي"
+  twitterUrl        String?
+  linkedinUrl       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  // Phase 1 Backend Audit - Security: Account lockout fields
+  failedLoginAttempts Int     @default(0)
+  lockedUntil        DateTime?
   articles          Article[]
   sessions          Session[]
   accounts          Account[]
@@ -26,6 +36,11 @@ model User {
   settings          Settings?
   emailVerifications EmailVerification[]
   articleRevisions  ArticleRevision[]
+
+  // Phase 2 Backend Audit - Performance: Add indexes for account lockout queries
+  @@index([email])
+  @@index([lockedUntil])
+  @@index([createdAt(sort: Desc)])
 }
 
 // Article Model
@@ -54,6 +69,11 @@ model Article {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Article Series
+  seriesId        String?
+  series          ArticleSeries? @relation(fields: [seriesId], references: [id])
+  seriesOrder     Int?           // Position within the series
+
   // Relations
   categories      Category[] @relation("ArticleCategories")
   tags            Tag[]      @relation("ArticleTags")
@@ -64,15 +84,21 @@ model Article {
   articleViews    ArticleView[]
   revisions       ArticleRevision[]
 
+  // Phase 2 Backend Audit - Performance: Enhanced indexes for common query patterns
   @@index([slug])
   @@index([status])
   @@index([publishedAt])
   @@index([authorId])
   @@index([isFeatured])
+  @@index([seoScore]) // For SEO filtering (good/bad scores)
+  @@index([views(sort: Desc)]) // For popular articles
   @@index([status, publishedAt(sort: Desc)]) // For published articles sorted by date
   @@index([status, isFeatured, publishedAt(sort: Desc)]) // For featured articles
   @@index([authorId, status]) // For user's articles by status
   @@index([createdAt(sort: Desc)]) // For recent articles
+  @@index([scheduledAt]) // For scheduled posts queue
+  @@index([status, scheduledAt]) // For filtering scheduled by status
+  @@index([status, createdAt(sort: Desc)]) // For articles by status and date
 }
 
 // Article Revision Model - For tracking article content changes
@@ -125,7 +151,9 @@ model Tag {
   articles  Article[] @relation("ArticleTags")
   createdAt DateTime  @default(now())
 
+  // Phase 2 Backend Audit - Performance: Index for tag queries
   @@index([slug])
+  @@index([name]) // For tag search
 }
 
 // Image Model
@@ -219,7 +247,11 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Phase 2 Backend Audit - Performance: Improved session query indexes
   @@index([userId])
+  @@index([expiresAt])
+  @@index([token])
+  @@index([userId, expiresAt])
 }
 
 // Login Attempt Model - For tracking failed login attempts (throttling)
@@ -271,12 +303,15 @@ model Notification {
   metadata     Json?    // Optional additional data (articleId, etc.)
   createdAt    DateTime @default(now())
 
+  // Phase 2 Backend Audit - Performance: Improved notification query indexes
   @@index([userId])
   @@index([read])
   @@index([createdAt])
   @@index([userId, read])
   @@index([userId, createdAt(sort: Desc)]) // For user notifications sorted by date
   @@index([read, createdAt(sort: Desc)]) // For unread notifications
+  @@index([type]) // For filtering by notification type
+  @@index([userId, read, createdAt(sort: Desc)]) // Composite for user's unread notifications
 }
 
 // Preview Token Model - For secure article preview access
@@ -303,11 +338,15 @@ model ArticleView {
   userAgent String?  // Optional user agent tracking
   viewedAt  DateTime @default(now())
 
+  // Phase 2 Backend Audit - Performance: Improved view tracking indexes
   @@unique([articleId, sessionId])
   @@index([articleId])
   @@index([sessionId])
+  @@index([ipAddress])
   @@index([viewedAt])
   @@index([articleId, viewedAt(sort: Desc)]) // For article views analytics
+  @@index([sessionId, ipAddress]) // For session + IP deduplication
+  @@index([articleId, sessionId, ipAddress]) // Composite for fast lookup
 }
 
 // Site Settings Model - For storing site-wide configuration
@@ -353,10 +392,47 @@ model Settings {
   aiResponseLimit        Int      @default(4096) // max tokens
   aiFeaturesEnabled      Boolean  @default(true)
 
+  // Breaking News Settings
+  breakingNewsEnabled    Boolean  @default(false)
+  breakingNewsText       String?  @db.Text
+  breakingNewsUrl        String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Article Series Model - Group related articles into a series
+model ArticleSeries {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  description String?   @db.Text
+  coverImage  String?   // URL of cover image
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  articles    Article[]
+
+  @@index([slug])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Newsletter Subscriber Model
+model Subscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  confirmed   Boolean  @default(false)
+  token       String?  @unique  // Confirmation token
+  subscribedAt DateTime @default(now())
+  confirmedAt  DateTime?
+  unsubscribedAt DateTime?
+  active      Boolean  @default(true)
+
+  @@index([email])
+  @@index([active])
+  @@index([subscribedAt(sort: Desc)])
 }
 
 // Email Verification Model - For storing email verification tokens

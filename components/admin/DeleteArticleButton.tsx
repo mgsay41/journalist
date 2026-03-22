@@ -26,6 +26,7 @@ export function DeleteArticleButton({ articleId, articleTitle }: DeleteArticleBu
         onClick={() => setOpen(true)}
         className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted-foreground/10 transition-colors"
         title="حذف"
+        aria-label="حذف المقال"
         type="button"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

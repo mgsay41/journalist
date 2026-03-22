@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { sanitizeArticleContent } from '@/lib/security/sanitization';
+import { gooeyToast } from 'goey-toast';
 
 interface RevisionAuthor {
   id: string;
@@ -95,7 +97,7 @@ export function ArticleRevisions({
       // Refresh the page to show restored content
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to restore revision');
+      gooeyToast.error(err instanceof Error ? err.message : 'Failed to restore revision');
     } finally {
       setRestoring(false);
     }
@@ -240,7 +242,7 @@ export function ArticleRevisions({
         >
           <div className="prose prose-sm max-w-none">
             <div
-              dangerouslySetInnerHTML={{ __html: selectedRevision.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeArticleContent(selectedRevision.content) }}
             />
           </div>
         </Modal>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
+import { gooeyToast } from 'goey-toast';
 
 interface CategoryOption {
   id: string;
@@ -60,16 +61,16 @@ export function BulkActionsBar({ selectedIds, onClearSelection, categories = [],
 
       if (response.ok) {
         const data = await response.json();
-        alert(data.message);
+        gooeyToast.success(data.message);
         onClearSelection();
         router.refresh();
       } else {
         const error = await response.json();
-        alert(error.error || 'فشل تنفيذ العملية');
+        gooeyToast.error(error.error || 'فشل تنفيذ العملية');
       }
     } catch (error) {
       console.error('Bulk action failed:', error);
-      alert('حدث خطأ أثناء تنفيذ العملية');
+      gooeyToast.error('حدث خطأ أثناء تنفيذ العملية');
     } finally {
       setIsLoading(false);
       setLoadingAction(null);
@@ -100,7 +101,7 @@ export function BulkActionsBar({ selectedIds, onClearSelection, categories = [],
         setBulkEditData({ categoryIds: [], tagIds: [] });
         onClearSelection();
         router.refresh();
-        alert(data.message || 'تم تحديث المقالات بنجاح');
+        gooeyToast.success(data.message || 'تم تحديث المقالات بنجاح');
       } else {
         const error = await response.json();
         setError(error.error || 'فشل تنفيذ العملية');

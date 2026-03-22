@@ -43,9 +43,8 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle }: Sideb
       <aside
         className={cn(
           'fixed top-0 right-0 h-full bg-card border-l border-border z-50',
-          'flex flex-col transition-all duration-300',
-          'group', // Add group for hover effects
-          isCollapsed ? 'w-24' : 'w-56',
+          'flex flex-col transition-all duration-200',
+          isCollapsed ? 'w-15' : 'w-60',
           className
         )}
         dir="rtl"
@@ -88,10 +87,7 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle }: Sideb
           {adminNavConfig.map((section) => (
             <div key={section.title} className="mb-4">
               {!isCollapsed && (
-                <p
-                  className="px-3 mb-2 text-xs font-semibold uppercase tracking-wide admin-section-header"
-                  style={{ color: '#71717a' }}
-                >
+                <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wide text-accent">
                   {section.title}
                 </p>
               )}
@@ -190,12 +186,11 @@ function NavItemComponent({
             'flex items-center gap-2 px-2 py-2 rounded-lg transition-colors text-sm',
             'w-full no-underline',
             isActive
-              ? 'bg-foreground admin-nav-item-active'
-              : 'admin-nav-item hover:text-foreground hover:bg-muted',
-            isChildActive && !isActive && 'bg-foreground/10',
+              ? 'border-e-2 border-accent bg-accent/8 text-accent font-medium'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+            isChildActive && !isActive && 'bg-muted text-foreground',
             isCollapsed && 'justify-center px-2'
           )}
-          style={{ color: isActive ? '#ffffff' : '#71717a' }}
           title={isCollapsed ? item.title : undefined}
         >
           {item.icon && (
@@ -252,10 +247,9 @@ function NavItemComponent({
                   className={cn(
                     'flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-xs no-underline',
                     isChildActiveItem
-                      ? 'bg-foreground/10 text-foreground font-medium'
-                      : 'admin-nav-child hover:text-foreground hover:bg-muted/50'
+                      ? 'border-e-2 border-accent/60 bg-accent/5 text-accent font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
-                  style={{ color: isChildActiveItem ? '#18181b' : '#71717a' }}
                 >
                   {child.icon && (
                     <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

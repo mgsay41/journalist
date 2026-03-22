@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 /**
  * SparklineChart - A mini chart component for visualizing trends
  * Shows a simple line chart with optional fill and data points
@@ -16,7 +18,7 @@ interface SparklineChartProps {
   className?: string;
 }
 
-export function SparklineChart({
+function SparklineChartComponent({
   data,
   width = 100,
   height = 30,
@@ -103,6 +105,26 @@ export function SparklineChart({
     </svg>
   );
 }
+
+// Custom comparison function - only re-render if data or visual config changes
+function arePropsEqual(
+  prevProps: SparklineChartProps,
+  nextProps: SparklineChartProps
+): boolean {
+  return (
+    prevProps.data.length === nextProps.data.length &&
+    prevProps.data.every((val, i) => val === nextProps.data[i]) &&
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height &&
+    prevProps.strokeWidth === nextProps.strokeWidth &&
+    prevProps.color === nextProps.color &&
+    prevProps.showFill === nextProps.showFill &&
+    prevProps.showDots === nextProps.showDots &&
+    prevProps.className === nextProps.className
+  );
+}
+
+export const SparklineChart = memo(SparklineChartComponent, arePropsEqual);
 
 /**
  * Get trend color class based on direction

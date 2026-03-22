@@ -71,6 +71,7 @@ export function HeadlineOptimizer({
     try {
       const response = await fetch('/api/admin/ai/optimize-headline', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           headline: headline.trim(),

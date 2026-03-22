@@ -658,6 +658,7 @@ function ImageDetailModal({
     try {
       const response = await fetch('/api/admin/ai/image-alt-text', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageUrl: image.url,

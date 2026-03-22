@@ -6,6 +6,7 @@ import { SeoScoreCard } from './SeoScoreCard';
 import { CategoryTagSelector } from './CategoryTagSelector';
 import { MetaOptionsSelector } from './MetaOptionsSelector';
 import { ContentImprovementCard } from './ContentImprovementCard';
+import { AiImageGenerator, type GeneratedImageData } from './AiImageGenerator';
 
 // Types matching the API response
 interface SuggestedCategory {
@@ -196,6 +197,13 @@ export function ArticleCompletionResults({
   const [customMetaDescription, setCustomMetaDescription] = useState('');
   const [customSlug, setCustomSlug] = useState('');
   const [focusKeyword, setFocusKeyword] = useState(results.focusKeyword);
+
+  // AI Image Generator state
+  const [showImageGenerator, setShowImageGenerator] = useState(false);
+  const [generatedFeaturedImage, setGeneratedFeaturedImage] = useState<GeneratedImageData | null>(null);
+
+  // AI SEO Fix state
+  const [isAiFixing, setIsAiFixing] = useState(false);
 
   // Get current title
   const getCurrentTitle = useCallback(() => {
@@ -434,6 +442,59 @@ export function ArticleCompletionResults({
     setNewTagNames(newNames);
   }, []);
 
+  // AI Image Generator handlers
+  const handleImageGenerated = useCallback((image: GeneratedImageData) => {
+    setGeneratedFeaturedImage(image);
+  }, []);
+
+  const handleSetAsFeatured = useCallback((imageUrl: string, publicId?: string) => {
+    // Store the featured image info to be saved with the article
+    // This will be sent to the parent component or stored for later use
+    setGeneratedFeaturedImage({
+      imageUrl,
+      width: 0,
+      height: 0,
+      seed: '',
+      model: 'flux',
+      prompt: '',
+      cloudinaryPublicId: publicId,
+    });
+    setShowImageGenerator(false);
+  }, []);
+
+  // AI SEO Fix handler
+  const handleAiFixSeoIssue = useCallback(async (type: 'internal-links' | 'external-links' | 'long-paragraphs') => {
+    setIsAiFixing(true);
+    try {
+      const response = await fetch('/api/admin/ai/auto-fix-seo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: type,
+          title: currentTitle,
+          content: currentContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'فشل في الإصلاح التلقائي');
+      }
+
+      const result = await response.json();
+
+      // Update content with the fixed version
+      if (result.modifiedContent) {
+        onContentChange(result.modifiedContent);
+      }
+    } catch (error) {
+      console.error('AI fix error:', error);
+      throw error;
+    } finally {
+      setIsAiFixing(false);
+    }
+  }, [currentTitle, currentContent, onContentChange]);
+
   // Prepare save data
   const getSaveData = useCallback(() => {
     return {
@@ -651,6 +712,95 @@ export function ArticleCompletionResults({
         onFocusKeywordChange={setFocusKeyword}
       />
 
+      {/* AI Featured Image Generator */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <h3 className="font-semibold text-foreground">صورة الغلف بالذكاء الاصطناعي</h3>
+            </div>
+            {!showImageGenerator && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImageGenerator(true)}
+                className="gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                توليد صورة
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            قم بتوليد صورة غلاف احترافية باستخدام الذكاء الاصطناعي بناءً على محتوى المقال
+          </p>
+        </div>
+
+        <div className="p-4">
+          {showImageGenerator ? (
+            <AiImageGenerator
+              articleTitle={getCurrentTitle()}
+              articleContent={currentContent}
+              articleCategory={results.suggestedCategories[0]?.name}
+              onImageGenerated={handleImageGenerated}
+              onSetAsFeatured={handleSetAsFeatured}
+              onClose={() => setShowImageGenerator(false)}
+            />
+          ) : generatedFeaturedImage ? (
+            <div className="space-y-4">
+              <div className="relative rounded-xl overflow-hidden bg-muted aspect-video max-w-md mx-auto">
+                <img
+                  src={generatedFeaturedImage.imageUrl}
+                  alt="Generated featured image"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="flex justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowImageGenerator(true)}
+                  className="gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  إعادة التوليد
+                </Button>
+                <div className="text-sm text-success flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  تم توليد الصورة بنجاح
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                اضغط على "توليد صورة" لإنشاء صورة غلاف احترافية باستخدام الذكاء الاصطناعي
+              </p>
+              <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+                <span className="px-2 py-1 bg-muted rounded-full">✓ مجاني تماماً</span>
+                <span className="px-2 py-1 bg-muted rounded-full">✓ جودة عالية</span>
+                <span className="px-2 py-1 bg-muted rounded-full">✓ خيارات متعددة</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Content Improvement Card */}
       <ContentImprovementCard
         contentAnalysis={results.contentAnalysis}
@@ -662,6 +812,9 @@ export function ArticleCompletionResults({
         onApplyGrammarFix={handleApplyGrammarFix}
         onApplyAllGrammarFixes={handleApplyAllGrammarFixes}
         onApplySeoFix={handleApplySeoFix}
+        onAiFixSeoIssue={handleAiFixSeoIssue}
+        articleTitle={currentTitle}
+        isAiFixing={isAiFixing}
       />
 
       {/* Action Buttons */}

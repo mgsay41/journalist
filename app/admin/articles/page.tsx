@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Loading, SkeletonTable } from '@/components/ui/Loading';
 import { ArticlesListClient } from '@/components/admin/ArticlesListClient';
 import { ArticlesFilters } from '@/components/admin/ArticlesFilters';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 interface SearchParams {
   page?: string;

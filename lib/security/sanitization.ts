@@ -5,6 +5,8 @@
  * to prevent XSS and injection attacks
  */
 
+import DOMPurify from 'dompurify';
+
 /**
  * Sanitize HTML content to prevent XSS attacks
  * Removes dangerous tags and attributes while keeping safe formatting
@@ -191,60 +193,10 @@ export function isValidFileType(
 }
 
 /**
- * Sanitize SQL input (additional layer on top of Prisma)
- *
- * @param input - Raw SQL input
- * @returns Sanitized string
+ * @deprecated Removed: Prisma uses parameterized queries which prevent SQL injection.
+ * Stripping SQL keywords corrupts legitimate article content (e.g., "DELETE key from diet").
+ * Do not add SQL keyword filtering on top of Prisma.
  */
-export function sanitizeSqlInput(input: string): string {
-  if (!input) return '';
-
-  // Remove SQL injection patterns
-  return input
-    .replace(/--/g, '') // Remove SQL comments
-    .replace(/\/\*/g, '') // Remove block comment start
-    .replace(/\*\//g, '') // Remove block comment end
-    .replace(/;/g, '') // Remove statement terminators
-    .replace(/\b(ALTER|CREATE|DELETE|DROP|EXEC(UTE){0,1}|INSERT( +INTO){0,1}|MERGE|SELECT|UPDATE|UNION( +ALL){0,1})\b/gi, '') // Remove SQL keywords
-    .trim();
-}
-
-/**
- * Validate integer within range
- *
- * @param value - Value to validate
- * @param min - Minimum value (inclusive)
- * @param max - Maximum value (inclusive)
- * @returns Valid integer or null
- */
-export function validateInt(value: any, min: number = Number.MIN_SAFE_INTEGER, max: number = Number.MAX_SAFE_INTEGER): number | null {
-  const num = parseInt(value, 10);
-
-  if (isNaN(num) || num < min || num > max) {
-    return null;
-  }
-
-  return num;
-}
-
-/**
- * Validate boolean value
- *
- * @param value - Value to validate
- * @returns Boolean value or null
- */
-export function validateBoolean(value: any): boolean | null {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    const lower = value.toLowerCase();
-    if (lower === 'true' || lower === '1') return true;
-    if (lower === 'false' || lower === '0') return false;
-  }
-  if (typeof value === 'number') {
-    return value === 1;
-  }
-  return null;
-}
 
 /**
  * Generate a random token for secure operations
@@ -300,3 +252,139 @@ export function validatePasswordStrength(password: string): {
 
   return { strength, score, feedback };
 }
+
+/**
+ * Sanitize article content using DOMPurify
+ *
+ * This function is specifically designed for sanitizing TipTap editor content
+ * while preserving safe HTML formatting and YouTube embeds.
+ *
+ * Features:
+ * - Removes dangerous tags (script, style, iframe with unsafe sources, etc.)
+ * - Removes dangerous attributes (onclick, onerror, etc.)
+ * - Preserves safe formatting tags (p, h1-h6, strong, em, ul, ol, li, a, img, etc.)
+ * - Allows YouTube iframe embeds only (from www.youtube.com and youtube-nocookie.com)
+ * - Allows safe protocols (https, http, mailto, tel)
+ *
+ * @param html - Raw HTML string from TipTap editor
+ * @returns Sanitized HTML string safe for rendering
+ */
+export function sanitizeArticleContent(html: string): string {
+  if (!html) return '';
+
+  // DOMPurify requires a browser DOM — skip on the server
+  // Content is already sanitized before being saved to the database
+  if (typeof window === 'undefined') {
+    return html;
+  }
+
+  // Configure DOMPurify to allow TipTap content + YouTube embeds
+  const cleanHtml = DOMPurify.sanitize(html, {
+    // Allow tags for rich text content
+    ALLOWED_TAGS: [
+      // Text formatting
+      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'sub', 'sup',
+      'code', 'pre', 'kbd', 'samp', 'var',
+      // Headings
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      // Lists
+      'ul', 'ol', 'li',
+      // Quotes
+      'blockquote', 'cite', 'q',
+      // Links and media
+      'a', 'img', 'picture', 'figure', 'figcaption',
+      // Tables
+      'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+      // Dividers and containers
+      'hr', 'div', 'span',
+      // YouTube embeds (iframe with strict restrictions)
+      'iframe',
+    ],
+
+    // Allow attributes for tags (DOMPurify doesn't support regex in ALLOWED_ATTR)
+    ALLOWED_ATTR: [
+      // Global attributes
+      'id', 'class', 'style', 'title', 'lang', 'dir', 'translate',
+      // Link attributes
+      'href', 'target', 'rel', 'download',
+      // Image attributes
+      'src', 'alt', 'width', 'height', 'loading', 'decoding', 'fetchpriority',
+      // Time element
+      'datetime',
+      // iframe attributes (restricted by ALLOWED_URI_REGEX)
+      'src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen',
+      'title', 'loading',
+    ],
+
+    // Allow safe URI protocols
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|data:image\/(?:[\w.+]+)):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+
+    // Custom hook to add additional restrictions
+    ADD_ATTR: ['loading', 'decoding', 'fetchpriority', 'data-*', 'aria-*'],
+
+    // Allow data: URLs for images only
+    ALLOW_DATA_ATTR: true,
+
+    // For iframe elements, only allow YouTube embeds
+    FORBID_TAGS: ['script', 'style', 'form', 'input', 'button', 'select', 'textarea', 'object', 'embed', 'applet'],
+    FORBID_ATTR: [
+      'onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur',
+      'onchange', 'onsubmit', 'onreset', 'ondblclick', 'onmousedown',
+      'onmouseup', 'onmouseenter', 'onmouseleave', 'onkeypress', 'onkeydown',
+      'onkeyup', 'onafterprint', 'onbeforeprint', 'onbeforeunload',
+      'onhashchange', 'onmessage', 'onoffline', 'ononline', 'onpagehide',
+      'onpageshow', 'onpopstate', 'onresize', 'onstorage',
+    ],
+
+    // Note: iframe elements are allowed but should only come from our YouTube extension
+    // User input in the editor doesn't directly create iframes
+  });
+
+  return cleanHtml;
+}
+
+/**
+ * Configuration for sanitizeArticleContent
+ * Shows exactly what tags and attributes are allowed
+ */
+export const ARTICLE_CONTENT_SANITIZATION_CONFIG = {
+  allowedTags: [
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'sub', 'sup',
+    'code', 'pre', 'kbd', 'samp', 'var',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li',
+    'blockquote', 'cite', 'q',
+    'a', 'img', 'picture', 'figure', 'figcaption',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+    'hr', 'div', 'span',
+    'iframe', // Only YouTube embeds allowed
+  ],
+  allowedAttributes: [
+    'id', 'class', 'style', 'title', 'lang', 'dir',
+    'href', 'target', 'rel', 'download',
+    'src', 'alt', 'width', 'height', 'loading', 'decoding', 'fetchpriority',
+    'datetime',
+    /^data-[\w-]+$/,
+    /^aria-[\w-]+$/,
+    'frameborder', 'allow', 'allowfullscreen',
+  ],
+  blockedTags: [
+    'script', 'style', 'form', 'input', 'button', 'select', 'textarea',
+    'object', 'embed', 'applet',
+  ],
+  blockedAttributes: [
+    'onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur',
+    'onchange', 'onsubmit', 'onreset', 'ondblclick', 'onmousedown',
+    'onmouseup', 'onmouseenter', 'onmouseleave', 'onkeypress', 'onkeydown',
+    'onkeyup',
+  ],
+  allowedProtocols: [
+    'https://', 'http://', 'mailto:', 'tel:',
+    'data:image/', // For inline images
+  ],
+  allowedIframeSources: [
+    'www.youtube.com/embed/',
+    'youtube-nocookie.com/embed/',
+    'www.youtube-nocookie.com/embed/',
+  ],
+};

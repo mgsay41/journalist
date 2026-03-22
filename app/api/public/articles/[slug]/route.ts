@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const slugSchema = z.string().min(1).max(255).regex(/^[a-z0-9-]+$/, 'Invalid slug format');
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +10,12 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+
+    // Validate slug format before hitting the database
+    const slugValidation = slugSchema.safeParse(slug);
+    if (!slugValidation.success) {
+      return NextResponse.json({ error: 'المقال غير موجود' }, { status: 404 });
+    }
 
     const article = await prisma.article.findUnique({
       where: { slug },
@@ -59,7 +68,7 @@ export async function GET(
 
     if (!article) {
       return NextResponse.json(
-        { error: 'Article not found' },
+        { error: 'المقال غير موجود' },
         { status: 404 }
       );
     }
@@ -67,7 +76,7 @@ export async function GET(
     // Check if article is published
     if (article.status !== 'published' || !article.publishedAt || article.publishedAt > new Date()) {
       return NextResponse.json(
-        { error: 'Article not available' },
+        { error: 'المقال غير متاح' },
         { status: 403 }
       );
     }
@@ -102,11 +111,13 @@ export async function GET(
       seoAnalysis: article.seoAnalysis,
     };
 
-    return NextResponse.json(formattedArticle);
+    return NextResponse.json(formattedArticle, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error('Error fetching article:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch article' },
+      { error: 'خطأ في جلب المقال' },
       { status: 500 }
     );
   }

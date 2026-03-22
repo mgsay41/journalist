@@ -93,6 +93,7 @@ export function AiOutliner({ onOutlineSelect, onContentInsert, className = '' }:
     try {
       const response = await fetch('/api/admin/ai/outline', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: topic.trim(),

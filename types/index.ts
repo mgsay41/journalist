@@ -162,8 +162,38 @@ export interface TagFormData {
   slug?: string;
 }
 
-// API Response Types
-export interface ApiResponse<T = any> {
+// ─── Prisma Json field types ────────────────────────────────────────────────
+// These mirror the runtime shape of Prisma `Json` columns so callers can type-
+// assert instead of using `any`.
+
+/** Shape stored in Article.aiCompletionData */
+export interface AiCompletionData {
+  focusKeyword: string;
+  secondaryKeywords: string[];
+  slug: string;
+  metaTitles: Array<{ text: string; length: number }>;
+  metaDescriptions: Array<{ text: string; length: number }>;
+  excerpt: string;
+  suggestedCategories: Array<{ id?: string; name: string }>;
+  suggestedTags: Array<{ id?: string; name: string }>;
+  availableCategories: Array<{ id: string; name: string }>;
+  availableTags: Array<{ id: string; name: string }>;
+  titleSuggestions?: Array<{ text: string; score: number }>;
+  contentAnalysis: Record<string, unknown>;
+  grammarIssues: Array<{ text: string; suggestion: string; type: string }>;
+  seoAnalysis: Record<string, unknown>;
+}
+
+/** Shape stored in Notification.metadata */
+export interface NotificationMetadata {
+  articleId?: string;
+  articleTitle?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+
+// ─── API Response Types ───────────────────────────────────────────────────────
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

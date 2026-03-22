@@ -96,34 +96,125 @@ export function KeyboardShortcuts({
 
       // Handle shortcuts only when modal is closed
       if (!isOpen) {
+        const ctrlOrMeta = e.ctrlKey || e.metaKey;
+        const shift = e.shiftKey;
+        const alt = e.altKey;
+
+        // Editor shortcuts - only when not in input
+        if (!isInput) {
+          // Ctrl + B: Bold
+          if (ctrlOrMeta && !shift && !alt && e.key === 'b') {
+            e.preventDefault();
+            onShortcutTriggered?.('bold');
+          }
+          // Ctrl + I: Italic
+          else if (ctrlOrMeta && !shift && !alt && e.key === 'i') {
+            e.preventDefault();
+            onShortcutTriggered?.('italic');
+          }
+          // Ctrl + U: Underline
+          else if (ctrlOrMeta && !shift && !alt && e.key === 'u') {
+            e.preventDefault();
+            onShortcutTriggered?.('underline');
+          }
+          // Ctrl + Shift + X: Strike
+          else if (ctrlOrMeta && shift && !alt && e.key.toLowerCase() === 'x') {
+            e.preventDefault();
+            onShortcutTriggered?.('strike');
+          }
+          // Ctrl + Alt + 1-6: Headings
+          else if (ctrlOrMeta && alt && ['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+            e.preventDefault();
+            onShortcutTriggered?.(`heading-${e.key}`);
+          }
+          // Ctrl + Shift + 8: Bullet list
+          else if (ctrlOrMeta && shift && !alt && e.key === '8') {
+            e.preventDefault();
+            onShortcutTriggered?.('list-ul');
+          }
+          // Ctrl + Shift + 7: Ordered list
+          else if (ctrlOrMeta && shift && !alt && e.key === '7') {
+            e.preventDefault();
+            onShortcutTriggered?.('list-ol');
+          }
+          // Ctrl + Shift + 9: Quote
+          else if (ctrlOrMeta && shift && !alt && e.key === '9') {
+            e.preventDefault();
+            onShortcutTriggered?.('quote');
+          }
+          // Ctrl + E: Code
+          else if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'e') {
+            e.preventDefault();
+            onShortcutTriggered?.('code');
+          }
+          // Ctrl + K: Link
+          else if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            onShortcutTriggered?.('link');
+          }
+        }
+
+        // Navigation shortcuts - work even in inputs
         // Ctrl + S: Save
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 's') {
           e.preventDefault();
           onShortcutTriggered?.('save');
         }
-
         // Ctrl + Enter: Publish
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        else if (ctrlOrMeta && !shift && e.key === 'Enter') {
           e.preventDefault();
           onShortcutTriggered?.('publish');
         }
-
-        // Ctrl + K: Link
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        // Ctrl + P: Preview (only when not in input)
+        else if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'p' && !isInput) {
           e.preventDefault();
-          onShortcutTriggered?.('link');
+          onShortcutTriggered?.('preview');
         }
 
-        // Ctrl + B: Bold (only if not in input)
-        if ((e.ctrlKey || e.metaKey) && e.key === 'b' && !isInput) {
-          e.preventDefault();
-          onShortcutTriggered?.('bold');
+        // AI shortcuts - only when not in input
+        if (!isInput) {
+          // Ctrl + Space: AI assist
+          if (ctrlOrMeta && !shift && e.code === 'Space') {
+            e.preventDefault();
+            onShortcutTriggered?.('ai-assist');
+          }
+          // Ctrl + Shift + I: AI improve
+          else if (ctrlOrMeta && shift && !alt && e.key.toLowerCase() === 'i') {
+            e.preventDefault();
+            onShortcutTriggered?.('ai-improve');
+          }
+          // Ctrl + Shift + C: AI complete
+          else if (ctrlOrMeta && shift && !alt && e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            onShortcutTriggered?.('ai-complete');
+          }
         }
 
-        // Ctrl + I: Italic (only if not in input)
-        if ((e.ctrlKey || e.metaKey) && e.key === 'i' && !isInput) {
+        // Action shortcuts - work even in inputs
+        // Ctrl + Z: Undo
+        if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'z') {
           e.preventDefault();
-          onShortcutTriggered?.('italic');
+          onShortcutTriggered?.('undo');
+        }
+        // Ctrl + Shift + Z: Redo
+        else if (ctrlOrMeta && shift && !alt && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          onShortcutTriggered?.('redo');
+        }
+        // Ctrl + F: Find
+        else if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          onShortcutTriggered?.('find');
+        }
+        // Ctrl + H: Replace
+        else if (ctrlOrMeta && !shift && !alt && e.key.toLowerCase() === 'h') {
+          e.preventDefault();
+          onShortcutTriggered?.('replace');
+        }
+        // F11: Fullscreen - only when not in input
+        else if (!isInput && e.key === 'F11') {
+          e.preventDefault();
+          onShortcutTriggered?.('fullscreen');
         }
       }
     };

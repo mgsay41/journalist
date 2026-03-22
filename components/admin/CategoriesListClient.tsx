@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Modal } from '@/components/ui/Modal';
-import { Alert, Toast } from '@/components/ui/Alert';
+import { Alert } from '@/components/ui/Alert';
+import { gooeyToast } from 'goey-toast';
 
 interface Category {
   id: string;
@@ -48,7 +49,7 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
   const flatCategories = flattenCategories(initialCategories);
 
@@ -165,10 +166,7 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
       // Refresh categories
       await refreshCategories();
       closeModal();
-      setToast({
-        type: 'success',
-        message: editingCategory ? 'تم تحديث التصنيف بنجاح' : 'تم إنشاء التصنيف بنجاح',
-      });
+      gooeyToast.success(editingCategory ? 'تم تحديث التصنيف بنجاح' : 'تم إنشاء التصنيف بنجاح');
     } catch (error) {
       setErrors({ submit: 'حدث خطأ في الاتصال' });
     } finally {
@@ -192,16 +190,16 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء الحذف' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء الحذف');
         return;
       }
 
       // Refresh categories
       await refreshCategories();
       closeDeleteModal();
-      setToast({ type: 'success', message: 'تم حذف التصنيف بنجاح' });
+      gooeyToast.success('تم حذف التصنيف بنجاح');
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -236,19 +234,16 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء الحذف' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء الحذف');
         return;
       }
 
       await refreshCategories();
       closeBulkDeleteModal();
       setSelectedCategories(new Set());
-      setToast({
-        type: 'success',
-        message: `تم حذف ${data.deletedCount} تصنيف بنجاح`,
-      });
+      gooeyToast.success(`تم حذف ${data.deletedCount} تصنيف بنجاح`);
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -271,19 +266,16 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء التحديث' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء التحديث');
         return;
       }
 
       await refreshCategories();
       closeBulkColorModal();
       setSelectedCategories(new Set());
-      setToast({
-        type: 'success',
-        message: `تم تحديث ${data.updatedCount} تصنيف بنجاح`,
-      });
+      gooeyToast.success(`تم تحديث ${data.updatedCount} تصنيف بنجاح`);
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -328,12 +320,12 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
 
       if (response.ok) {
         await refreshCategories();
-        setToast({ type: 'success', message: 'تم إعادة ترتيب التصنيفات بنجاح' });
+        gooeyToast.success('تم إعادة ترتيب التصنيفات بنجاح');
       } else {
-        setToast({ type: 'error', message: 'فشل في إعادة ترتيب التصنيفات' });
+        gooeyToast.error('فشل في إعادة ترتيب التصنيفات');
       }
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     }
 
     setDraggedCategory(null);
@@ -474,15 +466,6 @@ export function CategoriesListClient({ initialCategories }: CategoriesListClient
 
   return (
     <>
-      {/* Toast notification */}
-      {toast && (
-        <Toast
-          type={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
-
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <div className="flex items-center gap-2 flex-1">

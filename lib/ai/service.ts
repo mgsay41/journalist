@@ -38,6 +38,10 @@ import {
   buildGrammarCheckPrompt,
   buildAltTextPrompt,
   buildRelatedTopicsPrompt,
+  buildAutoFixInternalLinksPrompt,
+  buildAutoFixExternalLinksPrompt,
+  buildAutoFixLongParagraphsPrompt,
+  buildAutoFixSeoIssuesPrompt,
 } from "./prompts";
 
 // Default model
@@ -509,6 +513,136 @@ export async function suggestRelatedTopics(data: {
   });
   return {
     data: parseJsonResponse<RelatedTopicsResult>(result.text),
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+// ============================================
+// SEO Auto-Fix Functions
+// ============================================
+
+export interface AddedInternalLink {
+  articleTitle: string;
+  linkUrl: string;
+  anchorText: string;
+  position: string;
+  reason: string;
+}
+
+export interface AutoFixInternalLinksResult {
+  modifiedContent: string;
+  addedLinks: AddedInternalLink[];
+  linksCount: number;
+}
+
+export async function autoFixInternalLinks(data: {
+  title: string;
+  content: string;
+  availableArticles: Array<{ title: string; slug: string; category: string }>;
+  targetCount?: number;
+}): Promise<AiResultWithUsage<AutoFixInternalLinksResult>> {
+  const prompt = buildAutoFixInternalLinksPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 16384, // Need more tokens for content modification
+    temperature: 0.5,
+    useCache: false,
+  });
+  return {
+    data: parseJsonResponse<AutoFixInternalLinksResult>(result.text),
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+export interface AddedExternalLink {
+  url: string;
+  anchorText: string;
+  sourceType: "wikipedia" | "government" | "organization" | "news" | "research";
+  position: string;
+  reason: string;
+}
+
+export interface AutoFixExternalLinksResult {
+  modifiedContent: string;
+  addedLinks: AddedExternalLink[];
+  linksCount: number;
+}
+
+export async function autoFixExternalLinks(data: {
+  title: string;
+  content: string;
+  targetCount?: number;
+}): Promise<AiResultWithUsage<AutoFixExternalLinksResult>> {
+  const prompt = buildAutoFixExternalLinksPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 16384,
+    temperature: 0.5,
+    useCache: false,
+  });
+  return {
+    data: parseJsonResponse<AutoFixExternalLinksResult>(result.text),
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+export interface SplitParagraphInfo {
+  originalPosition: string;
+  originalWordCount: number;
+  newParagraphsCount: number;
+  splitReason: string;
+}
+
+export interface AutoFixLongParagraphsResult {
+  modifiedContent: string;
+  splitParagraphs: SplitParagraphInfo[];
+  totalParagraphsModified: number;
+}
+
+export async function autoFixLongParagraphs(data: {
+  content: string;
+  maxWords?: number;
+}): Promise<AiResultWithUsage<AutoFixLongParagraphsResult>> {
+  const prompt = buildAutoFixLongParagraphsPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 16384,
+    temperature: 0.5,
+    useCache: false,
+  });
+  return {
+    data: parseJsonResponse<AutoFixLongParagraphsResult>(result.text),
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+export interface AutoFixSeoIssuesChanges {
+  internalLinksAdded?: AddedInternalLink[];
+  externalLinksAdded?: AddedExternalLink[];
+  paragraphsSplit?: number | SplitParagraphInfo[];
+}
+
+export interface AutoFixSeoIssuesResult {
+  modifiedContent: string;
+  changes: AutoFixSeoIssuesChanges;
+  summary: string;
+}
+
+export async function autoFixSeoIssues(data: {
+  title: string;
+  content: string;
+  issuesToFix: Array<"internal-links" | "external-links" | "long-paragraphs">;
+  availableArticles?: Array<{ title: string; slug: string; category: string }>;
+}): Promise<AiResultWithUsage<AutoFixSeoIssuesResult>> {
+  const prompt = buildAutoFixSeoIssuesPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 16384,
+    temperature: 0.5,
+    useCache: false,
+  });
+  return {
+    data: parseJsonResponse<AutoFixSeoIssuesResult>(result.text),
     usage: extractUsage(result, DEFAULT_MODEL),
   };
 }

@@ -1,9 +1,48 @@
 /**
  * Rate Limiting Utilities
  *
- * Provides in-memory rate limiting for API endpoints
- * Uses a sliding window approach for accurate rate limiting
+ * Uses Upstash Redis + Ratelimit when UPSTASH_REDIS_REST_URL and
+ * UPSTASH_REDIS_REST_TOKEN are set (recommended for production/Vercel).
+ * Falls back to in-memory sliding window for local development.
  */
+
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+// ---------------------------------------------------------------------------
+// Upstash Redis client — lazily initialised, null when env vars are absent
+// ---------------------------------------------------------------------------
+let _redis: Redis | null | undefined;
+
+function getRedis(): Redis | null {
+  if (_redis !== undefined) return _redis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  _redis = url && token ? new Redis({ url, token }) : null;
+  return _redis;
+}
+
+// Cache Ratelimit instances by config key so we don't recreate them per request
+const _ratelimiters = new Map<string, Ratelimit>();
+
+function getRatelimiter(limit: number, windowSeconds: number): Ratelimit | null {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  const key = `${limit}:${windowSeconds}`;
+  if (!_ratelimiters.has(key)) {
+    _ratelimiters.set(key, new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
+      prefix: '@journalist/ratelimit',
+    }));
+  }
+  return _ratelimiters.get(key)!;
+}
+
+// ---------------------------------------------------------------------------
+// In-memory fallback (used in development when Upstash is not configured)
+// ---------------------------------------------------------------------------
 
 interface RateLimitEntry {
   count: number;
@@ -12,6 +51,9 @@ interface RateLimitEntry {
 
 // In-memory store for rate limiting
 const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Hard cap to prevent unbounded memory growth
+const RATE_LIMIT_STORE_MAX_SIZE = 10000;
 
 /**
  * Clean up expired entries from the rate limit store
@@ -69,6 +111,11 @@ export function rateLimit(options: RateLimitOptions): RateLimitResult {
   let entry = rateLimitStore.get(identifier);
 
   if (!entry || entry.resetAt < now) {
+    // If store is at capacity, run cleanup before adding a new key
+    if (!entry && rateLimitStore.size >= RATE_LIMIT_STORE_MAX_SIZE) {
+      cleanupExpiredEntries();
+    }
+
     // Create new entry or reset expired one
     entry = {
       count: 1,
@@ -105,6 +152,8 @@ export function rateLimit(options: RateLimitOptions): RateLimitResult {
 /**
  * Rate limit middleware helper for API routes
  *
+ * Uses Upstash Redis when configured; falls back to in-memory for development.
+ *
  * @param request - Next.js request object
  * @param options - Rate limit options
  * @returns Rate limit result or null if not rate limited
@@ -113,13 +162,31 @@ export async function checkRateLimit(
   request: Request,
   options: RateLimitOptions
 ): Promise<RateLimitResult | null> {
-  // Get identifier from IP address
-  const ip = request.headers.get('x-forwarded-for') ||
+  const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
              request.headers.get('x-real-ip') ||
              'unknown';
 
   const identifier = `${options.identifier || 'default'}:${ip}`;
 
+  // Try Upstash Redis first (production)
+  const ratelimiter = getRatelimiter(options.limit, options.window);
+  if (ratelimiter) {
+    const result = await ratelimiter.limit(identifier);
+    return {
+      success: result.success,
+      remaining: result.remaining,
+      resetAt: result.reset, // Unix timestamp in ms
+    };
+  }
+
+  // Fall back to in-memory (development only — not reliable in serverless production)
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      '[rate-limit] WARNING: Upstash Redis is not configured. ' +
+      'Falling back to in-memory rate limiting which is ineffective in serverless ' +
+      'deployments. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.'
+    );
+  }
   return rateLimit({ ...options, identifier });
 }
 

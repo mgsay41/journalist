@@ -1,0 +1,82 @@
+name: Load Testing
+
+on:
+  workflow_dispatch:  # Allow manual trigger
+  schedule:
+    # Run load tests every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  load-test:
+    name: Run K6 Load Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup K6
+        run: |
+          curl https://github.com/grafana/k6/releases/download/v0.51.0/k6-v0.51.0-linux-amd64.tar.gz -L | tar xvz
+          sudo mv k6-v0.51.0-linux-amd64/k6 /usr/local/bin/
+
+      - name: Start development server
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+          npx next start &
+          # Wait for server to be ready
+          sleep 30
+
+      - name: Run K6 load tests
+        run: |
+          k6 run \
+            --out json=test-results.json \
+            --out summary=load-test-summary.json \
+            tests/load/api-load-test.js
+        env:
+          BASE_URL: http://localhost:3000
+        continue-on-error: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-results
+          path: |
+            test-results.json
+            load-test-summary.json
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const summary = JSON.parse(fs.readFileSync('load-test-summary.json', 'utf8'));
+              const comment = `
+                ## 🔍 K6 Load Test Results
+
+                **Total Requests:** ${summary.metrics.http_reqs?.count || 'N/A'}
+                **Failure Rate:** ${((summary.metrics.http_req_failed?.passes || 0) / (summary.metrics.http_reqs?.count || 1) * 100).toFixed(2)}%
+                **Avg Response Time:** ${Math.round(summary.metrics.http_req_duration?.avg || 0)}ms
+                **P95 Response Time:** ${Math.round(summary.metrics.http_req_duration?.['p(95)'] || 0)}ms
+
+                ### Thresholds
+                - ✅ 95th percentile < 500ms: ${summary.metrics.http_req_duration?.['p(95)'] < 500 ? 'PASS' : 'FAIL'}
+                - ✅ Error rate < 1%: ${((summary.metrics.http_req_failed?.passes || 0) / (summary.metrics.http_reqs?.count || 1) * 100) < 1 ? 'PASS' : 'FAIL'}
+              `;
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (e) {
+              console.log('Could not read test results:', e.message);
+            }

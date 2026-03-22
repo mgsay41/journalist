@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { checkGrammar, safeAiCall, isGeminiConfigured, recordAiUsage } from "@/lib/ai";
 import { z } from "zod";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 
 const requestSchema = z.object({
   content: z.string().min(1, { message: "المحتوى مطلوب" }),
@@ -19,6 +20,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "غير مصرح بالوصول" },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting: 30 grammar check requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 30,
+      window: 3600,
+      identifier: `ai:grammar:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
       );
     }
 

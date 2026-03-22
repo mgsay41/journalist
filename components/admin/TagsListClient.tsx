@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { Alert, Toast } from '@/components/ui/Alert';
+import { Alert } from '@/components/ui/Alert';
+import { gooeyToast } from 'goey-toast';
 
 interface Tag {
   id: string;
@@ -34,7 +35,7 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -70,7 +71,7 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
 
   const openMergeModal = () => {
     if (selectedTags.size < 2) {
-      setToast({ type: 'error', message: 'يجب تحديد وسمين على الأقل للدمج' });
+      gooeyToast.error('يجب تحديد وسمين على الأقل للدمج');
       return;
     }
     setMergeTargetId('');
@@ -139,10 +140,7 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       // Refresh tags
       await refreshTags();
       closeModal();
-      setToast({
-        type: 'success',
-        message: editingTag ? 'تم تحديث الوسم بنجاح' : 'تم إنشاء الوسم بنجاح',
-      });
+      gooeyToast.success(editingTag ? 'تم تحديث الوسم بنجاح' : 'تم إنشاء الوسم بنجاح');
     } catch (error) {
       setErrors({ submit: 'حدث خطأ في الاتصال' });
     } finally {
@@ -162,16 +160,16 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء الحذف' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء الحذف');
         return;
       }
 
       // Refresh tags
       await refreshTags();
       closeDeleteModal();
-      setToast({ type: 'success', message: 'تم حذف الوسم بنجاح' });
+      gooeyToast.success('تم حذف الوسم بنجاح');
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -196,7 +194,7 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء الدمج' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء الدمج');
         return;
       }
 
@@ -204,12 +202,9 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       await refreshTags();
       closeMergeModal();
       setSelectedTags(new Set());
-      setToast({
-        type: 'success',
-        message: `تم دمج ${data.mergedCount} وسم بنجاح`,
-      });
+      gooeyToast.success(`تم دمج ${data.mergedCount} وسم بنجاح`);
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -226,20 +221,19 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        setToast({ type: 'error', message: data.error || 'حدث خطأ أثناء الحذف' });
+        gooeyToast.error(data.error || 'حدث خطأ أثناء الحذف');
         return;
       }
 
       // Refresh tags
       await refreshTags();
-      setToast({
-        type: 'success',
-        message: data.deletedCount > 0
+      gooeyToast.success(
+        data.deletedCount > 0
           ? `تم حذف ${data.deletedCount} وسم غير مستخدم`
-          : 'لا توجد وسوم غير مستخدمة',
-      });
+          : 'لا توجد وسوم غير مستخدمة'
+      );
     } catch (error) {
-      setToast({ type: 'error', message: 'حدث خطأ في الاتصال' });
+      gooeyToast.error('حدث خطأ في الاتصال');
     } finally {
       setIsLoading(false);
     }
@@ -263,15 +257,6 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
 
   return (
     <>
-      {/* Toast notification */}
-      {toast && (
-        <Toast
-          type={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
-
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <div className="flex-1">

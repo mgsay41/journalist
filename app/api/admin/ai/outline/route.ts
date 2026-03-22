@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth';
 import { generateContent } from '@/lib/gemini';
 import { recordAiUsage, isGeminiConfigured } from '@/lib/ai';
 import { z } from 'zod';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 const requestSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
@@ -17,6 +18,19 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limiting: 20 AI requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 20,
+      window: 3600,
+      identifier: `ai:outline:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
     }
 
     if (!isGeminiConfigured()) {
@@ -109,7 +123,7 @@ ${keyPoints?.length ? `النقاط الرئيسية:\n${keyPoints.join('\n')}` 
       await recordAiUsage({
         userId: session.user.id,
         feature: 'outline-generation',
-        model: 'gemini-3-flash',
+        model: result.model as import('@/lib/gemini').GeminiModelId,
         inputTokens: result.tokensUsed.input || 0,
         outputTokens: result.tokensUsed.output || 0,
         cached: result.cached || false,

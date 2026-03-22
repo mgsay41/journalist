@@ -6,19 +6,23 @@
  * - Authorization checks
  * - CSRF protection
  * - Request logging
+ *
+ * Phase 2 Frontend Audit - Added CSRF protection middleware
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { validateCsrfMiddleware } from './csrf';
 
 /**
  * Check if user is authenticated
+ * Delegates to getServerSession from lib/auth.ts for consistent session handling.
  *
- * @param request - Next.js request
+ * @param _request - Next.js request (unused; session is read from cookies via Next.js headers)
  * @returns Response if unauthorized, null if authorized
  */
-export async function requireAuth(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
+export async function requireAuth(_request: NextRequest) {
+  const { getServerSession } = await import('@/lib/auth');
+  const session = await getServerSession();
 
   if (!session) {
     return NextResponse.json(
@@ -42,6 +46,35 @@ export function withAuth(
   return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
     const authError = await requireAuth(request);
     if (authError) return authError;
+
+    return handler(request, ...rest);
+  };
+}
+
+/**
+ * Middleware wrapper that requires both authentication AND CSRF protection
+ *
+ * Use this for all state-changing API routes (POST, PUT, DELETE, PATCH)
+ *
+ * @param handler - The API route handler
+ * @returns Wrapped handler with auth and CSRF checks
+ *
+ * @example
+ * export const POST = withAuthCsrf(async (request) => {
+ *   // Your handler logic here
+ * });
+ */
+export function withAuthCsrf(
+  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
+) {
+  return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
+    // Check authentication first
+    const authError = await requireAuth(request);
+    if (authError) return authError;
+
+    // Check CSRF token
+    const csrfError = await validateCsrfMiddleware(request);
+    if (csrfError) return csrfError;
 
     return handler(request, ...rest);
   };

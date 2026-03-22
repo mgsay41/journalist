@@ -10,6 +10,7 @@ import { TableOfContentsSticky } from '@/components/public/TableOfContents';
 import { ReadingSettings } from '@/components/public/FontSizeControls';
 import { TextToSpeech } from '@/components/public/TextToSpeech';
 import type { Metadata } from 'next';
+import { SeriesNavigation } from '@/components/public/SeriesNavigation';
 
 interface ArticlePageProps {
   params: Promise<{ slug: string }>;
@@ -45,6 +46,11 @@ async function getArticleData(slug: string) {
         select: {
           id: true,
           name: true,
+          bio: true,
+          authorTitle: true,
+          image: true,
+          twitterUrl: true,
+          linkedinUrl: true,
         },
       },
       images: {
@@ -56,6 +62,17 @@ async function getArticleData(slug: string) {
         },
       },
       videos: true,
+      series: {
+        select: {
+          title: true,
+          slug: true,
+          description: true,
+          articles: {
+            where: { status: 'published', publishedAt: { lte: new Date() } },
+            select: { id: true, title: true, slug: true, seriesOrder: true },
+          },
+        },
+      },
     },
   });
 
@@ -296,36 +313,62 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     day: 'numeric',
   });
 
-  // JSON-LD structured data
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const articleUrl = `${baseUrl}/article/${slug}`;
+
+  // JSON-LD structured data — Article + BreadcrumbList
+  const breadcrumbItems: object[] = [
+    { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: baseUrl },
+  ];
+  if (article.categories.length > 0) {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: article.categories[0].name,
+      item: `${baseUrl}/category/${article.categories[0].slug}`,
+    });
+    breadcrumbItems.push({ '@type': 'ListItem', position: 3, name: article.title, item: articleUrl });
+  } else {
+    breadcrumbItems.push({ '@type': 'ListItem', position: 2, name: article.title, item: articleUrl });
+  }
+
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: article.title,
-    description: article.excerpt || article.metaDescription || '',
-    image: article.featuredImage?.url || [],
-    datePublished: article.publishedAt?.toISOString(),
-    dateModified: article.updatedAt.toISOString(),
-    author: {
-      '@type': 'Person',
-      name: article.author?.name || 'المسؤول',
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'الموقع الصحفي',
-      logo: {
-        '@type': 'ImageObject',
-        url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/logo.png`,
+    '@graph': [
+      {
+        '@type': 'Article',
+        headline: article.title,
+        description: article.excerpt || article.metaDescription || '',
+        image: article.featuredImage?.url || [],
+        datePublished: article.publishedAt?.toISOString(),
+        dateModified: article.updatedAt.toISOString(),
+        author: {
+          '@type': 'Person',
+          name: article.author?.name || 'المسؤول',
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'الموقع الصحفي',
+          logo: {
+            '@type': 'ImageObject',
+            url: `${baseUrl}/logo.png`,
+          },
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': articleUrl,
+        },
       },
-    },
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': `${process.env.NEXT_PUBLIC_APP_URL || ''}/article/${slug}`,
-    },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: breadcrumbItems,
+      },
+    ],
   };
 
   return (
     <PublicLayout categories={categories} popularTags={popularTags}>
-      <ReadingProgress contentId="article-content" />
+      <ReadingProgress contentId="article-content" color="var(--accent)" />
       <ArticleViewTracker slug={slug} />
       <script
         type="application/ld+json"
@@ -427,8 +470,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
             #article-content blockquote {
               page-break-inside: avoid;
-              border-left: 3px solid #ccc;
-              padding-left: 1em;
+              border-inline-start: 3px solid #ccc;
+              padding-inline-start: 1em;
               margin: 1.5em 0;
             }
 
@@ -490,7 +533,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
             /* Article URL at the end */
             #article-content::after {
-              content: "مقتبس من: ${process.env.NEXT_PUBLIC_APP_URL || ''}/article/${slug}";
+              content: "مقتبس من: ${articleUrl}";
               display: block;
               margin-top: 2em;
               font-size: 10pt;
@@ -503,29 +546,24 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
       {/* Breadcrumb */}
       {article.categories.length > 0 && (
-        <nav className="border-b border-border bg-muted/30">
+        <nav className="border-b border-border" style={{ background: 'var(--muted)' }}>
           <div className="container mx-auto px-4 py-3">
-            <ol className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ol className="flex items-center gap-2 text-xs text-muted-foreground">
               <li>
-                <a href="/" className="hover:text-foreground transition-colors">
-                  الرئيسية
-                </a>
+                <a href="/" className="hover:text-accent transition-colors">الرئيسية</a>
               </li>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               <li>
-                <a
-                  href={`/category/${article.categories[0].slug}`}
-                  className="hover:text-foreground transition-colors"
-                >
+                <a href={`/category/${article.categories[0].slug}`} className="hover:text-accent transition-colors">
                   {article.categories[0].name}
                 </a>
               </li>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              <li className="text-foreground line-clamp-1">{article.title}</li>
+              <li className="text-foreground line-clamp-1 font-medium">{article.title}</li>
             </ol>
           </div>
         </nav>
@@ -534,20 +572,21 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       {/* Reading Settings - Fixed position controls */}
       <ReadingSettings position="fixed" showLabel={false} />
 
-      <article className="py-8 md:py-12">
+      <article className="py-6 md:py-8">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+          <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
             <div>
               {/* Article Header */}
-            <header className="mb-8">
-              {/* Categories */}
+            <header className="mb-6">
+              {/* Amber category badges */}
               {article.categories.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-2 mb-5">
                   {article.categories.map((category) => (
                     <a
                       key={category.id}
                       href={`/category/${category.slug}`}
-                      className="text-xs px-3 py-1.5 border border-border-subtle rounded-full hover:border-foreground hover:bg-muted transition-colors"
+                      className="text-xs px-3 py-1 bg-accent text-white font-semibold uppercase hover:bg-accent-hover transition-colors"
+                      style={{ letterSpacing: '0.07em' }}
                     >
                       {category.name}
                     </a>
@@ -555,27 +594,47 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 </div>
               )}
 
-              {/* Title */}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight mb-6">
+              {/* Title — Amiri display font */}
+              <h1 className="font-display text-3xl md:text-4xl lg:text-5xl text-foreground leading-tight mb-4"
+                style={{ fontWeight: 700, lineHeight: 1.25 }}>
                 {article.title}
               </h1>
 
-              {/* Meta */}
-              <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground mb-6">
-                <div className="flex flex-wrap items-center gap-4">
+              {/* Excerpt — italic lead / deck text */}
+              {article.excerpt && (
+                <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-4 italic"
+                  style={{
+                    borderInlineStart: '3px solid var(--accent)',
+                    paddingInlineStart: '1rem',
+                  }}>
+                  {article.excerpt}
+                </p>
+              )}
+
+              {/* Amber rule */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-0.5 bg-accent" />
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              {/* Meta bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3">
                   {article.author && (
                     <div className="flex items-center gap-2">
-                      <span>بواسطة</span>
-                      <span className="font-medium text-foreground">{article.author.name}</span>
+                      <span className="w-7 h-7 rounded-full bg-accent-light flex items-center justify-center text-accent font-bold text-xs shrink-0">
+                        {article.author.name.charAt(0)}
+                      </span>
+                      <span className="font-semibold text-foreground">{article.author.name}</span>
                     </div>
                   )}
-                  <span>•</span>
+                  {article.author && <span aria-hidden="true" className="text-border">|</span>}
                   <time dateTime={article.publishedAt?.toISOString()}>
                     {formatDate.format(article.publishedAt!)}
                   </time>
                   {article.readingTime && (
                     <>
-                      <span>•</span>
+                      <span aria-hidden="true">·</span>
                       <span>{article.readingTime} دقيقة قراءة</span>
                     </>
                   )}
@@ -583,34 +642,23 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 <TextToSpeech content={article.content} title={article.title} />
               </div>
 
-              {/* Featured Image */}
+              {/* Featured Image — no border-radius, editorial full-width */}
               {article.featuredImage && (
-                <figure className="mb-8">
+                <figure className="mt-5 mb-2">
                   <img
                     src={article.featuredImage.url}
                     alt={article.featuredImage.altText || article.title}
-                    className="w-full h-auto rounded-lg"
+                    className="w-full h-auto"
+                    style={{ display: 'block' }}
                   />
                   {article.featuredImage.caption && (
-                    <figcaption className="text-center text-sm text-muted-foreground mt-3">
+                    <figcaption className="text-center text-xs text-muted-foreground mt-3 italic">
                       {article.featuredImage.caption}
                     </figcaption>
                   )}
                 </figure>
               )}
-
-              {/* Excerpt */}
-              {article.excerpt && (
-                <p className="text-xl text-muted-foreground leading-relaxed border-l-4 border-foreground pr-4">
-                  {article.excerpt}
-                </p>
-              )}
             </header>
-
-            {/* Share Sidebar (Desktop) - Fixed position */}
-            <aside className="hidden lg:block fixed left-8 top-1/2 -translate-y-1/2 z-10">
-              <SocialShare title={article.title} url={`/article/${slug}`} />
-            </aside>
 
             {/* Article Content */}
             <div id="article-content" className="prose prose-lg max-w-none">
@@ -623,14 +671,16 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
             {/* Tags */}
             {article.tags.length > 0 && (
-              <div className="mt-8 pt-8 border-t border-border">
-                <h3 className="text-sm font-semibold text-foreground mb-4">الوسوم</h3>
+              <div className="mt-8 pt-6 border-t border-border">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-4" style={{ letterSpacing: '0.08em' }}>
+                  الوسوم
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {article.tags.map((tag) => (
                     <a
                       key={tag.id}
                       href={`/tag/${tag.slug}`}
-                      className="text-xs px-3 py-1.5 border border-border-subtle rounded-full hover:border-foreground hover:bg-muted transition-colors"
+                      className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent transition-colors"
                     >
                       #{tag.name}
                     </a>
@@ -639,14 +689,78 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               </div>
             )}
 
+            {/* Author Bio */}
+            {article.author && article.author.bio && (
+              <div className="mt-8 pt-6 border-t border-border">
+                <div className="p-6" style={{ background: 'var(--muted)', borderInlineStart: '3px solid var(--accent)' }}>
+                  <p className="text-xs font-semibold text-accent uppercase mb-4" style={{ letterSpacing: '0.08em' }}>عن الكاتب</p>
+                  <div className="flex items-start gap-4">
+                    {article.author.image ? (
+                      <img
+                        src={article.author.image}
+                        alt={article.author.name}
+                        className="w-14 h-14 object-cover shrink-0"
+                        style={{ border: '2px solid var(--accent)' }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 shrink-0 flex items-center justify-center text-xl font-bold text-accent"
+                        style={{ background: 'var(--accent-light)', border: '2px solid var(--accent)' }}>
+                        {article.author.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground text-base">{article.author.name}</p>
+                      {article.author.authorTitle && (
+                        <p className="text-sm text-accent mb-2">{article.author.authorTitle}</p>
+                      )}
+                      <p className="text-sm text-muted-foreground leading-relaxed">{article.author.bio}</p>
+                      {(article.author.twitterUrl || article.author.linkedinUrl) && (
+                        <div className="flex gap-4 mt-3">
+                          {article.author.twitterUrl && (
+                            <a
+                              href={article.author.twitterUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-accent hover:text-accent-hover font-medium transition-colors"
+                            >
+                              X / تويتر ↗
+                            </a>
+                          )}
+                          {article.author.linkedinUrl && (
+                            <a
+                              href={article.author.linkedinUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-accent hover:text-accent-hover font-medium transition-colors"
+                            >
+                              لينكدإن ↗
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Share (Mobile) */}
-            <div className="mt-8 pt-8 border-t border-border lg:hidden">
+            <div className="mt-6 pt-6 border-t border-border lg:hidden">
               <SocialShare title={article.title} url={`/article/${slug}`} />
             </div>
             </div>
 
-            {/* TOC Sidebar */}
-            <div className="hidden lg:block">
+            {/* Sidebar */}
+            <div className="hidden lg:flex flex-col gap-4">
+              {/* Share Card */}
+              <SocialShare title={article.title} url={`/article/${slug}`} variant="sidebar" />
+
+              {article.series && article.series.articles.length > 1 && (
+                <SeriesNavigation
+                  series={article.series}
+                  currentArticleId={article.id}
+                />
+              )}
               <TableOfContentsSticky contentId="article-content" />
             </div>
           </div>
@@ -655,7 +769,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
       {/* Related Articles */}
       {relatedArticles.length > 0 && (
-        <section className="related-articles border-t border-border bg-muted/30 py-12">
+        <section className="related-articles border-t border-border bg-muted/30 py-8">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
               <RelatedArticles articles={formattedRelatedArticles} />
@@ -663,6 +777,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           </div>
         </section>
       )}
+
+
     </PublicLayout>
   );
 }

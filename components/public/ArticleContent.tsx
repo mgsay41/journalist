@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { sanitizeArticleContent } from '@/lib/security/sanitization';
 
 interface ArticleContentProps {
   content: string;
@@ -46,8 +47,12 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
   const optimizedContent = useMemo(() => {
     if (!content) return content;
 
-    // Add loading="lazy" and decoding="async" to img tags that don't already have it
-    return content.replace(
+    // First, sanitize the content to prevent XSS attacks
+    // This removes dangerous tags/scripts while preserving safe HTML and YouTube embeds
+    const sanitized = sanitizeArticleContent(content);
+
+    // Then add loading="lazy" and decoding="async" to img tags that don't already have it
+    return sanitized.replace(
       /<img(?![^>]*\sloading=)([^>]*)>/gi,
       '<img$1 loading="lazy" decoding="async" fetchpriority="low">'
     );
@@ -62,113 +67,170 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
       />
 
       <style jsx global>{`
-        /* Article content styling */
+        /* ═══════════════════════════════════
+           ARTICLE BODY — Editorial Styles
+           ═══════════════════════════════════ */
+
         .article-content {
           direction: rtl;
           text-align: right;
         }
 
+        /* ── Drop cap on first paragraph ── */
+        .article-content > div > p:first-of-type::first-letter {
+          font-family: var(--font-amiri), 'Times New Roman', serif;
+          font-size: 4.2em;
+          font-weight: 700;
+          color: var(--accent);
+          float: right;
+          line-height: 0.78;
+          margin-inline-end: 0.1em;
+          margin-top: 0.08em;
+          padding-inline-start: 0.04em;
+        }
+
+        /* ── Headings ── */
         .article-content h1 {
+          font-family: var(--font-amiri), 'Times New Roman', serif;
           font-size: 2rem;
           font-weight: 700;
-          margin-top: 2rem;
+          margin-top: 2.5rem;
           margin-bottom: 1rem;
           line-height: 1.3;
           color: var(--foreground);
         }
 
         .article-content h2 {
-          font-size: 1.5rem;
-          font-weight: 600;
-          margin-top: 2rem;
+          font-family: var(--font-amiri), 'Times New Roman', serif;
+          font-size: 1.55rem;
+          font-weight: 700;
+          margin-top: 2.5rem;
           margin-bottom: 1rem;
-          line-height: 1.4;
+          padding-top: 1rem;
+          border-top: 2px solid var(--accent-light);
+          line-height: 1.35;
           color: var(--foreground);
         }
 
         .article-content h3 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin-top: 1.5rem;
+          font-family: var(--font-amiri), 'Times New Roman', serif;
+          font-size: 1.3rem;
+          font-weight: 700;
+          margin-top: 2rem;
           margin-bottom: 0.75rem;
           line-height: 1.4;
           color: var(--foreground);
         }
 
+        /* ── Body text ── */
         .article-content p {
-          margin-bottom: 1rem;
-          line-height: 1.8;
-          color: var(--muted-foreground);
+          margin-bottom: 1.25rem;
+          line-height: 1.9;
+          color: var(--foreground);
+          opacity: 0.88;
         }
 
+        /* ── Links — amber underline ── */
         .article-content a {
-          color: var(--foreground);
+          color: var(--accent);
           text-decoration: underline;
-          text-underline-offset: 2px;
-          transition: color 0.2s;
+          text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+          text-underline-offset: 3px;
+          text-decoration-thickness: 1px;
+          transition: text-decoration-color 0.2s, color 0.2s;
         }
 
         .article-content a:hover {
-          color: var(--foreground/80);
+          color: var(--accent-hover);
+          text-decoration-color: var(--accent);
         }
 
+        /* ── Lists ── */
         .article-content ul,
         .article-content ol {
-          margin-bottom: 1rem;
-          padding-right: 2rem;
+          margin-bottom: 1.25rem;
+          padding-inline-start: 1.75rem;
         }
 
         .article-content li {
           margin-bottom: 0.5rem;
-          line-height: 1.7;
-          color: var(--muted-foreground);
+          line-height: 1.8;
+          color: var(--foreground);
+          opacity: 0.85;
         }
 
+        /* ── Blockquote — amber editorial pull ── */
         .article-content blockquote {
-          border-right: 4px solid var(--border);
-          padding: 1rem 1.5rem;
-          margin: 1.5rem 0;
-          background-color: var(--muted);
+          border-inline-end: 4px solid var(--accent);
+          border-inline-start: none;
+          padding: 1rem 1.25rem 1rem 1rem;
+          padding-inline-end: 1.25rem;
+          margin: 2rem 0;
+          background: var(--accent-light);
           font-style: italic;
-          color: var(--muted-foreground);
+          font-size: 1.1rem;
+          line-height: 1.7;
+          color: var(--foreground);
+          position: relative;
         }
 
+        .article-content blockquote::before {
+          content: '❝';
+          position: absolute;
+          top: -0.1em;
+          right: -0.05em;
+          font-size: 3rem;
+          color: var(--accent);
+          opacity: 0.25;
+          font-style: normal;
+          line-height: 1;
+          font-family: Georgia, serif;
+        }
+
+        /* ── Inline code ── */
         .article-content code {
           background-color: var(--muted);
-          padding: 0.2rem 0.4rem;
-          border-radius: 0.25rem;
+          padding: 0.15rem 0.4rem;
           font-size: 0.875em;
-          font-family: monospace;
+          font-family: 'Courier New', monospace;
           direction: ltr;
           display: inline-block;
+          border: 1px solid var(--border);
         }
 
+        /* ── Code block ── */
         .article-content pre {
-          background-color: var(--muted);
-          padding: 1rem;
-          border-radius: 0.5rem;
+          background-color: var(--foreground);
+          color: var(--background);
+          padding: 1.25rem;
           overflow-x: auto;
-          margin: 1.5rem 0;
+          margin: 2rem 0;
           direction: ltr;
           text-align: left;
+          font-size: 0.875rem;
+          line-height: 1.6;
         }
 
         .article-content pre code {
           background-color: transparent;
           padding: 0;
+          border: none;
+          color: inherit;
         }
 
+        /* ── Images — no border-radius, editorial ── */
         .article-content img {
           max-width: 100%;
           height: auto;
-          border-radius: 0.5rem;
-          margin: 1.5rem 0;
+          margin: 2rem 0;
+          display: block;
         }
 
+        /* ── Tables ── */
         .article-content table {
           width: 100%;
           border-collapse: collapse;
-          margin: 1.5rem 0;
+          margin: 2rem 0;
         }
 
         .article-content th,
@@ -180,23 +242,35 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
 
         .article-content th {
           background-color: var(--muted);
-          font-weight: 600;
+          font-weight: 700;
+          color: var(--foreground);
+          font-size: 0.875rem;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
 
+        /* ── Horizontal rule ── */
         .article-content hr {
           border: none;
-          border-top: 1px solid var(--border);
-          margin: 2rem 0;
+          margin: 2.5rem 0;
+          text-align: center;
+          color: var(--accent);
+          opacity: 0.5;
         }
 
-        /* YouTube embed styling */
+        .article-content hr::after {
+          content: '· · ·';
+          font-size: 1.25rem;
+          letter-spacing: 0.4em;
+        }
+
+        /* ── YouTube embeds ── */
         .article-content .youtube-wrapper {
           position: relative;
-          padding-bottom: 56.25%; /* 16:9 aspect ratio */
+          padding-bottom: 56.25%;
           height: 0;
           overflow: hidden;
-          border-radius: 0.5rem;
-          margin: 1.5rem 0;
+          margin: 2rem 0;
         }
 
         .article-content .youtube-wrapper iframe {
@@ -208,21 +282,22 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
           border: none;
         }
 
-        /* Figure and figcaption styling */
+        /* ── Figures ── */
         .article-content figure {
-          margin: 1.5rem 0;
+          margin: 2rem 0;
         }
 
         .article-content figcaption {
           text-align: center;
-          font-size: 0.875rem;
+          font-size: 0.8rem;
           color: var(--muted-foreground);
-          margin-top: 0.5rem;
+          margin-top: 0.6rem;
+          font-style: italic;
         }
 
-        /* Strong and emphasis */
+        /* ── Strong / em ── */
         .article-content strong {
-          font-weight: 600;
+          font-weight: 700;
           color: var(--foreground);
         }
 

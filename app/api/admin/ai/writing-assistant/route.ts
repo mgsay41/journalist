@@ -4,6 +4,7 @@ import { generateContent } from '@/lib/gemini';
 import { recordAiUsage, isGeminiConfigured } from '@/lib/ai';
 import { z } from 'zod';
 import type { AiFeature } from '@/lib/ai/usage';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 // Inline AI writing assistant types
 type AssistantAction =
@@ -34,6 +35,19 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limiting: 30 writing assistant requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 30,
+      window: 3600,
+      identifier: `ai:writing-assistant:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
+      );
     }
 
     if (!isGeminiConfigured()) {
@@ -119,7 +133,7 @@ export async function POST(request: NextRequest) {
       await recordAiUsage({
         userId: session.user.id,
         feature: actionToFeature[action as AssistantAction],
-        model: 'gemini-3-flash',
+        model: result.model as import('@/lib/gemini').GeminiModelId,
         inputTokens: result.tokensUsed.input || 0,
         outputTokens: result.tokensUsed.output || 0,
         cached: result.cached || false,

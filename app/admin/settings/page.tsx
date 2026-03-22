@@ -35,10 +35,12 @@ async function getSettings(userId: string) {
     autoPublishEnabled: false,
     defaultCategories: null,
     notifyOnPublish: true,
-    geminiApiKey: null,
-    aiModelPreference: 'gemini-3-flash',
+    aiModelPreference: 'gemini-2.5-flash',
     aiResponseLimit: 4096,
     aiFeaturesEnabled: true,
+    breakingNewsEnabled: false,
+    breakingNewsText: null,
+    breakingNewsUrl: null,
   };
 }
 
@@ -50,6 +52,10 @@ async function getUserProfile(userId: string) {
       name: true,
       email: true,
       image: true,
+      bio: true,
+      authorTitle: true,
+      twitterUrl: true,
+      linkedinUrl: true,
     },
   });
 

@@ -1,5 +1,6 @@
 import { getServerSession } from '@/lib/auth';
 import { AdminLayoutWrapper } from '@/components/admin/AdminLayoutWrapper';
+import { ErrorBoundary } from '@/components/admin/ErrorBoundary';
 import { getBreadcrumbs } from '@/lib/admin-nav';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
@@ -58,7 +59,9 @@ export default async function AdminLayout({
       userName={userName}
       breadcrumbs={breadcrumbs}
     >
-      {children}
+      <ErrorBoundary>
+        {children}
+      </ErrorBoundary>
     </AdminLayoutWrapper>
   );
 }

@@ -24,6 +24,7 @@ import {
   type AiFeature,
 } from "@/lib/ai";
 import { z } from "zod";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 
 // Map action to feature name for usage tracking
 const actionToFeature: Record<string, AiFeature> = {
@@ -83,6 +84,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "غير مصرح بالوصول" },
         { status: 401 }
+      );
+    }
+
+    // Rate limiting: 20 AI content requests per hour per user
+    const rateLimitResult = await checkRateLimit(request, {
+      limit: 20,
+      window: 3600,
+      identifier: `ai:content:${session.user.id}`,
+    });
+    if (rateLimitResult && !rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً.' },
+        { status: 429 }
       );
     }
 

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
           defaultArticleStatus: 'draft',
           autoPublishEnabled: false,
           notifyOnPublish: true,
-          aiModelPreference: 'gemini-3-flash',
+          aiModelPreference: 'gemini-2.5-flash',
           aiResponseLimit: 4096,
           aiFeaturesEnabled: true,
         },

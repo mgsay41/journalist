@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { verifyPreviewToken } from "@/lib/preview";
 import { Cairo } from "next/font/google";
 import { PreviewControls } from "@/components/admin/PreviewControls";
+import { sanitizeArticleContent } from "@/lib/security/sanitization";
 import "./preview.css";
 
 const cairo = Cairo({
@@ -147,7 +148,7 @@ export default async function PreviewPage({
         {/* Article Body */}
         <div
           className="prose prose-lg max-w-none prose-headings:font-bold prose-headings:text-zinc-900 prose-p:text-zinc-700 prose-p:leading-relaxed prose-a:text-zinc-900 prose-a:font-semibold prose-a:no-underline hover:prose-a:underline prose-strong:text-zinc-900 prose-code:text-zinc-900 prose-pre:bg-zinc-100 prose-blockquote:border-r-zinc-900"
-          dangerouslySetInnerHTML={{ __html: article.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeArticleContent(article.content) }}
         />
 
         {/* Article Footer */}

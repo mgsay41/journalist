@@ -45,42 +45,41 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Update articles with new categories and tags
-        for (const articleId of articleIds) {
-          // Disconnect existing categories if new ones provided
+        // Phase 3 Backend Audit - Performance: Optimize bulk edit to avoid N+1 queries
+        // Fetch all articles with their existing tags in a single query
+        const articles = await prisma.article.findMany({
+          where: { id: { in: articleIds } },
+          select: { id: true, tags: { select: { id: true } } },
+        });
+
+        // Build update operations for all articles
+        const updateOperations = articles.map(article => {
+          const updateData: any = {};
+
+          // Replace categories if provided
           if (categoryIds && categoryIds.length > 0) {
-            await prisma.article.update({
-              where: { id: articleId },
-              data: {
-                categories: {
-                  set: categoryIds.map(id => ({ id })),
-                },
-              },
-            });
+            updateData.categories = {
+              set: categoryIds.map(id => ({ id })),
+            };
           }
 
-          // Add new tags (append, don't replace)
+          // Append tags (merge existing with new)
           if (tagIds && tagIds.length > 0) {
-            const article = await prisma.article.findUnique({
-              where: { id: articleId },
-              select: { tags: { select: { id: true } } },
-            });
-
-            if (article) {
-              const existingTagIds = article.tags.map(t => t.id);
-              const newTagIds = [...new Set([...existingTagIds, ...tagIds])];
-
-              await prisma.article.update({
-                where: { id: articleId },
-                data: {
-                  tags: {
-                    set: newTagIds.map(id => ({ id })),
-                  },
-                },
-              });
-            }
+            const existingTagIds = article.tags.map(t => t.id);
+            const mergedTagIds = [...new Set([...existingTagIds, ...tagIds])];
+            updateData.tags = {
+              set: mergedTagIds.map(id => ({ id })),
+            };
           }
-        }
+
+          return prisma.article.update({
+            where: { id: article.id },
+            data: updateData,
+          });
+        });
+
+        // Execute all updates in parallel
+        await Promise.all(updateOperations);
 
         result = { count: articleIds.length };
         break;
