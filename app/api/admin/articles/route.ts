@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
 import { createArticleSchema, listArticlesSchema } from '@/lib/validations/article';
 import { generateSlug } from '@/lib/utils/slug';
-import { Prisma } from '@prisma/client';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHtml } from '@/lib/security/sanitization';
 import { withMonitoring } from '@/lib/monitoring/middleware';
@@ -73,7 +72,8 @@ export async function GET(request: NextRequest) {
     } = validatedQuery.data;
 
     // Build where clause
-    const where: Prisma.ArticleWhereInput = {};
+    type ArticleWhereInput = NonNullable<NonNullable<Parameters<typeof prisma.article.findMany>[0]>['where']>;
+    const where: ArticleWhereInput = {};
 
     // Search in title and content
     if (search) {

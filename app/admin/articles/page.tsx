@@ -8,7 +8,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Loading, SkeletonTable } from '@/components/ui/Loading';
 import { ArticlesListClient } from '@/components/admin/ArticlesListClient';
 import { ArticlesFilters } from '@/components/admin/ArticlesFilters';
-import type { Prisma } from '@prisma/client';
 
 interface SearchParams {
   page?: string;
@@ -74,7 +73,8 @@ async function getArticles(searchParams: SearchParams): Promise<ArticlesResponse
   const sortOrder = searchParams.sortOrder || 'desc';
   const limit = 20;
 
-  const where: Prisma.ArticleWhereInput = {};
+  type ArticleWhereInput = NonNullable<NonNullable<Parameters<typeof prisma.article.findMany>[0]>['where']>;
+  const where: ArticleWhereInput = {};
 
   if (search) {
     where.OR = [

@@ -86,13 +86,12 @@ export async function GET(request: NextRequest) {
       prisma.article.count({ where }),
     ]);
 
-    // Format response
+    // Format response — content intentionally excluded from list view (10–50KB per article)
     const formattedArticles = articles.map((article) => ({
       id: article.id,
       title: article.title,
       slug: article.slug,
       excerpt: article.excerpt,
-      content: article.content,
       featuredImage: article.featuredImage?.url || null,
       publishedAt: article.publishedAt,
       readingTime: article.readingTime,
@@ -123,7 +122,7 @@ export async function GET(request: NextRequest) {
           hasMore: skip + ARTICLES_PER_PAGE < totalCount,
         },
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
     console.error('Error fetching public articles:', error);

@@ -1,4 +1,5 @@
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { PublicLayout, ArticleCard, ArticleCardSkeleton, LazyImage } from '@/components/public';
 import { SkeletonHero } from '@/components/ui/Skeleton';
 import { prisma } from '@/lib/prisma';
@@ -6,76 +7,96 @@ import { prisma } from '@/lib/prisma';
 // Revalidate every 5 minutes — ISR
 export const revalidate = 300;
 
-async function getHomepageData() {
-  try {
-    const categories = await prisma.category.findMany({
-      where: {
-        articles: {
-          some: { status: 'published', publishedAt: { lte: new Date() } },
-        },
+const getHomepageData = unstable_cache(
+  async () => {
+    try {
+      // Fetch categories and tags in parallel — they're independent queries
+      const [categories, popularTags] = await Promise.all([
+        prisma.category.findMany({
+          where: {
+            articles: {
+              some: { status: 'published', publishedAt: { lte: new Date() } },
+            },
+          },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, slug: true },
+        }),
+        prisma.tag.findMany({
+          where: {
+            articles: {
+              some: { status: 'published', publishedAt: { lte: new Date() } },
+            },
+          },
+          orderBy: { articles: { _count: 'desc' } },
+          take: 9,
+          select: { id: true, name: true, slug: true },
+        }),
+      ]);
+
+      return { categories, popularTags };
+    } catch (error) {
+      console.error('[Homepage] Failed to fetch layout data:', error);
+      return { categories: [], popularTags: [] };
+    }
+  },
+  ['homepage-layout'],
+  { revalidate: 300, tags: ['articles', 'categories', 'tags'] }
+);
+
+// unstable_cache: server-process cache for 5 min (reduces DB load during ISR revalidation).
+// cache(): per-render deduplication — both HeroSection and RecentArticlesSection call this.
+const getCachedHeroArticle = unstable_cache(
+  async () => {
+    const featuredArticle = await prisma.article.findFirst({
+      where: { status: 'published', publishedAt: { lte: new Date() }, isFeatured: true },
+      orderBy: { publishedAt: 'desc' },
+      include: {
+        categories: { select: { id: true, name: true, slug: true } },
+        featuredImage: { select: { id: true, url: true, altText: true } },
+        author: { select: { id: true, name: true } },
       },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, slug: true },
     });
 
-    const popularTags = await prisma.tag.findMany({
-      where: {
-        articles: {
-          some: { status: 'published', publishedAt: { lte: new Date() } },
-        },
+    return featuredArticle ?? await prisma.article.findFirst({
+      where: { status: 'published', publishedAt: { lte: new Date() } },
+      orderBy: { publishedAt: 'desc' },
+      include: {
+        categories: { select: { id: true, name: true, slug: true } },
+        featuredImage: { select: { id: true, url: true, altText: true } },
+        author: { select: { id: true, name: true } },
       },
-      orderBy: { articles: { _count: 'desc' } },
-      take: 9,
-      select: { id: true, name: true, slug: true },
     });
+  },
+  ['hero-article'],
+  { revalidate: 300, tags: ['articles'] }
+);
 
-    return { categories, popularTags };
-  } catch (error) {
-    console.error('[Homepage] Failed to fetch layout data:', error);
-    return { categories: [], popularTags: [] };
-  }
-}
+// React cache() deduplicates this call within a single render pass.
+// Both HeroSection and RecentArticlesSection call it — only ONE DB query fires.
+const getHeroArticle = cache(getCachedHeroArticle);
 
-async function getHeroArticle() {
-  const featuredArticle = await prisma.article.findFirst({
-    where: { status: 'published', publishedAt: { lte: new Date() }, isFeatured: true },
-    orderBy: { publishedAt: 'desc' },
-    include: {
-      categories: { select: { id: true, name: true, slug: true } },
-      featuredImage: { select: { id: true, url: true, altText: true } },
-      author: { select: { id: true, name: true } },
-    },
-  });
-
-  return featuredArticle || await prisma.article.findFirst({
-    where: { status: 'published', publishedAt: { lte: new Date() } },
-    orderBy: { publishedAt: 'desc' },
-    include: {
-      categories: { select: { id: true, name: true, slug: true } },
-      featuredImage: { select: { id: true, url: true, altText: true } },
-      author: { select: { id: true, name: true } },
-    },
-  });
-}
-
-async function getRecentArticles(excludeId: string | null) {
-  const whereClause: any = {
-    status: 'published',
-    publishedAt: { lte: new Date() },
-  };
-  if (excludeId) whereClause.id = { not: excludeId };
-
-  return prisma.article.findMany({
-    where: whereClause,
-    orderBy: { publishedAt: 'desc' },
-    take: 9,
-    include: {
-      categories: { select: { id: true, name: true, slug: true } },
-      featuredImage: { select: { id: true, url: true, altText: true } },
-      author: { select: { id: true, name: true } },
-    },
-  });
-}
+// Always fetches without an exclude filter — we filter the hero out in the component.
+// This makes the function cacheable with a stable argument.
+const getRecentArticles = unstable_cache(
+  async () => {
+    return prisma.article.findMany({
+      where: {
+        status: 'published',
+        publishedAt: { lte: new Date() },
+      },
+      orderBy: { publishedAt: 'desc' },
+      // Fetch one extra so we still have 9 after removing the hero
+      take: 10,
+      include: {
+        categories: { select: { id: true, name: true, slug: true } },
+        featuredImage: { select: { id: true, url: true, altText: true } },
+        author: { select: { id: true, name: true } },
+      },
+    });
+  },
+  ['recent-articles'],
+  { revalidate: 300, tags: ['articles'] }
+);
 
 /* ── Hero Section — cinematic full-bleed overlay ── */
 async function HeroSection() {
@@ -201,8 +222,18 @@ async function RecentArticlesSection() {
   let recentArticles: Awaited<ReturnType<typeof getRecentArticles>> = [];
 
   try {
-    heroArticle = await getHeroArticle();
-    recentArticles = await getRecentArticles(heroArticle?.id || null);
+    // Both fire simultaneously — getHeroArticle() is deduplicated via cache()
+    // so no extra DB query even though HeroSection already called it.
+    [heroArticle, recentArticles] = await Promise.all([
+      getHeroArticle(),
+      getRecentArticles(),
+    ]);
+    // Remove the hero article from the grid to avoid duplication
+    if (heroArticle) {
+      recentArticles = recentArticles.filter((a) => a.id !== heroArticle!.id);
+    }
+    // Keep at most 9
+    recentArticles = recentArticles.slice(0, 9);
   } catch (error) {
     console.error('[RecentArticlesSection] Failed:', error);
   }

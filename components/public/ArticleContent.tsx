@@ -54,7 +54,7 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
     // Then add loading="lazy" and decoding="async" to img tags that don't already have it
     return sanitized.replace(
       /<img(?![^>]*\sloading=)([^>]*)>/gi,
-      '<img$1 loading="lazy" decoding="async" fetchpriority="low">'
+      '<img$1 loading="lazy" decoding="async" fetchpriority="low" style="max-width:100%;height:auto;">'
     );
   }, [content]);
 

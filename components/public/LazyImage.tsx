@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
+// Module-level constant — generated once, not per render instance
+const BLUR_PLACEHOLDER =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2YzZjRmNiIvPjwvc3ZnPg==';
+
 interface LazyImageProps {
   src: string;
   alt: string;
@@ -20,19 +24,33 @@ interface LazyImageProps {
   threshold?: number;
 }
 
-/**
- * LazyImage Component
- *
- * An optimized image component that:
- * - Uses Intersection Observer API to detect when image is near viewport
- * - Only loads image when it's about to enter the viewport
- * - Shows placeholder/skeleton while loading
- * - Uses Next.js Image for automatic optimization
- * - Supports blur placeholders (LQIP)
- *
- * @param rootMargin - Margin around the viewport to trigger loading (default: '200px')
- * @param threshold - Percentage of element visibility to trigger loading (default: 0.01)
- */
+function ErrorPlaceholder({
+  fill,
+  width,
+  height,
+  className,
+}: Pick<LazyImageProps, 'fill' | 'width' | 'height' | 'className'>) {
+  return (
+    <div
+      className={cn(
+        'bg-muted flex items-center justify-center',
+        fill ? 'absolute inset-0' : 'rounded-lg',
+        className
+      )}
+      style={{ width: fill ? undefined : width, height: fill ? undefined : height }}
+    >
+      <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export function LazyImage({
   src,
   alt,
@@ -48,152 +66,104 @@ export function LazyImage({
   rootMargin = '200px',
   threshold = 0.01,
 }: LazyImageProps) {
-  const [isInView, setIsInView] = useState(priority); // Priority images load immediately
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInView, setIsInView] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const imgRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const resolvedSizes = sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw';
+  const resolvedPlaceholder = placeholder || (blurDataURL ? 'blur' : 'empty');
+  const resolvedBlur = blurDataURL || BLUR_PLACEHOLDER;
 
   useEffect(() => {
-    // If priority or already in view, skip intersection observer
-    if (priority || isInView) return;
+    // Priority images skip the intersection observer entirely
+    if (priority) return;
 
-    // Create Intersection Observer
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsInView(true);
-            // Stop observing once in view
-            if (imgRef.current) {
-              observer.unobserve(imgRef.current);
-            }
-          }
-        });
+        if (entries[0]?.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
       },
-      {
-        rootMargin, // Start loading 200px before entering viewport
-        threshold, // Trigger when at least 1% visible
-      }
+      { rootMargin, threshold }
     );
 
-    // Observe the image container
-    const currentRef = imgRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
-    }
+    const el = containerRef.current;
+    if (el) observer.observe(el);
+    return () => observer.disconnect();
+  }, [priority, rootMargin, threshold]);
 
-    // Cleanup
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, [priority, isInView, rootMargin, threshold]);
-
-  // Generate a simple blur placeholder if none provided
-  const getBlurPlaceholder = () => {
-    if (blurDataURL) return blurDataURL;
-    // Generate a minimal data URI for blur effect
-    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2YzZjRmNiIvPjwvc3ZnPg==';
-  };
-
-  // Error state
   if (error) {
-    return (
-      <div
-        ref={imgRef}
-        className={cn(
-          'bg-muted flex items-center justify-center',
-          fill ? 'absolute inset-0' : 'rounded-lg',
-          className
-        )}
-        style={{ width: fill ? undefined : width, height: fill ? undefined : height }}
-      >
-        <svg
-          className="w-8 h-8 text-muted-foreground"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-      </div>
-    );
+    return <ErrorPlaceholder fill={fill} width={width} height={height} className={className} />;
   }
 
-  // Loading state or not in view yet
-  if (!isInView || isLoading) {
+  // ── Priority images: render Image immediately, overlay shimmer until loaded ──
+  // This is critical for LCP — no IntersectionObserver delay, no skeleton blocking paint.
+  if (priority) {
     return (
-      <div
-        ref={imgRef}
-        className={cn('relative overflow-hidden', className)}
-        style={{ width: fill ? undefined : width, height: fill ? undefined : height }}
-      >
-        {/* Skeleton/shimmer effect */}
-        <div
+      <div className={cn('relative overflow-hidden', className)}>
+        <Image
+          src={src}
+          alt={alt}
+          width={fill ? undefined : width}
+          height={fill ? undefined : height}
+          fill={fill}
+          sizes={resolvedSizes}
+          quality={quality}
+          priority
+          placeholder={resolvedPlaceholder}
+          blurDataURL={resolvedBlur}
           className={cn(
-            'animate-shimmer absolute inset-0',
-            fill ? '' : 'rounded-lg'
+            'transition-opacity duration-500',
+            isLoaded ? 'opacity-100' : 'opacity-0',
+            fill ? 'object-cover' : undefined
           )}
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setError(true)}
         />
-        {isInView && (
-          <Image
-            src={src}
-            alt={alt}
-            width={fill ? undefined : width}
-            height={fill ? undefined : height}
-            fill={fill}
-            sizes={sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'}
-            quality={quality}
-            priority={priority}
-            placeholder={placeholder || (blurDataURL ? 'blur' : 'empty')}
-            blurDataURL={blurDataURL || getBlurPlaceholder()}
-            className={cn(
-              'transition-opacity duration-300',
-              isLoading ? 'opacity-0' : 'opacity-100',
-              fill ? 'object-cover' : undefined
-            )}
-            onLoad={() => setIsLoading(false)}
-            onError={() => {
-              setIsLoading(false);
-              setError(true);
-            }}
-          />
-        )}
+        {/* Shimmer overlay — removed as soon as the image paints */}
+        {!isLoaded && <div className="absolute inset-0 animate-shimmer" aria-hidden="true" />}
       </div>
     );
   }
 
-  // Image loaded successfully
+  // ── Lazy images: skeleton until near viewport, then load ──
   return (
-    <div ref={imgRef} className={cn('relative overflow-hidden', className)}>
-      <Image
-        src={src}
-        alt={alt}
-        width={fill ? undefined : width}
-        height={fill ? undefined : height}
-        fill={fill}
-        sizes={sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'}
-        quality={quality}
-        priority={priority}
-        placeholder={placeholder || (blurDataURL ? 'blur' : 'empty')}
-        blurDataURL={blurDataURL || getBlurPlaceholder()}
-        className={cn(
-          'transition-opacity duration-300',
-          isLoading ? 'opacity-0' : 'opacity-100',
-          fill ? 'object-cover' : undefined
-        )}
-        onLoad={() => setIsLoading(false)}
-        onError={() => {
-          setIsLoading(false);
-          setError(true);
-        }}
-      />
+    <div
+      ref={containerRef}
+      className={cn('relative overflow-hidden', className)}
+      style={{ width: fill ? undefined : width, height: fill ? undefined : height }}
+    >
+      {/* Skeleton — always rendered, hidden once image is loaded */}
+      {!isLoaded && (
+        <div
+          className={cn('animate-shimmer absolute inset-0', fill ? '' : 'rounded-lg')}
+          aria-hidden="true"
+        />
+      )}
+      {/* Image — only mounted once near the viewport */}
+      {isInView && (
+        <Image
+          src={src}
+          alt={alt}
+          width={fill ? undefined : width}
+          height={fill ? undefined : height}
+          fill={fill}
+          sizes={resolvedSizes}
+          quality={quality}
+          priority={false}
+          placeholder={resolvedPlaceholder}
+          blurDataURL={resolvedBlur}
+          className={cn(
+            'transition-opacity duration-300',
+            isLoaded ? 'opacity-100' : 'opacity-0',
+            fill ? 'object-cover' : undefined
+          )}
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setError(true)}
+        />
+      )}
     </div>
   );
 }

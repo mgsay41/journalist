@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { Button } from '@/components/ui/Button';
 import { DarkModeToggle } from './DarkModeToggle';
 
-type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
+export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 interface FontSizeContextType {
   fontSize: FontSize;
@@ -24,6 +24,7 @@ export function useFontSize() {
   return context;
 }
 
+const FONT_SIZE_COOKIE_KEY = 'fontSize';
 const FONT_SIZE_STORAGE_KEY = 'article-font-size';
 
 const fontSizes: Record<FontSize, { label: string; value: string; className: string }> = {
@@ -41,19 +42,8 @@ interface FontSizeProviderProps {
 }
 
 export function FontSizeProvider({ children, defaultSize = 'medium' }: FontSizeProviderProps) {
+  // defaultSize comes from a server-read cookie — no hydration mismatch.
   const [fontSize, setFontSizeState] = useState<FontSize>(defaultSize);
-
-  // Load font size preference from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY) as FontSize | null;
-      if (stored && stored in fontSizes) {
-        setFontSizeState(stored);
-      }
-    } catch (e) {
-      console.error('Failed to read font size from localStorage:', e);
-    }
-  }, []);
 
   // Apply font size to document
   useEffect(() => {
@@ -64,10 +54,13 @@ export function FontSizeProvider({ children, defaultSize = 'medium' }: FontSizeP
 
   const setFontSize = useCallback((size: FontSize) => {
     setFontSizeState(size);
+    // Persist to cookie (server-readable, no hydration mismatch on next load)
+    document.cookie = `${FONT_SIZE_COOKIE_KEY}=${size}; path=/; max-age=31536000; SameSite=Lax`;
+    // Also persist to localStorage as fallback
     try {
       localStorage.setItem(FONT_SIZE_STORAGE_KEY, size);
     } catch (e) {
-      console.error('Failed to save font size to localStorage:', e);
+      // ignore
     }
   }, []);
 

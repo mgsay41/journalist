@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 import { prisma } from '@/lib/prisma';
 import { PublicLayout } from '@/components/public';
 import { ArticleContent } from '@/components/public/ArticleContent';
@@ -642,15 +643,19 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 <TextToSpeech content={article.content} title={article.title} />
               </div>
 
-              {/* Featured Image — no border-radius, editorial full-width */}
+              {/* Featured Image — Next.js Image for AVIF/WebP, CDN caching, CLS prevention */}
               {article.featuredImage && (
                 <figure className="mt-5 mb-2">
-                  <img
-                    src={article.featuredImage.url}
-                    alt={article.featuredImage.altText || article.title}
-                    className="w-full h-auto"
-                    style={{ display: 'block' }}
-                  />
+                  <div className="relative w-full aspect-video">
+                    <Image
+                      src={article.featuredImage.url}
+                      alt={article.featuredImage.altText || article.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 80vw, 70vw"
+                      priority
+                      className="object-cover"
+                    />
+                  </div>
                   {article.featuredImage.caption && (
                     <figcaption className="text-center text-xs text-muted-foreground mt-3 italic">
                       {article.featuredImage.caption}

@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
 import { Cairo, Amiri } from "next/font/google";
+import { cookies } from "next/headers";
 import { RootErrorBoundary } from "@/components/RootErrorBoundary";
 import { Providers } from "@/components/Providers";
 import { WebVitals } from "@/components/public/WebVitals";
 import { GooeyToasterClient } from "@/components/ui/GooeyToasterClient";
+import type { FontSize } from "@/components/public/FontSizeControls";
 import "./globals.css";
 import "goey-toast/styles.css";
 // Validate required environment variables at startup
 import "@/lib/env";
+
+const VALID_FONT_SIZES: FontSize[] = ['small', 'medium', 'large', 'xlarge'];
 
 // Cairo — body text and UI, excellent for Arabic
 const cairo = Cairo({
@@ -54,11 +58,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Read font size preference from cookie — server-side, no hydration mismatch
+  const cookieStore = await cookies();
+  const cookieFontSize = cookieStore.get('fontSize')?.value as FontSize | undefined;
+  const initialFontSize: FontSize = (cookieFontSize && VALID_FONT_SIZES.includes(cookieFontSize))
+    ? cookieFontSize
+    : 'medium';
+
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${amiri.variable}`} suppressHydrationWarning>
       <head>
@@ -76,7 +87,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         {/* Phase 3 - Web Vitals monitoring */}
         <WebVitals debug={process.env.NODE_ENV === 'development'} />
-        <Providers>
+        <Providers initialFontSize={initialFontSize}>
           <RootErrorBoundary>{children}</RootErrorBoundary>
         </Providers>
         <GooeyToasterClient />
