@@ -63,7 +63,7 @@ describe('calculateCost', () => {
 
   describe('unknown model', () => {
     it('should return zero cost for unknown model', () => {
-      const result = calculateCost('unknown-model' as any, 1000, 500)
+      const result = calculateCost('unknown-model' as GeminiModelId, 1000, 500)
       expect(result.inputCost).toBe(0)
       expect(result.outputCost).toBe(0)
       expect(result.totalCost).toBe(0)

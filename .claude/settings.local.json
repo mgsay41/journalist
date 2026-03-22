@@ -65,7 +65,10 @@
       "Bash(cat app/api/public/articles/[slug]/route.ts)",
       "Bash(cat app/api/public/articles/[slug]/related/route.ts)",
       "Bash(du -sh node_modules/@*)",
-      "Bash(grep -r \"img\\\\|Image\" app/article/[slug]/page.tsx)"
+      "Bash(grep -r \"img\\\\|Image\" app/article/[slug]/page.tsx)",
+      "Bash(npm run:*)",
+      "Bash(grep -E \"^\\\\S.*\\\\.tsx?$\")",
+      "Read(//tmp/**)"
     ]
   }
 }
