@@ -215,7 +215,7 @@ export default FontSizeControls;
 
 // Font size settings component
 interface ReadingSettingsProps {
-  position?: 'fixed' | 'static';
+  position?: 'fixed' | 'static' | 'sticky';
   showLabel?: boolean;
   orientation?: 'horizontal' | 'vertical';
   className?: string;
