@@ -15,7 +15,7 @@ export function SocialShare({ title, url, variant = 'inline' }: SocialShareProps
     if (typeof window !== 'undefined') {
       return url.startsWith('http') ? url : `${window.location.origin}${url}`;
     }
-    return url.startsWith('http') ? url : `https://yourdomain.com${url}`;
+    return url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_APP_URL || ''}${url}`;
   }, [url]);
 
   const encodedTitle = encodeURIComponent(title);

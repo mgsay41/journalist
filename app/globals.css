@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Hide font-size widget while TTS player is open */
+body[data-tts-active="true"] [data-reading-settings] {
+  display: none;
+}
+
 /* ═══════════════════════════════════════════════
    EDITORIAL DESIGN SYSTEM — الموقع الصحفي
    Warm paper palette · Amber accent · Amiri display

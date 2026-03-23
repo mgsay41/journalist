@@ -43,6 +43,11 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
     if (audioRef.current) audioRef.current.src = '';
   }, []);
 
+  // Hide the font-size widget when player is open
+  useEffect(() => {
+    document.body.dataset.ttsActive = isExpanded ? 'true' : '';
+  }, [isExpanded]);
+
   const handlePlay = useCallback(async () => {
     setError(null);
 
@@ -208,7 +213,7 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
                 type="button"
                 onClick={cycleSpeed}
                 disabled={isLoading}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors tabular-nums min-w-[34px] text-center disabled:opacity-40"
+                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors tabular-nums min-w-8.5 text-center disabled:opacity-40"
                 title="تغيير السرعة"
               >
                 {playbackRate === '1' ? '1×' : `${playbackRate}×`}
