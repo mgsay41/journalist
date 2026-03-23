@@ -12,6 +12,7 @@ import { ReadingSettings } from '@/components/public/FontSizeControls';
 import { TextToSpeech } from '@/components/public/TextToSpeech';
 import type { Metadata } from 'next';
 import { SeriesNavigation } from '@/components/public/SeriesNavigation';
+import Link from 'next/link';
 
 interface ArticlePageProps {
   params: Promise<{ slug: string }>;
@@ -163,7 +164,7 @@ async function getRelatedArticles(
     return [];
   }
 
-  const whereClause: any = {
+  const whereClause: Record<string, unknown> = {
     id: { not: articleId },
     status: 'published',
     publishedAt: { lte: new Date() },
@@ -551,7 +552,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           <div className="container mx-auto px-4 py-3">
             <ol className="flex items-center gap-2 text-xs text-muted-foreground">
               <li>
-                <a href="/" className="hover:text-accent transition-colors">الرئيسية</a>
+                <Link href="/" className="hover:text-accent transition-colors">الرئيسية</Link>
               </li>
               <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
         // Build update operations for all articles
         const updateOperations = articles.map(article => {
-          const updateData: any = {};
+          const updateData: Record<string, unknown> = {};
 
           // Replace categories if provided
           if (categoryIds && categoryIds.length > 0) {

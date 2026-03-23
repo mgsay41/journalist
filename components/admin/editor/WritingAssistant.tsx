@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { ReactNodeView, NodeViewWrapper } from '@tiptap/react';
 import * as React from 'react';
+import type { Editor } from '@tiptap/core';
 
 // Types for AI suggestions
 export interface AiSuggestionAttributes {
@@ -59,8 +60,8 @@ export const WritingAssistantExtension = Extension.create({
           const decorations = DecorationSet.create(state.doc, [decoration]);
 
           // Store the suggestion in the editor's stored marks
-          (this as any).suggestionData = suggestion;
-          (this as any).suggestionDecorations = decorations;
+          (this as unknown as Record<string, unknown>).suggestionData = suggestion;
+          (this as unknown as Record<string, unknown>).suggestionDecorations = decorations;
 
           // Emit event
           const event = new CustomEvent('ai-suggestion-show', {
@@ -74,8 +75,8 @@ export const WritingAssistantExtension = Extension.create({
       hideAiSuggestion:
         () =>
         ({ view }) => {
-          (this as any).suggestionData = null;
-          (this as any).suggestionDecorations = null;
+          (this as unknown as Record<string, unknown>).suggestionData = null;
+          (this as unknown as Record<string, unknown>).suggestionDecorations = null;
 
           const event = new CustomEvent('ai-suggestion-hide');
           view.dom.dispatchEvent(event);
@@ -128,10 +129,11 @@ export const WritingAssistantExtension = Extension.create({
           decorations(state) {
             // Create decorations from stored marks
             const decorations: Decoration[] = [];
-            const suggestion = (this as any).suggestionData;
+            const self = this as unknown as Record<string, unknown>;
+            const suggestion = self.suggestionData;
 
-            if (suggestion && (this as any).suggestionDecorations) {
-              return (this as any).suggestionDecorations;
+            if (suggestion && self.suggestionDecorations) {
+              return self.suggestionDecorations as DecorationSet;
             }
 
             return DecorationSet.empty;
@@ -144,7 +146,7 @@ export const WritingAssistantExtension = Extension.create({
 
 // Floating Menu Component for AI Suggestions
 interface WritingAssistantMenuProps {
-  editor: any;
+  editor: Editor;
   suggestion: AiSuggestionAttributes | null;
   position: { from: number; to: number } | null;
   onApply: (suggestion: string) => void;
@@ -251,7 +253,7 @@ export const WritingAssistantMenu = React.memo(function WritingAssistantMenu({
 
 // AI Writing Toolbar Component
 interface AiWritingToolbarProps {
-  onAction: (action: string, data: any) => void;
+  onAction: (action: string, data: Record<string, unknown>) => void;
   loading?: boolean;
   disabled?: boolean;
 }

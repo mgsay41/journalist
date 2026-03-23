@@ -415,8 +415,8 @@ function analyzeImages(content: string, hasFeaturedImage: boolean, imageCount: n
   const criteria: SeoCriterion[] = [];
 
   // Featured image analysis - Part of Media Presence (5 pts total for media)
-  let featuredStatus: CriterionStatus = hasFeaturedImage ? 'passed' : 'failed';
-  let featuredScore = hasFeaturedImage ? SEO_WEIGHTS.contentReadability.mediaPresence : 0;
+  const featuredStatus: CriterionStatus = hasFeaturedImage ? 'passed' : 'failed';
+  const featuredScore = hasFeaturedImage ? SEO_WEIGHTS.contentReadability.mediaPresence : 0;
 
   criteria.push({
     id: 'featured-image',
@@ -478,8 +478,8 @@ function analyzeLinks(content: string): SeoCriterion[] {
 
   // Internal links - 4 points
   const internalMaxScore = SEO_WEIGHTS.additionalSeo.internalLinks;
-  let internalStatus: CriterionStatus = links.internal >= minInternal ? 'passed' : 'warning';
-  let internalScore = links.internal >= minInternal ? internalMaxScore : Math.round(internalMaxScore * 0.5);
+  const internalStatus: CriterionStatus = links.internal >= minInternal ? 'passed' : 'warning';
+  const internalScore = links.internal >= minInternal ? internalMaxScore : Math.round(internalMaxScore * 0.5);
 
   criteria.push({
     id: 'internal-links',
@@ -498,8 +498,8 @@ function analyzeLinks(content: string): SeoCriterion[] {
 
   // External links - 3 points
   const externalMaxScore = SEO_WEIGHTS.additionalSeo.externalLinks;
-  let externalStatus: CriterionStatus = links.external >= minExternal ? 'passed' : 'warning';
-  let externalScore = links.external >= minExternal ? externalMaxScore : Math.round(externalMaxScore * 0.5);
+  const externalStatus: CriterionStatus = links.external >= minExternal ? 'passed' : 'warning';
+  const externalScore = links.external >= minExternal ? externalMaxScore : Math.round(externalMaxScore * 0.5);
 
   criteria.push({
     id: 'external-links',

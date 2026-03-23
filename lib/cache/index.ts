@@ -71,7 +71,7 @@ function updateStats(type: 'hit' | 'miss' | 'set' | 'delete', cacheSize?: number
  * @param keys - Cache key parts
  * @param revalidate - Revalidation time in seconds
  */
-export function createCachedFn<T extends (...args: any[]) => Promise<any>>(
+export function createCachedFn<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   keys: string[],
   revalidate: number = CACHE_DURATIONS.FIFTEEN_MINUTES

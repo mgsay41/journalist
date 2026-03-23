@@ -13,9 +13,9 @@ import { rollbar, logError, logWarning, logInfo, logCritical, isRollbarConfigure
 /**
  * Helper to send Rollbar error and wait for response
  */
-function sendToRollbar(level: string, data: any): Promise<{ success: boolean; err?: any }> {
+function sendToRollbar(level: string, data: unknown): Promise<{ success: boolean; err?: unknown }> {
   return new Promise((resolve) => {
-    const callback = (err: any) => {
+    const callback = (err: unknown) => {
       if (err) {
         console.error('Rollbar send error:', err);
         resolve({ success: false, err });
@@ -25,21 +25,24 @@ function sendToRollbar(level: string, data: any): Promise<{ success: boolean; er
       }
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any;
     switch (level) {
       case 'info':
-        rollbar.info('Rollbar test - Info message', data, callback);
+        rollbar.info('Rollbar test - Info message', d, callback);
         break;
       case 'warning':
-        rollbar.warning('Rollbar test - Warning message', data, callback);
+        rollbar.warning('Rollbar test - Warning message', d, callback);
         break;
       case 'critical':
-        rollbar.critical('Rollbar test - Critical error', new Error('Test critical error'), data, callback);
+        rollbar.critical('Rollbar test - Critical error', new Error('Test critical error'), d, callback);
         break;
       case 'error':
-      default:
+      default: {
         const testError = new Error('Rollbar test error from /api/monitoring/test-rollbar');
-        rollbar.error(testError, data, callback);
+        rollbar.error(testError, d, callback);
         break;
+      }
     }
   });
 }
@@ -91,7 +94,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: 'Failed to send to Rollbar',
-        details: result.err?.message || String(result.err),
+        details: result.err instanceof Error ? result.err.message : String(result.err),
         config: {
           configured: configStatus,
           tokenProvided,

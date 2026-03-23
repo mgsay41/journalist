@@ -3,6 +3,7 @@ import { PublicLayout } from '@/components/public/PublicLayout';
 import { ArticleCard } from '@/components/public/ArticleCard';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 interface ArchiveMonthPageProps {
   params: Promise<{ year: string; month: string }>;
@@ -84,9 +85,9 @@ export default async function ArchiveMonthPage({ params }: ArchiveMonthPageProps
         <div className="max-w-5xl mx-auto">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-            <a href="/" className="hover:text-foreground transition-colors">الرئيسية</a>
+            <Link href="/" className="hover:text-foreground transition-colors">الرئيسية</Link>
             <span>›</span>
-            <a href="/archive" className="hover:text-foreground transition-colors">الأرشيف</a>
+            <Link href="/archive" className="hover:text-foreground transition-colors">الأرشيف</Link>
             <span>›</span>
             <span className="text-foreground">{monthName} {yearNum}</span>
           </nav>

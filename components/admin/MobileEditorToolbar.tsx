@@ -45,7 +45,7 @@ export function MobileEditorToolbar({
 
   if (!editor) return null;
 
-  const handleFormatAction = (action: string, attrs?: any) => {
+  const handleFormatAction = (action: string, attrs?: Record<string, unknown>) => {
     haptic.light();
 
     switch (action) {
@@ -56,7 +56,7 @@ export function MobileEditorToolbar({
         editor.chain().focus().toggleItalic().run();
         break;
       case 'toggleHeading':
-        editor.chain().focus().toggleHeading(attrs).run();
+        editor.chain().focus().toggleHeading(attrs as { level: 1 | 2 | 3 | 4 | 5 | 6 }).run();
         break;
       case 'toggleBulletList':
         editor.chain().focus().toggleBulletList().run();
@@ -67,7 +67,7 @@ export function MobileEditorToolbar({
     }
   };
 
-  const isActive = (action: string, attrs?: any) => {
+  const isActive = (action: string, attrs?: Record<string, unknown>) => {
     switch (action) {
       case 'toggleBold':
         return editor.isActive('bold');

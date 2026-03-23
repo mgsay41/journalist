@@ -50,8 +50,6 @@ export function TextToSpeech({ content, title, className = '' }: TextToSpeechPro
   // Check for browser support
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      setIsSupported(true);
-
       // Load voices
       const loadVoices = () => {
         const availableVoices = window.speechSynthesis.getVoices();
@@ -66,16 +64,17 @@ export function TextToSpeech({ content, title, className = '' }: TextToSpeechPro
 
       loadVoices();
       window.speechSynthesis.onvoiceschanged = loadVoices;
+      const timer = setTimeout(() => { setIsSupported(true); }, 0);
+      return () => {
+        clearTimeout(timer);
+        if (utteranceRef.current) {
+          window.speechSynthesis.cancel();
+        }
+      };
     } else {
-      setIsSupported(false);
+      const timer = setTimeout(() => { setIsSupported(false); }, 0);
+      return () => clearTimeout(timer);
     }
-
-    // Cleanup
-    return () => {
-      if (utteranceRef.current) {
-        window.speechSynthesis.cancel();
-      }
-    };
   }, []);
 
   // Speak function

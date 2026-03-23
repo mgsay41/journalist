@@ -1,12 +1,13 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
+import { TextEncoder, TextDecoder } from 'util'
 
 // Polyfill for TextEncoder/TextDecoder (required for Next.js cache in tests)
-if (typeof TextEncoder === 'undefined') {
-  global.TextEncoder = require('util').TextEncoder
+if (typeof globalThis.TextEncoder === 'undefined') {
+  globalThis.TextEncoder = TextEncoder as typeof globalThis.TextEncoder
 }
-if (typeof TextDecoder === 'undefined') {
-  global.TextDecoder = require('util').TextDecoder
+if (typeof globalThis.TextDecoder === 'undefined') {
+  globalThis.TextDecoder = TextDecoder as typeof globalThis.TextDecoder
 }
 
 // Mock Next.js server module before any imports
@@ -30,10 +31,10 @@ jest.mock('next/server', () => {
       json = async () => ({})
       text = async () => ''
       clone = () => this
-      nextUrl: any = { search: '', pathname: '' }
+      nextUrl: { search: string; pathname: string } = { search: '', pathname: '' }
     },
     NextResponse: {
-      json: (body: any, init?: ResponseInit) => ({
+      json: (body: unknown, init?: ResponseInit) => ({
         status: init?.status || 200,
         body,
         headers: new Headers(init?.headers),

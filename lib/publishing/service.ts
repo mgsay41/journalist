@@ -283,6 +283,12 @@ export async function getScheduledQueue(limit: number = 20) {
             name: true,
           },
         },
+        categories: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: { scheduledAt: "asc" },
       take: limit,
@@ -298,6 +304,12 @@ export async function getScheduledQueue(limit: number = 20) {
       },
       include: {
         author: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        categories: {
           select: {
             id: true,
             name: true,

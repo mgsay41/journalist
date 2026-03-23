@@ -48,7 +48,7 @@ export function generateMetadata({
   const fullUrl = url ? `${baseUrl}${url}` : baseUrl;
   const fullImage = image ? `${baseUrl}${image}` : `${baseUrl}/og-image.jpg`;
 
-  const metadata: Record<string, any> = {
+  const metadata: Record<string, unknown> = {
     title: fullTitle,
     description: description || defaultDescription,
 
@@ -99,11 +99,12 @@ export function generateMetadata({
 
   // Article-specific metadata
   if (type === 'article') {
-    metadata.openGraph.publishedTime = publishedTime;
-    metadata.openGraph.modifiedTime = modifiedTime;
-    metadata.openGraph.authors = author ? [author] : undefined;
-    metadata.openGraph.section = section;
-    metadata.openGraph.tags = tags;
+    const og = metadata.openGraph as Record<string, unknown>;
+    og.publishedTime = publishedTime;
+    og.modifiedTime = modifiedTime;
+    og.authors = author ? [author] : undefined;
+    og.section = section;
+    og.tags = tags;
 
     metadata.article = {
       publishedTime,
@@ -150,7 +151,7 @@ export function generateArticleJsonLd({
   const fullUrl = `${baseUrl}${url}`;
   const fullImage = image ? `${baseUrl}${image}` : `${baseUrl}/og-image.jpg`;
 
-  const jsonLd: Record<string, any> = {
+  const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: title,

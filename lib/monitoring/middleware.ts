@@ -17,7 +17,7 @@ import { generateRequestId } from '@/lib/monitoring/logger';
  * @param handler - The route handler function
  * @returns Wrapped handler with performance tracking
  */
-export function withPerformanceTracking<T extends any[]>(
+export function withPerformanceTracking<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>
 ): (...args: T) => Promise<NextResponse> {
   return async (...args: T) => {
@@ -88,7 +88,7 @@ export function withPerformanceTracking<T extends any[]>(
  * @param handler - The route handler function
  * @returns Wrapped handler with both error handling and performance tracking
  */
-export function withMonitoring<T extends any[]>(
+export function withMonitoring<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>
 ): (...args: T) => Promise<NextResponse> {
   return withPerformanceTracking(handler);

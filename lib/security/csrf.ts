@@ -294,10 +294,10 @@ export async function validateCsrfMiddleware(request: NextRequest): Promise<Next
  * @param handler - The API route handler
  * @returns Wrapped handler with CSRF validation
  */
-export function withCsrfProtection(
-  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
+export function withCsrfProtection<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>
 ) {
-  return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
+  return async (request: NextRequest, ...rest: TArgs): Promise<NextResponse> => {
     const csrfError = await validateCsrfMiddleware(request);
     if (csrfError) return csrfError;
 

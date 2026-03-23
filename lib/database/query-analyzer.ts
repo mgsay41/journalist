@@ -45,7 +45,7 @@ export interface QueryPlanNode {
   actualStartupTime: number;
   actualTotalTime: number;
   plans?: QueryPlanNode[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -67,21 +67,22 @@ export interface QueryIssue {
  */
 export async function analyzeQuery(
   query: string,
-  params: any[] = []
+  params: unknown[] = []
 ): Promise<QueryAnalysisResult> {
   try {
     const explainQuery = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`;
-    const result = await prisma.$queryRawUnsafe(explainQuery, ...params) as any[];
+    type ExplainRow = { 'QUERY PLAN': QueryPlanNode[] };
+    const result = await prisma.$queryRawUnsafe(explainQuery, ...params) as ExplainRow[];
 
     const planData = result[0]['QUERY PLAN']?.[0];
     if (!planData) {
       throw new Error('Invalid EXPLAIN ANALYZE result');
     }
 
-    const plan = planData.Plan;
-    const executionTime = planData['Execution Time'] || 0;
-    const totalCost = plan['Total Cost'] || plan.total_cost || 0;
-    const rows = plan.PlanRows || plan.plan_rows || 0;
+    const plan = planData.Plan as QueryPlanNode;
+    const executionTime = (planData['Execution Time'] as number) || 0;
+    const totalCost = (plan['Total Cost'] as number) || (plan.total_cost as number) || 0;
+    const rows = (plan.PlanRows as number) || (plan.plan_rows as number) || 0;
 
     // Analyze the plan for issues
     const issues = analyzePlan(plan);
@@ -177,7 +178,7 @@ function analyzePlan(plan: QueryPlanNode, issues: QueryIssue[] = []): QueryIssue
 
   // Recursively analyze child plans
   if (plan.Plans) {
-    for (const childPlan of plan.Plans) {
+    for (const childPlan of (plan.Plans as QueryPlanNode[])) {
       analyzePlan(childPlan, issues);
     }
   }
@@ -203,7 +204,7 @@ function generateRecommendations(issues: QueryIssue[], plan: QueryPlanNode): str
       case 'sequential_scan':
         if (issue.details?.relation) {
           recommendations.push(
-            `Consider adding an index on ${(issue.details as any).relation} for the filtered columns`
+            `Consider adding an index on ${String(issue.details?.relation)} for the filtered columns`
           );
         }
         break;
@@ -211,7 +212,7 @@ function generateRecommendations(issues: QueryIssue[], plan: QueryPlanNode): str
       case 'missing_index':
         if (issue.details?.condition) {
           recommendations.push(
-            `Create an index to support: ${(issue.details as any).condition}`
+            `Create an index to support: ${String(issue.details?.condition)}`
           );
         }
         break;
@@ -357,7 +358,8 @@ export async function getTableStats(): Promise<
     ORDER BY pg_total_relation_size(t.tablename::text) DESC
   `;
 
-  const tables = await prisma.$queryRawUnsafe(query) as any[];
+  type TableRow = { tableName: string; rows: number; totalSize: string; indexSize: string };
+  const tables = await prisma.$queryRawUnsafe(query) as TableRow[];
 
   // Get indexes for each table
   const result = [];
@@ -376,10 +378,11 @@ export async function getTableStats(): Promise<
       ORDER BY i.relname, a.attnum
     `;
 
-    const indexes = await prisma.$queryRawUnsafe(indexQuery, table.tableName) as any[];
+    type IndexRow = { indexName: string; column: string; isUnique: boolean; isPrimary: boolean };
+    const indexes = await prisma.$queryRawUnsafe(indexQuery, table.tableName) as IndexRow[];
 
     // Group columns by index
-    const groupedIndexes: Map<string, any> = new Map();
+    const groupedIndexes: Map<string, { indexName: string; columns: string[]; isUnique: boolean; isPrimary: boolean }> = new Map();
     for (const idx of indexes) {
       if (!groupedIndexes.has(idx.indexName)) {
         groupedIndexes.set(idx.indexName, {
@@ -461,7 +464,7 @@ export async function detectMissingIndexes(): Promise<
     JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
     JOIN pg_namespace n ON n.oid = t.relnamespace
     WHERE n.nspname = 'public'
-  ` as any[];
+  ` as { tableName: string; columnName: string }[];
 
   const existingMap = new Map<string, Set<string>>();
   for (const idx of existingIndexes) {

@@ -37,6 +37,33 @@ export function SuggestionTooltip({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
 
+  const calculatePosition = useCallback((rect: DOMRect) => {
+    // Position tooltip below the marked text
+    const top = rect.bottom + window.scrollY + 8;
+    const left = rect.left + window.scrollX + rect.width / 2;
+    setPosition({ top, left });
+  }, []);
+
+  const handleApply = useCallback(() => {
+    if (!tooltipData) return;
+
+    if (tooltipData.type === 'grammar' && tooltipData.correction) {
+      if (onApplyGrammarCorrection) {
+        onApplyGrammarCorrection(tooltipData.id, tooltipData.correction);
+      } else if (editor) {
+        editor.commands.applyGrammarCorrection(tooltipData.id, tooltipData.correction);
+      }
+    } else if (tooltipData.type === 'seo' && tooltipData.suggestedText) {
+      if (onApplySeoSuggestion) {
+        onApplySeoSuggestion(tooltipData.id, tooltipData.suggestedText);
+      } else if (editor) {
+        editor.commands.applySeoSuggestion(tooltipData.id, tooltipData.suggestedText);
+      }
+    }
+
+    setTooltipData(null);
+  }, [tooltipData, editor, onApplyGrammarCorrection, onApplySeoSuggestion]);
+
   // Handle click outside to close tooltip
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -115,33 +142,6 @@ export function SuggestionTooltip({
     editorElement.addEventListener('mouseover', handleMouseOver);
     return () => editorElement.removeEventListener('mouseover', handleMouseOver);
   }, [editor]);
-
-  const calculatePosition = useCallback((rect: DOMRect) => {
-    // Position tooltip below the marked text
-    const top = rect.bottom + window.scrollY + 8;
-    const left = rect.left + window.scrollX + rect.width / 2;
-    setPosition({ top, left });
-  }, []);
-
-  const handleApply = useCallback(() => {
-    if (!tooltipData) return;
-
-    if (tooltipData.type === 'grammar' && tooltipData.correction) {
-      if (onApplyGrammarCorrection) {
-        onApplyGrammarCorrection(tooltipData.id, tooltipData.correction);
-      } else if (editor) {
-        editor.commands.applyGrammarCorrection(tooltipData.id, tooltipData.correction);
-      }
-    } else if (tooltipData.type === 'seo' && tooltipData.suggestedText) {
-      if (onApplySeoSuggestion) {
-        onApplySeoSuggestion(tooltipData.id, tooltipData.suggestedText);
-      } else if (editor) {
-        editor.commands.applySeoSuggestion(tooltipData.id, tooltipData.suggestedText);
-      }
-    }
-
-    setTooltipData(null);
-  }, [tooltipData, editor, onApplyGrammarCorrection, onApplySeoSuggestion]);
 
   const handleIgnore = useCallback(() => {
     if (!tooltipData) return;

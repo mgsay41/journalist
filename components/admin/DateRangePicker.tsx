@@ -192,9 +192,15 @@ export function DateRangePicker({
 
   // Update internal state when value prop changes
   useEffect(() => {
-    setCurrentPreset(getCurrentPreset(value));
-    setCustomFrom(value?.from || '');
-    setCustomTo(value?.to || '');
+    const preset = getCurrentPreset(value);
+    const from = value?.from || '';
+    const to = value?.to || '';
+    const timer = setTimeout(() => {
+      setCurrentPreset(preset);
+      setCustomFrom(from);
+      setCustomTo(to);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [value]);
 
   const handlePresetClick = (preset: DateRangePreset) => {

@@ -69,8 +69,8 @@ async function testUniqueConstraints() {
         },
       });
       log('⚠️  Unique constraint test inconclusive (timestamps differ)', 'yellow');
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+    } catch (error: unknown) {
+      if ((error as { code?: string }).code === 'P2002') {
         log('✅ Unique constraint works correctly!', 'green');
         log('   Duplicate slug rejected: P2002', 'green');
       }

@@ -3,6 +3,26 @@ import { Suspense } from "react";
 import { getScheduledQueue } from "@/lib/publishing";
 import { Loading } from "@/components/ui/Loading";
 
+interface ArticleCategory {
+  id: string;
+  name: string;
+}
+
+interface ArticleAuthor {
+  id: string;
+  name: string | null;
+}
+
+interface ScheduledArticle {
+  id: string;
+  title: string;
+  slug: string;
+  scheduledAt: Date | null;
+  publishedAt: Date | null;
+  author: ArticleAuthor;
+  categories: ArticleCategory[];
+}
+
 export const metadata = {
   title: "المقالات المجدولة",
   description: "إدارة جدولة نشر المقالات",
@@ -85,7 +105,7 @@ async function ScheduledQueueList() {
   );
 }
 
-function ScheduledArticlesList({ articles }: { articles: any[] }) {
+function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
   if (articles.length === 0) {
     return (
       <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-8 text-center">
@@ -148,7 +168,7 @@ function ScheduledArticlesList({ articles }: { articles: any[] }) {
               </td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-1">
-                  {article.categories.slice(0, 2).map((cat: any) => (
+                  {article.categories.slice(0, 2).map((cat) => (
                     <span
                       key={cat.id}
                       className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-800"
@@ -181,7 +201,7 @@ function ScheduledArticlesList({ articles }: { articles: any[] }) {
   );
 }
 
-function RecentArticlesList({ articles }: { articles: any[] }) {
+function RecentArticlesList({ articles }: { articles: ScheduledArticle[] }) {
   if (articles.length === 0) {
     return null;
   }
@@ -200,7 +220,7 @@ function RecentArticlesList({ articles }: { articles: any[] }) {
               {new Intl.DateTimeFormat("ar-SA", {
                 hour: "2-digit",
                 minute: "2-digit",
-              }).format(new Date(article.publishedAt))}
+              }).format(new Date(article.publishedAt!))}
             </p>
           </div>
           <a
@@ -218,7 +238,7 @@ function RecentArticlesList({ articles }: { articles: any[] }) {
 // Client component for countdown timer
 function CountdownTimer({ targetDate }: { targetDate: Date }) {
   const [timeLeft, setTimeLeft] = React.useState(
-    targetDate.getTime() - Date.now()
+    () => targetDate.getTime() - Date.now()
   );
 
   React.useEffect(() => {

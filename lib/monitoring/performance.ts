@@ -416,11 +416,11 @@ export class PerformanceTracker {
 /**
  * Decorator for tracking async function performance
  */
-export function trackPerformance<T extends (...args: any[]) => Promise<any>>(
+export function trackPerformance<T extends (...args: unknown[]) => Promise<unknown>>(
   name: string,
   fn: T
 ): T {
-  return (async (...args: any[]) => {
+  return (async (...args: unknown[]) => {
     const start = Date.now();
     try {
       const result = await fn(...args);

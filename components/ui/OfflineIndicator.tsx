@@ -25,7 +25,8 @@ export function OfflineIndicator({ position = 'bottom', className = '' }: Offlin
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
-    setIsOnline(navigator.onLine);
+    const initialOnline = navigator.onLine;
+    const timer = setTimeout(() => { setIsOnline(initialOnline); }, 0);
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -41,6 +42,7 @@ export function OfflineIndicator({ position = 'bottom', className = '' }: Offlin
     window.addEventListener('offline', handleOffline);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

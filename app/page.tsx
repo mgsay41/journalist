@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { PublicLayout, ArticleCard, ArticleCardSkeleton, LazyImage } from '@/components/public';
 import { SkeletonHero } from '@/components/ui/Skeleton';
 import { prisma } from '@/lib/prisma';
+import Link from 'next/link';
 
 // Revalidate every 5 minutes — ISR
 export const revalidate = 300;
@@ -247,7 +248,7 @@ async function RecentArticlesSection() {
             أحدث المقالات
           </h2>
           <div className="flex-1 h-px bg-border" />
-          <a
+          <Link
             href="/archive"
             className="whitespace-nowrap text-sm text-accent hover:text-accent-hover transition-colors font-medium flex items-center gap-1"
           >
@@ -255,7 +256,7 @@ async function RecentArticlesSection() {
             <svg className="w-3.5 h-3.5 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
-          </a>
+          </Link>
         </div>
 
         {recentArticles.length > 0 ? (

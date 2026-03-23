@@ -789,7 +789,7 @@ export function ArticleCompletionResults({
                 </svg>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                اضغط على "توليد صورة" لإنشاء صورة غلاف احترافية باستخدام الذكاء الاصطناعي
+                اضغط على &quot;توليد صورة&quot; لإنشاء صورة غلاف احترافية باستخدام الذكاء الاصطناعي
               </p>
               <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
                 <span className="px-2 py-1 bg-muted rounded-full">✓ مجاني تماماً</span>

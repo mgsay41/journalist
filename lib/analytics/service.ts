@@ -286,20 +286,21 @@ export interface AnalyticsTrends {
 export async function getTopArticles(params: TopArticlesParams = {}): Promise<ArticleStats[]> {
   const { limit = 10, dateRange, categoryId, tagId } = params;
 
-  const where: any = {
+  const where: Record<string, unknown> = {
     status: "published",
     publishedAt: { lte: new Date() },
   };
 
   // Apply date range filter
   if (dateRange?.from || dateRange?.to) {
-    where.publishedAt = {};
+    const publishedAtFilter: { gte?: Date; lte?: Date } = {};
     if (dateRange.from) {
-      where.publishedAt.gte = dateRange.from;
+      publishedAtFilter.gte = dateRange.from;
     }
     if (dateRange.to) {
-      where.publishedAt.lte = dateRange.to;
+      publishedAtFilter.lte = dateRange.to;
     }
+    where.publishedAt = publishedAtFilter;
   }
 
   // Apply category filter

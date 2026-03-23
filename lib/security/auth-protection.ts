@@ -176,7 +176,7 @@ export async function recordFailedLogin(
     const newAttempts = (user.failedLoginAttempts || 0) + 1;
     attemptsRemaining = Math.max(0, ACCOUNT_LOCKOUT_CONFIG.MAX_ATTEMPTS - newAttempts);
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       failedLoginAttempts: newAttempts,
     };
 

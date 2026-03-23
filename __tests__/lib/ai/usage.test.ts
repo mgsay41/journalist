@@ -4,6 +4,7 @@ jest.mock('@google/genai', () => ({}))
 jest.mock('@upstash/redis', () => ({ Redis: jest.fn() }))
 
 import { calculateCost } from '@/lib/ai/usage'
+import type { GeminiModelId } from '@/lib/gemini'
 
 describe('calculateCost', () => {
   describe('gemini-2.5-flash', () => {

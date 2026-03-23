@@ -40,10 +40,10 @@ export async function requireAuth(_request: NextRequest) {
  * @param handler - The API route handler
  * @returns Wrapped handler with authentication check
  */
-export function withAuth(
-  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
+export function withAuth<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>
 ) {
-  return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
+  return async (request: NextRequest, ...rest: TArgs): Promise<NextResponse> => {
     const authError = await requireAuth(request);
     if (authError) return authError;
 
@@ -64,10 +64,10 @@ export function withAuth(
  *   // Your handler logic here
  * });
  */
-export function withAuthCsrf(
-  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
+export function withAuthCsrf<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>
 ) {
-  return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
+  return async (request: NextRequest, ...rest: TArgs): Promise<NextResponse> => {
     // Check authentication first
     const authError = await requireAuth(request);
     if (authError) return authError;
@@ -87,11 +87,11 @@ export function withAuthCsrf(
  * @param options - Rate limit options
  * @returns Wrapped handler with rate limiting
  */
-export function withRateLimitMiddleware(
-  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>,
+export function withRateLimitMiddleware<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>,
   options: { limit: number; window: number; identifier?: string }
 ) {
-  return async (request: NextRequest, ...rest: any[]): Promise<NextResponse> => {
+  return async (request: NextRequest, ...rest: TArgs): Promise<NextResponse> => {
     const { checkRateLimit } = await import('./rate-limit');
 
     const result = await checkRateLimit(request, options);
@@ -134,11 +134,11 @@ export function withRateLimitMiddleware(
  * @param middleware - Array of middleware functions
  * @returns Wrapped handler with all middleware applied
  */
-export function composeMiddleware(
-  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>,
+export function composeMiddleware<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>,
   ...middleware: Array<(
-    handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
-  ) => (request: NextRequest, ...args: any[]) => Promise<NextResponse>>
+    handler: (request: NextRequest, ...args: TArgs) => Promise<NextResponse>
+  ) => (request: NextRequest, ...args: TArgs) => Promise<NextResponse>>
 ) {
   return middleware.reduceRight(
     (acc, mw) => mw(acc),

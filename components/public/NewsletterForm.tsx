@@ -12,10 +12,14 @@ export function NewsletterForm() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) === 'true') {
-      setSubscribed(true);
-    }
-    setReady(true);
+    const isSubscribed = localStorage.getItem(STORAGE_KEY) === 'true';
+    const timer = setTimeout(() => {
+      if (isSubscribed) {
+        setSubscribed(true);
+      }
+      setReady(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -51,20 +51,19 @@ export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProvid
   // Apply resolved theme class to document root
   useEffect(() => {
     const root = document.documentElement;
-    let resolved: 'light' | 'dark' = 'light';
-
-    if (theme === 'system') {
-      resolved = window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
-    } else {
-      resolved = theme;
-    }
-
-    setResolvedTheme(resolved);
+    const resolved: 'light' | 'dark' = theme === 'system'
+      ? window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light'
+      : theme;
 
     // Update document class and data attribute
     root.classList.remove('light', 'dark');
     root.classList.add(resolved);
     root.setAttribute('data-theme', resolved);
+
+    const timer = setTimeout(() => {
+      setResolvedTheme(resolved);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [theme]);
 
   // Listen for system theme changes when using system theme

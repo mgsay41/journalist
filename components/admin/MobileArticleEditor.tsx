@@ -95,7 +95,11 @@ export const MobileArticleEditor = forwardRef<MobileArticleEditorRef, MobileArti
 
     // Detect mobile device
     useEffect(() => {
-      setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const timer = setTimeout(() => {
+        setIsMobile(isMobileDevice);
+      }, 0);
+      return () => clearTimeout(timer);
     }, []);
 
     const editor = useEditor({

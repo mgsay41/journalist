@@ -70,21 +70,25 @@ export const rollbar = new Rollbar({
   transform(err, args) {
     // Add custom metadata to all errors
     if (args.custom) {
-      (args.custom as any).app = 'journalist-cms';
-      (args.custom as any).userAgent = navigator.userAgent;
-      (args.custom as any).url = window.location.href;
+      const custom = args.custom as Record<string, unknown>;
+      custom.app = 'journalist-cms';
+      custom.userAgent = navigator.userAgent;
+      custom.url = window.location.href;
     }
 
     // Filter out errors from browser extensions
-    if ((err as any)?.message?.includes('chrome-extension://')) {
-      (args as any).message = null; // Suppress extension errors
+    const errObj = err as { message?: string };
+    if (errObj?.message?.includes('chrome-extension://')) {
+      const argsObj = args as Record<string, unknown>;
+      argsObj.message = null; // Suppress extension errors
     }
   },
 
   // Filter out specific errors
   checkIgnore(isUncaught, args, payload) {
     // Ignore errors from browser extensions
-    if ((payload as any)?.body?.trace?.frames?.some((frame: any) =>
+    const payloadObj = payload as { body?: { trace?: { frames?: Array<{ filename?: string }> }; message?: { body?: string } } };
+    if (payloadObj?.body?.trace?.frames?.some((frame) =>
       frame.filename?.includes('chrome-extension://') ||
       frame.filename?.includes('safari-extension://') ||
       frame.filename?.includes('moz-extension://')
@@ -98,8 +102,8 @@ export const rollbar = new Rollbar({
       'Non-Error promise rejection captured',
     ];
 
-    if ((payload as any)?.body?.message?.body && ignoredMessages.some(msg =>
-      (payload as any).body.message.body.includes(msg)
+    if (payloadObj?.body?.message?.body && ignoredMessages.some(msg =>
+      payloadObj.body?.message?.body?.includes(msg)
     )) {
       return true;
     }

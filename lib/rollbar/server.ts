@@ -73,16 +73,18 @@ export const rollbar = new Rollbar({
   transform(err, args) {
     // Add custom metadata to all errors
     if (args.request) {
-      (args as any).custom = (args as any).custom || {};
-      (args as any).custom.app = 'journalist-cms';
-      (args as any).custom.nodeVersion = process.version;
+      const argsObj = args as Record<string, unknown>;
+      argsObj.custom = (argsObj.custom as Record<string, unknown>) || {};
+      (argsObj.custom as Record<string, unknown>).app = 'journalist-cms';
+      (argsObj.custom as Record<string, unknown>).nodeVersion = process.version;
     }
   },
 
   // Filter out specific errors
-  checkIgnore(err, args) {
+  checkIgnore(err) {
     // Ignore 404 errors for certain routes
-    if ((err as any)?.message?.includes('Cannot find module')) {
+    const errObj = (err as unknown) as { message?: string };
+    if (errObj?.message?.includes('Cannot find module')) {
       // Only ignore if it's a node_modules issue
       return false;
     }

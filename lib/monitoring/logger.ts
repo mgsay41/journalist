@@ -126,6 +126,7 @@ function writeLog(entry: LogEntry): void {
 export class Logger {
   private requestId?: string;
   private userId?: string;
+  private context?: Record<string, unknown>;
 
   constructor(options?: { requestId?: string; userId?: string }) {
     this.requestId = options?.requestId;
@@ -152,7 +153,7 @@ export class Logger {
     });
 
     // Store context for future logs
-    (logger as any).context = context;
+    logger.context = context;
 
     return logger;
   }
@@ -165,7 +166,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: 'error',
       message,
-      context: { ...(this as any).context, ...context },
+      context: { ...this.context, ...context },
       requestId: this.requestId,
       userId: this.userId,
     });
@@ -179,7 +180,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: 'warn',
       message,
-      context: { ...(this as any).context, ...context },
+      context: { ...this.context, ...context },
       requestId: this.requestId,
       userId: this.userId,
     });
@@ -193,7 +194,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: 'info',
       message,
-      context: { ...(this as any).context, ...context },
+      context: { ...this.context, ...context },
       requestId: this.requestId,
       userId: this.userId,
     });
@@ -207,7 +208,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: 'debug',
       message,
-      context: { ...(this as any).context, ...context },
+      context: { ...this.context, ...context },
       requestId: this.requestId,
       userId: this.userId,
     });

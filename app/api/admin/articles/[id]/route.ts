@@ -28,8 +28,8 @@ function calculateWordCount(content: string): number {
  *
  * Also sanitizes slugs that may contain invalid characters (e.g., Arabic text).
  */
-function sanitizeRequestBody(body: any): any {
-  const sanitized: any = {};
+function sanitizeRequestBody(body: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
     // Convert empty strings to undefined so they're treated as "not provided"
     if (value === '') {
@@ -306,7 +306,7 @@ export const PUT = withAuthCsrf(async (
     }
 
     // Disconnect existing categories and tags if provided
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       ...(title !== undefined && { title }),
       ...(slug !== undefined && { slug }),
       ...(sanitizedContent !== undefined && {

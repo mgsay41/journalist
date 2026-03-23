@@ -399,7 +399,7 @@ export async function validateRequest(
  * @param options - Validation options
  * @returns Wrapped handler with validation
  */
-export function withValidation<T extends any[]>(
+export function withValidation<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>,
   options: {
     maxBodySize?: number;
@@ -442,16 +442,16 @@ export function sanitizeResponse<T>(
 
   for (const field of sensitiveFields) {
     if (field in sanitized) {
-      (sanitized as any)[field] = '[REDACTED]';
+      (sanitized as Record<string, unknown>)[field] = '[REDACTED]';
     }
   }
 
   // Recursively sanitize nested objects
   for (const [key, value] of Object.entries(sanitized)) {
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      (sanitized as any)[key] = sanitizeResponse(value, sensitiveFields);
+      (sanitized as Record<string, unknown>)[key] = sanitizeResponse(value, sensitiveFields);
     } else if (Array.isArray(value)) {
-      (sanitized as any)[key] = value.map(item =>
+      (sanitized as Record<string, unknown>)[key] = value.map((item: unknown) =>
         typeof item === 'object' && item !== null
           ? sanitizeResponse(item, sensitiveFields)
           : item

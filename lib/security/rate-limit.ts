@@ -197,7 +197,7 @@ export async function checkRateLimit(
  * @param options - Rate limit options
  * @returns Wrapped handler with rate limiting
  */
-export function withRateLimit<T extends any[]>(
+export function withRateLimit<T extends unknown[]>(
   handler: (...args: T) => Promise<Response>,
   options: RateLimitOptions
 ) {

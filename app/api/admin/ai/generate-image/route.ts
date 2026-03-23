@@ -16,7 +16,9 @@ import {
   generateNanoBananaImageSaved,
   safeGenerateNanoBananaImage,
   isNanoBananaConfigured,
+  type NanoBananaModel,
 } from '@/lib/nanobanana';
+import type { ImageModel } from '@/lib/pollinations';
 
 // Rate limiting configuration - stricter for image generation
 const RATE_LIMIT = {
@@ -140,7 +142,7 @@ async function handleGenerateImage(req: NextRequest) {
         const nanoResult = await generateNanoBananaImageSaved(
           {
             prompt: finalPrompt,
-            model: model as any,
+            model: model as NanoBananaModel,
             width,
             height,
             seed: seed ? Number(seed) : undefined,
@@ -158,7 +160,7 @@ async function handleGenerateImage(req: NextRequest) {
       } else {
         const nanoResult = await generateNanoBananaImage({
           prompt: finalPrompt,
-          model: model as any,
+          model: model as NanoBananaModel,
           width,
           height,
           seed: seed ? Number(seed) : undefined,
@@ -178,7 +180,7 @@ async function handleGenerateImage(req: NextRequest) {
         width,
         height,
         seed,
-        model: model as any,
+        model: model as ImageModel,
         enhance: false, // Already enhanced above
         noLogo: true,
         private: false,
@@ -202,7 +204,7 @@ async function handleGenerateImage(req: NextRequest) {
           // Fallback to direct URL
           if (!width && !height) {
             const pollResult = generateImageWithAspectRatio(finalPrompt, aspectRatio, {
-              model: model as any,
+              model: model as ImageModel,
               seed,
               enhance: false,
               noLogo: true,
@@ -216,7 +218,7 @@ async function handleGenerateImage(req: NextRequest) {
         // Generate with aspect ratio if no custom dimensions
         if (!width && !height) {
           result = generateImageWithAspectRatio(finalPrompt, aspectRatio, {
-            model: model as any,
+            model: model as ImageModel,
             seed,
             enhance: false,
             noLogo: true,
@@ -324,7 +326,7 @@ async function handleBatchGenerate(req: NextRequest) {
         // Use Nano Banana
         const result = await generateNanoBananaImage({
           prompt: finalPrompt,
-          model: model as any,
+          model: model as NanoBananaModel,
           width,
           height,
         });
@@ -339,7 +341,7 @@ async function handleBatchGenerate(req: NextRequest) {
         // Use Pollinations
         const pollResult = !width && !height
           ? generateImageWithAspectRatio(finalPrompt, aspectRatio, {
-              model: model as any,
+              model: model as ImageModel,
               enhance: false,
               noLogo: true,
             })
@@ -347,7 +349,7 @@ async function handleBatchGenerate(req: NextRequest) {
               prompt: finalPrompt,
               width,
               height,
-              model: model as any,
+              model: model as ImageModel,
               enhance: false,
               noLogo: true,
             });

@@ -41,8 +41,8 @@ export function SeoScorePanel({
 
   // Debounced analysis
   useEffect(() => {
-    setIsAnalyzing(true);
     const timer = setTimeout(() => {
+      setIsAnalyzing(true);
       const articleContent: ArticleContent = {
         title,
         content,

@@ -51,7 +51,10 @@ export function TableOfContents({
       });
     });
 
-    setHeadings(extractedHeadings);
+    const timer = setTimeout(() => {
+      setHeadings(extractedHeadings);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [contentId, maxDepth]);
 
   // Set up intersection observer for active heading

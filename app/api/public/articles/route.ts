@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * ARTICLES_PER_PAGE;
 
     // Build where clause
-    const where: any = {
+    const where: Record<string, unknown> = {
       status: 'published',
       publishedAt: { lte: new Date() },
     };

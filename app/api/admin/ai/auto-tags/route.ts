@@ -134,7 +134,7 @@ ${tagList || 'لا توجد وسوم'}
 
     // Enrich selected tags with IDs
     if (aiResult.selectedTags && Array.isArray(aiResult.selectedTags)) {
-      aiResult.selectedTags = aiResult.selectedTags.map((tag: any) => {
+      aiResult.selectedTags = aiResult.selectedTags.map((tag: { name: string; confidence: number; relevance: string; reason: string }) => {
         const existingTag = existingTags.find(t => t.name === tag.name);
         return {
           ...tag,

@@ -114,7 +114,7 @@ export function AiOutliner({ onOutlineSelect, onContentInsert, className = '' }:
       if (data.success && data.outline) {
         setOutline(data.outline);
         // Select all sections by default
-        setSelectedSections(new Set(data.outline.outline.map((_: any, i: number) => i)));
+        setSelectedSections(new Set(data.outline.outline.map((_: unknown, i: number) => i)));
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {

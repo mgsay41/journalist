@@ -211,7 +211,7 @@ function convertToApiError(error: unknown): ApiError {
 
   // Error with status property (Next.js error)
   if (error && typeof error === 'object' && 'status' in error) {
-    const statusCode = (error as any).status;
+    const statusCode = (error as { status: number }).status;
     if (statusCode === 401) {
       return new ApiError(401, ErrorCode.UNAUTHORIZED);
     }
@@ -281,7 +281,7 @@ export function handleError(error: unknown, requestId?: string): NextResponse<Er
  * @param handler - Async route handler
  * @returns Wrapped handler with error handling
  */
-export function withErrorHandler<T extends any[]>(
+export function withErrorHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>
 ): (...args: T) => Promise<NextResponse> {
   return async (...args: T): Promise<NextResponse> => {

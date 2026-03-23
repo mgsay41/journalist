@@ -36,14 +36,14 @@ export function VoiceInputButton({
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      return;
+    if (!SpeechRecognitionAPI) {
+      const timer = setTimeout(() => { setIsSupported(false); }, 0);
+      return () => clearTimeout(timer);
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionAPI();
     recognition.lang = language;
     recognition.continuous = continuous;
     recognition.interimResults = false;
@@ -147,8 +147,8 @@ export default VoiceInputButton;
 // Type declarations for Web Speech API
 declare global {
   interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
   }
 
   interface SpeechRecognitionEvent extends Event {
@@ -169,9 +169,9 @@ declare global {
     start(): void;
     stop(): void;
     abort(): void;
-    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+    onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+    onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
   }
 }

@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
         name,
         slug,
         description: description || null,
-        color: (body as any).color || '#3b82f6',
+        color: (body as Record<string, unknown>).color as string || '#3b82f6',
         parentId: parentId || null,
       },
       include: {

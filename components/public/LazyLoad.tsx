@@ -22,12 +22,14 @@ export function LazyLoad({ children, fallback }: LazyLoadProps) {
 /**
  * Higher-order component for lazy loading with error boundary
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createLazyComponent<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   fallback?: ReactNode
 ) {
   const LazyComponent = lazy(importFn);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function WrappedLazyComponent(props: any) {
     return (
       <Suspense fallback={fallback || <Loading />}>

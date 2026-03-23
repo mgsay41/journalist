@@ -18,7 +18,7 @@ export function sanitizeHtml(html: string): string {
   if (!html) return '';
 
   // Remove dangerous tags and attributes
-  let sanitized = html
+  const sanitized = html
     // Remove script tags and content
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     // Remove style tags
