@@ -309,9 +309,12 @@ async function RelatedArticlesSection({
   if (formatted.length === 0) return null;
 
   return (
-    <section className="related-articles border-t border-border bg-muted/30 py-8">
+    <section
+      className="related-articles py-10 md:py-14"
+      style={{ background: 'var(--muted)', borderTop: '2px solid var(--border)' }}
+    >
       <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <RelatedArticles articles={formatted} />
         </div>
       </div>
@@ -421,106 +424,152 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-
-      {/* Breadcrumb */}
+      {/* ── Breadcrumb ── */}
       {article.categories.length > 0 && (
-        <nav className="border-b border-border" style={{ background: 'var(--muted)' }}>
-          <div className="container mx-auto px-4 py-3">
-            <ol className="flex items-center gap-2 text-xs text-muted-foreground">
-              <li>
-                <Link href="/" className="hover:text-accent transition-colors">الرئيسية</Link>
+        <nav aria-label="مسار التنقل" style={{ background: 'var(--muted)', borderBottom: '1px solid var(--border)' }}>
+          <div className="container mx-auto px-4 py-2.5">
+            <ol className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto">
+              <li className="shrink-0">
+                <Link href="/" className="hover:text-accent transition-colors font-medium">
+                  الرئيسية
+                </Link>
               </li>
-              <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <li>
-                <a href={`/category/${article.categories[0].slug}`} className="hover:text-accent transition-colors">
+              <li aria-hidden="true" className="shrink-0">
+                <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </li>
+              <li className="shrink-0">
+                <a
+                  href={`/category/${article.categories[0].slug}`}
+                  className="hover:text-accent transition-colors"
+                >
                   {article.categories[0].name}
                 </a>
               </li>
-              <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <li className="text-foreground line-clamp-1 font-medium">{article.title}</li>
+              <li aria-hidden="true" className="shrink-0">
+                <svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </li>
+              <li className="text-foreground font-medium truncate min-w-0">{article.title}</li>
             </ol>
           </div>
         </nav>
       )}
 
-      <article className="py-6 md:py-8">
+      {/* ── Main Article ── */}
+      <article className="py-8 md:py-12">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
+          <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8 lg:gap-10 items-start">
+
+            {/* ── Main Column ── */}
             <div>
               {/* Article Header */}
-            <header className="mb-6">
-              {/* Amber category badges */}
-              {article.categories.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-5">
-                  {article.categories.map((category) => (
-                    <a
-                      key={category.id}
-                      href={`/category/${category.slug}`}
-                      className="text-xs px-3 py-1 bg-accent text-white font-semibold uppercase hover:bg-accent-hover transition-colors"
-                      style={{ letterSpacing: '0.07em' }}
-                    >
-                      {category.name}
-                    </a>
-                  ))}
+              <header className="mb-8">
+
+                {/* Category badges */}
+                {article.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-5">
+                    {article.categories.map((category) => (
+                      <a
+                        key={category.id}
+                        href={`/category/${category.slug}`}
+                        className="inline-block text-xs px-3 py-1 bg-accent text-white font-bold uppercase hover:bg-accent-hover transition-colors"
+                        style={{ letterSpacing: '0.06em' }}
+                      >
+                        {category.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* Title — Amiri display font, fluid sizing */}
+                <h1
+                  className="font-display text-foreground leading-[1.3] mb-5"
+                  style={{ fontSize: 'clamp(1.75rem, 4vw, 3rem)', fontWeight: 700 }}
+                >
+                  {article.title}
+                </h1>
+
+                {/* Excerpt — italic lead with amber accent border */}
+                {article.excerpt && (
+                  <p
+                    className="text-base md:text-lg text-muted-foreground leading-relaxed mb-5"
+                    style={{
+                      borderInlineStart: '3px solid var(--accent)',
+                      paddingInlineStart: '1rem',
+                    }}
+                  >
+                    {article.excerpt}
+                  </p>
+                )}
+
+                {/* Amber rule */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-8 h-0.5 bg-accent shrink-0" />
+                  <div className="flex-1 h-px bg-border" />
                 </div>
-              )}
 
-              {/* Title — Amiri display font */}
-              <h1 className="font-display text-3xl md:text-4xl lg:text-5xl text-foreground leading-tight mb-4"
-                style={{ fontWeight: 700, lineHeight: 1.25 }}>
-                {article.title}
-              </h1>
-
-              {/* Excerpt — italic lead / deck text */}
-              {article.excerpt && (
-                <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-4 italic"
-                  style={{
-                    borderInlineStart: '3px solid var(--accent)',
-                    paddingInlineStart: '1rem',
-                  }}>
-                  {article.excerpt}
-                </p>
-              )}
-
-              {/* Amber rule */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-0.5 bg-accent" />
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              {/* Meta bar */}
-              <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
-                <div className="flex flex-wrap items-center gap-3">
-                  {article.author && (
-                    <div className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-full bg-accent-light flex items-center justify-center text-accent font-bold text-xs shrink-0">
-                        {article.author.name.charAt(0)}
-                      </span>
-                      <span className="font-semibold text-foreground">{article.author.name}</span>
+                {/* Meta bar — stacks on mobile, single row on sm+ */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+                    {article.author && (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-accent font-bold text-sm shrink-0"
+                          style={{
+                            background: 'var(--accent-light)',
+                            border: '1.5px solid var(--accent)',
+                          }}
+                        >
+                          {article.author.name.charAt(0)}
+                        </span>
+                        <div>
+                          <span className="font-semibold text-foreground text-sm leading-tight block">
+                            {article.author.name}
+                          </span>
+                          {article.author.authorTitle && (
+                            <span className="text-xs text-muted-foreground leading-tight block">
+                              {article.author.authorTitle}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {article.author && (
+                      <span aria-hidden="true" className="text-border hidden sm:inline">|</span>
+                    )}
+                    <div className="flex items-center gap-2 text-xs">
+                      <time dateTime={article.publishedAt?.toISOString()}>
+                        {formatDate.format(article.publishedAt!)}
+                      </time>
+                      {article.readingTime && (
+                        <>
+                          <span aria-hidden="true" className="opacity-40">·</span>
+                          <span
+                            className="px-2 py-0.5 text-accent font-semibold"
+                            style={{ background: 'var(--accent-light)', fontSize: '0.7rem' }}
+                          >
+                            {article.readingTime} دقيقة قراءة
+                          </span>
+                        </>
+                      )}
                     </div>
-                  )}
-                  {article.author && <span aria-hidden="true" className="text-border">|</span>}
-                  <time dateTime={article.publishedAt?.toISOString()}>
-                    {formatDate.format(article.publishedAt!)}
-                  </time>
-                  {article.readingTime && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>{article.readingTime} دقيقة قراءة</span>
-                    </>
-                  )}
+                  </div>
+                  <div className="shrink-0">
+                    <TextToSpeech content={article.content} title={article.title} slug={article.slug} />
+                  </div>
                 </div>
-                <TextToSpeech content={article.content} title={article.title} slug={article.slug} />
-              </div>
+              </header>
 
-              {/* Featured Image — Next.js Image for AVIF/WebP, CDN caching, CLS prevention */}
+              {/* Featured Image — full-bleed on mobile, contained on desktop */}
               {article.featuredImage && (
-                <figure className="mt-5 mb-2">
-                  <div className="relative w-full aspect-video">
+                <figure className="-mx-4 sm:mx-0 mb-8">
+                  <div
+                    className="relative w-full aspect-video overflow-hidden"
+                    style={{ boxShadow: '0 4px 32px rgba(26,24,20,0.12)' }}
+                  >
                     <Image
                       src={article.featuredImage.url}
                       alt={article.featuredImage.altText || article.title}
@@ -531,109 +580,166 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                     />
                   </div>
                   {article.featuredImage.caption && (
-                    <figcaption className="text-center text-xs text-muted-foreground mt-3 italic">
+                    <figcaption
+                      className="text-center text-xs text-muted-foreground px-4 sm:px-0"
+                      style={{
+                        borderTop: '1px solid var(--border)',
+                        paddingTop: '0.625rem',
+                        marginTop: '0.625rem',
+                      }}
+                    >
                       {article.featuredImage.caption}
                     </figcaption>
                   )}
                 </figure>
               )}
-            </header>
 
-            {/* Article Content */}
-            <div id="article-content" className="prose prose-lg max-w-none" data-article-url={articleUrl}>
-              <ArticleContent
-                content={article.content}
-                images={allImages}
-                videos={allVideos}
-              />
-            </div>
-
-            {/* Tags */}
-            {article.tags.length > 0 && (
-              <div className="mt-8 pt-6 border-t border-border">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-4" style={{ letterSpacing: '0.08em' }}>
-                  الوسوم
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {article.tags.map((tag) => (
-                    <a
-                      key={tag.id}
-                      href={`/tag/${tag.slug}`}
-                      className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent transition-colors"
-                    >
-                      #{tag.name}
-                    </a>
-                  ))}
-                </div>
+              {/* Article Content */}
+              <div id="article-content" className="prose prose-lg max-w-none" data-article-url={articleUrl}>
+                <ArticleContent
+                  content={article.content}
+                  images={allImages}
+                  videos={allVideos}
+                />
               </div>
-            )}
 
-            {/* Author Bio */}
-            {article.author && article.author.bio && (
-              <div className="mt-8 pt-6 border-t border-border">
-                <div className="p-6" style={{ background: 'var(--muted)', borderInlineStart: '3px solid var(--accent)' }}>
-                  <p className="text-xs font-semibold text-accent uppercase mb-4" style={{ letterSpacing: '0.08em' }}>عن الكاتب</p>
-                  <div className="flex items-start gap-4">
-                    {article.author.image ? (
-                      <img
-                        src={article.author.image}
-                        alt={article.author.name}
-                        className="w-14 h-14 object-cover shrink-0"
-                        style={{ border: '2px solid var(--accent)' }}
-                      />
-                    ) : (
-                      <div className="w-14 h-14 shrink-0 flex items-center justify-center text-xl font-bold text-accent"
-                        style={{ background: 'var(--accent-light)', border: '2px solid var(--accent)' }}>
-                        {article.author.name.charAt(0)}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground text-base">{article.author.name}</p>
-                      {article.author.authorTitle && (
-                        <p className="text-sm text-accent mb-2">{article.author.authorTitle}</p>
-                      )}
-                      <p className="text-sm text-muted-foreground leading-relaxed">{article.author.bio}</p>
-                      {(article.author.twitterUrl || article.author.linkedinUrl) && (
-                        <div className="flex gap-4 mt-3">
-                          {article.author.twitterUrl && (
-                            <a
-                              href={article.author.twitterUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-accent hover:text-accent-hover font-medium transition-colors"
-                            >
-                              X / تويتر ↗
-                            </a>
-                          )}
-                          {article.author.linkedinUrl && (
-                            <a
-                              href={article.author.linkedinUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-accent hover:text-accent-hover font-medium transition-colors"
-                            >
-                              لينكدإن ↗
-                            </a>
-                          )}
+              {/* Tags */}
+              {article.tags.length > 0 && (
+                <div className="mt-10 pt-6 border-t border-border">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1 h-4 bg-accent shrink-0" />
+                    <h3
+                      className="text-xs font-bold text-foreground uppercase"
+                      style={{ letterSpacing: '0.1em' }}
+                    >
+                      الوسوم
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {article.tags.map((tag) => (
+                      <a
+                        key={tag.id}
+                        href={`/tag/${tag.slug}`}
+                        className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent hover:bg-accent-light transition-all duration-200"
+                      >
+                        #{tag.name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Author Bio */}
+              {article.author && article.author.bio && (
+                <div className="mt-10 pt-8 border-t border-border">
+                  <div
+                    className="p-5 sm:p-6"
+                    style={{
+                      background: 'var(--muted)',
+                      borderInlineStart: '3px solid var(--accent)',
+                      boxShadow: 'var(--shadow-sm)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-1 h-4 bg-accent shrink-0" />
+                      <p
+                        className="text-xs font-bold text-accent uppercase"
+                        style={{ letterSpacing: '0.1em' }}
+                      >
+                        عن الكاتب
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-4">
+                      {article.author.image ? (
+                        <img
+                          src={article.author.image}
+                          alt={article.author.name}
+                          className="w-14 h-14 object-cover shrink-0"
+                          style={{ border: '2px solid var(--accent)' }}
+                        />
+                      ) : (
+                        <div
+                          className="w-14 h-14 shrink-0 flex items-center justify-center text-xl font-bold text-accent"
+                          style={{
+                            background: 'var(--accent-light)',
+                            border: '2px solid var(--accent)',
+                          }}
+                        >
+                          {article.author.name.charAt(0)}
                         </div>
                       )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-foreground text-base leading-tight">
+                          {article.author.name}
+                        </p>
+                        {article.author.authorTitle && (
+                          <p className="text-sm text-accent mt-0.5 mb-2">
+                            {article.author.authorTitle}
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {article.author.bio}
+                        </p>
+                        {(article.author.twitterUrl || article.author.linkedinUrl) && (
+                          <div className="flex gap-4 mt-3">
+                            {article.author.twitterUrl && (
+                              <a
+                                href={article.author.twitterUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-accent hover:text-accent-hover font-semibold transition-colors"
+                              >
+                                X / تويتر ↗
+                              </a>
+                            )}
+                            {article.author.linkedinUrl && (
+                              <a
+                                href={article.author.linkedinUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-accent hover:text-accent-hover font-semibold transition-colors"
+                              >
+                                لينكدإن ↗
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Mobile Share — card with header */}
+              <div className="mt-8 lg:hidden">
+                <div
+                  className="border border-border overflow-hidden"
+                  style={{ boxShadow: 'var(--shadow-sm)' }}
+                >
+                  <div
+                    className="flex items-center gap-2 px-4 py-3 border-b border-border"
+                    style={{ background: 'var(--muted)' }}
+                  >
+                    <div className="w-1 h-4 bg-accent shrink-0" />
+                    <span
+                      className="text-xs font-bold text-foreground uppercase"
+                      style={{ letterSpacing: '0.08em' }}
+                    >
+                      مشاركة المقال
+                    </span>
+                  </div>
+                  <div style={{ background: 'var(--card)' }}>
+                    <SocialShare title={article.title} url={`/article/${slug}`} />
+                  </div>
+                </div>
               </div>
-            )}
 
-            {/* Share (Mobile) */}
-            <div className="mt-6 pt-6 border-t border-border lg:hidden">
-              <SocialShare title={article.title} url={`/article/${slug}`} />
+              {/* Font size controls — sticky within article column only */}
+              <ReadingSettings position="sticky" showLabel={false} />
             </div>
 
-            {/* Font size controls — sticky within article column only */}
-            <ReadingSettings position="sticky" showLabel={false} />
-            </div>
-
-            {/* Sidebar */}
-            <div className="hidden lg:flex flex-col gap-4">
+            {/* ── Sidebar ── */}
+            <div className="hidden lg:flex flex-col gap-5">
               {/* Share Card */}
               <SocialShare title={article.title} url={`/article/${slug}`} variant="sidebar" />
 
@@ -657,8 +763,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           tagIds={tagIds}
         />
       </Suspense>
-
-
     </PublicLayout>
   );
 }
