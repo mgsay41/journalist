@@ -227,7 +227,7 @@ export async function validateRequestBodySize(request: NextRequest): Promise<Val
     if (size > VALIDATION_CONFIG.MAX_BODY_SIZE) {
       return {
         valid: false,
-        error: 'حجم الطلب كبير جداً',
+        error: 'حجم البيانات كبير جداً',
         statusCode: 413,
       };
     }
@@ -293,7 +293,7 @@ export function validateJsonBody(body: unknown, schema?: z.ZodSchema): Validatio
   if (typeof body !== 'object' || body === null) {
     return {
       valid: false,
-      error: 'نص الطلب غير صالح',
+      error: 'البيانات المرسلة غير صالحة',
       statusCode: 400,
     };
   }
@@ -383,7 +383,7 @@ export async function validateRequest(
       // Body not JSON or invalid JSON
       return {
         valid: false,
-        error: 'نص الطلب غير صالح',
+        error: 'البيانات المرسلة غير صالحة',
         statusCode: 400,
       };
     }

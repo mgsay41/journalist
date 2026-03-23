@@ -85,7 +85,7 @@ export function AdminTopBar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 bg-card border-b border-border",
+        "sticky top-0 z-30 bg-card/95 backdrop-blur-sm border-b border-border shadow-sm",
         "h-14 flex items-center justify-between px-6",
         className,
       )}
@@ -102,11 +102,14 @@ export function AdminTopBar({
         <NotificationBell />
         {actions}
 
+        {/* Separator */}
+        <div className="w-px h-6 bg-border hidden sm:block" />
+
         {/* User menu */}
         <div className="flex items-center gap-3">
           <div className="text-end hidden sm:block">
             <p
-              className="text-sm font-medium text-foreground"
+              className="text-sm font-semibold text-foreground"
               style={{ lineHeight: 1, marginBottom: 3 }}
             >
               {userName || "المدير"}
@@ -120,16 +123,16 @@ export function AdminTopBar({
           </div>
 
           <div className="relative group">
-            <button className="flex items-center gap-2 p-1 rounded-lg hover:bg-muted transition-colors">
+            <button className="flex items-center gap-2 p-1 rounded-xl hover:bg-muted transition-colors">
               {userImage ? (
                 <img
                   src={userImage}
                   alt={userName || "المدير"}
-                  className="w-9 h-9 rounded-full object-cover"
+                  className="w-9 h-9 rounded-full object-cover ring-2 ring-border"
                 />
               ) : (
-                <div className="w-9 h-9 bg-muted rounded-full flex items-center justify-center">
-                  <span className="text-foreground text-sm font-semibold">
+                <div className="w-9 h-9 bg-linear-to-br from-accent/20 to-accent/5 border border-accent/20 rounded-full flex items-center justify-center">
+                  <span className="text-accent text-sm font-bold">
                     {userName && userName.length > 0 ? userName.charAt(0) : "م"}
                   </span>
                 </div>

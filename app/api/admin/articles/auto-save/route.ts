@@ -73,25 +73,16 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Generate slug from title if not set
-      const slug = title
-        .trim()
-        .toLowerCase()
-        .replace(/[\s\Wa-z0-9]+/g, '-') // Replace non-Arabic/non-alphanumeric with hyphens
-        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
-        .substring(0, 100);
-
       // Calculate word count
       const plainText = content.replace(/<[^>]*>/g, '').trim();
       const wordCount = plainText ? plainText.split(/\s+/).length : 0;
       const readingTime = Math.ceil(wordCount / 200);
 
-      // Update the article
+      // Update the article (do not regenerate slug - preserves existing URL)
       const updatedArticle = await prisma.article.update({
         where: { id: articleId },
         data: {
           title: title.trim(),
-          slug,
           content,
           excerpt: excerpt?.trim() || null,
           metaTitle: metaTitle?.trim() || null,
@@ -116,12 +107,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a new draft article
-    const slug = title
+    // Regex keeps Arabic, Latin, and digits; replaces spaces with hyphens
+    const baseSlug = title
       .trim()
-      .toLowerCase()
-      .replace(/[\s\Wa-z0-9]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9-]/g, '')
       .replace(/^-+|-+$/g, '')
-      .substring(0, 100);
+      .substring(0, 80);
+    const slug = baseSlug || `draft-${Date.now()}`;
 
     // Calculate word count
     const plainText = content.replace(/<[^>]*>/g, '').trim();

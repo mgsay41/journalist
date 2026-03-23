@@ -176,7 +176,7 @@ function parseJsonResponse<T>(text: string): T {
     console.error("Original length:", text.length);
     console.error("Cleaned jsonStr:", jsonStr.substring(0, 1500));
     throw new GeminiError(
-      "فشل في تحليل استجابة JSON من النموذج",
+      "فشل في معالجة رد الذكاء الاصطناعي",
       "INVALID_RESPONSE"
     );
   }

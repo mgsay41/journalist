@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Alert } from '@/components/ui/Alert';
 import { SimplifiedArticleEditor } from '@/components/admin/SimplifiedArticleEditor';
+import { fetchWithCsrf } from '@/lib/security/csrf-client';
 
 export default function NewArticlePage() {
   const router = useRouter();
@@ -18,30 +19,35 @@ export default function NewArticlePage() {
   const [error, setError] = useState<string | null>(null);
 
   // Handle article completion - save as draft and redirect to AI analysis page
-  const handleComplete = useCallback(async (data: { title: string; content: string }) => {
+  const handleComplete = useCallback(async (data: { title: string; content: string; articleId?: string }) => {
     setTitle(data.title);
     setContent(data.content);
     setError(null);
     setIsCreating(true);
 
     try {
-      // Create the article as a draft first
-      const response = await fetch('/api/admin/articles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: data.title,
-          content: data.content,
-          status: 'draft',
-        }),
-      });
+      let articleId = data.articleId;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'فشل في إنشاء المقال');
+      // If auto-save already created the article, skip creating a duplicate
+      if (!articleId) {
+        const response = await fetchWithCsrf('/api/admin/articles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: data.title,
+            content: data.content,
+            status: 'draft',
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'فشل في إنشاء المقال');
+        }
+
+        const article = await response.json();
+        articleId = article.id;
       }
-
-      const article = await response.json();
 
       // Clear local draft
       try {
@@ -51,7 +57,7 @@ export default function NewArticlePage() {
       }
 
       // Redirect to AI analysis page
-      router.push(`/admin/articles/${article.id}/ai-complete`);
+      router.push(`/admin/articles/${articleId}/ai-complete`);
     } catch (err) {
       console.error('Create error:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء المقال');

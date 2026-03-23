@@ -98,7 +98,7 @@ export function AiPanel({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "فشل في الاتصال بالخادم");
+        throw new Error(data.error || "فشل الاتصال بالنظام");
       }
 
       return response.json();

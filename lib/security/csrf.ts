@@ -282,9 +282,6 @@ export async function validateCsrfMiddleware(request: NextRequest): Promise<Next
     );
   }
 
-  // Token is valid, invalidate it (one-time use)
-  await invalidateCsrfToken(csrfToken);
-
   return null;
 }
 

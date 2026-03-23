@@ -514,7 +514,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                     </>
                   )}
                 </div>
-                <TextToSpeech content={article.content} title={article.title} />
+                <TextToSpeech content={article.content} title={article.title} slug={article.slug} />
               </div>
 
               {/* Featured Image — Next.js Image for AVIF/WebP, CDN caching, CLS prevention */}

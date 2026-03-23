@@ -186,7 +186,7 @@ export function AiImageGenerator({
         setError(data.error?.message || 'فشل توليد الوصف');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'حدث خطأ أثناء الاتصال بالخادم');
+      setError(err instanceof Error ? err.message : 'حدث خطأ في الاتصال');
     } finally {
       setGeneratingPrompt(false);
     }
@@ -224,7 +224,7 @@ export function AiImageGenerator({
         setError(data.error?.message || 'فشل توليد الخيارات');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'حدث خطأ أثناء الاتصال بالخادم');
+      setError(err instanceof Error ? err.message : 'حدث خطأ في الاتصال');
     } finally {
       setGeneratingPrompt(false);
     }
@@ -288,7 +288,7 @@ export function AiImageGenerator({
         setError(data.error?.message || 'فشل توليد الصورة');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'حدث خطأ أثناء الاتصال بالخادم');
+      setError(err instanceof Error ? err.message : 'حدث خطأ في الاتصال');
     } finally {
       setGeneratingImage(false);
     }

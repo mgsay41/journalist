@@ -21,10 +21,10 @@ export function AiPanelError({ error, onDismiss, onRetry, isRetrying = false }: 
       return 'حدث خطأ في معالجة الاستجابة. حاول مرة أخرى.';
     }
     if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-      return 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
+      return 'تعذر الاتصال. تحقق من اتصالك بالإنترنت.';
     }
     if (errorMessage.includes('timeout')) {
-      return 'انتهت مهلة الطلب. حاول مرة أخرى لاحقاً.';
+      return 'انتهت مهلة الانتظار. حاول مرة أخرى لاحقاً.';
     }
     if (errorMessage.includes('rate') || errorMessage.includes('limit')) {
       return 'تم تجاوز الحد المسموح. انتظر قليلاً ثم حاول مجدداً.';

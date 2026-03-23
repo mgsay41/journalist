@@ -110,7 +110,7 @@ function parseJsonResponse<T>(text: string): T {
     console.error("Cleaned jsonStr:", jsonStr.substring(0, 1500));
     console.error("Parse error:", parseError);
     throw new GeminiError(
-      "فشل في تحليل استجابة JSON من النموذج",
+      "فشل في معالجة رد الذكاء الاصطناعي",
       "INVALID_RESPONSE"
     );
   }

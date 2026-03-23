@@ -51,7 +51,8 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
         dir="rtl"
       >
         {/* Header area - Logo + Collapse button (both on right side in RTL) */}
-        <div className="h-14 flex items-center justify-start px-3 border-b border-border gap-2">
+        <div className="h-14 flex items-center justify-start px-3 border-b border-border gap-2 relative">
+          <div className="absolute bottom-0 inset-x-0 h-px bg-linear-to-l from-accent/40 via-accent/10 to-transparent" />
           {/* Collapse button - on the right of the logo (right side in RTL) */}
           <button
             onClick={onToggle}
@@ -91,9 +92,12 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
           {adminNavConfig.map((section) => (
             <div key={section.title} className="mb-4">
               {!isCollapsed && (
-                <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wide text-accent">
-                  {section.title}
-                </p>
+                <div className="flex items-center gap-2 px-3 mb-2">
+                  <div className="w-0.5 h-3.5 rounded-full bg-accent/60" />
+                  <p className="text-xs font-bold uppercase tracking-widest text-accent/80">
+                    {section.title}
+                  </p>
+                </div>
               )}
               <ul className="space-y-0.5">
                 {section.items.map((item) => (
@@ -113,7 +117,7 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
         </nav>
 
         {/* Footer - View Site Link */}
-        <div className="border-t border-border p-2">
+        <div className="border-t border-border p-2 bg-muted/30">
           <Link
             href="/"
             target="_blank"
@@ -190,8 +194,8 @@ function NavItemComponent({
             'flex items-center gap-2 px-2 py-2 rounded-lg transition-colors text-sm',
             'w-full no-underline',
             isActive
-              ? 'border-e-2 border-accent bg-accent/8 text-accent font-medium'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+              ? 'border-e-2 border-accent bg-accent/12 text-accent font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/80',
             isChildActive && !isActive && 'bg-muted text-foreground',
             isCollapsed && 'justify-center px-2'
           )}
@@ -251,8 +255,8 @@ function NavItemComponent({
                   className={cn(
                     'flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-xs no-underline',
                     isChildActiveItem
-                      ? 'border-e-2 border-accent/60 bg-accent/5 text-accent font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                      ? 'border-e-2 border-accent/60 bg-accent/8 text-accent font-semibold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                   )}
                 >
                   {child.icon && (

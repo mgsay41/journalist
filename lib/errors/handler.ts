@@ -89,20 +89,20 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.INVALID_CREDENTIALS]: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
   [ErrorCode.ACCOUNT_LOCKED]: 'الحساب مؤمن مؤقتاً',
   [ErrorCode.IP_LOCKED]: 'عنوان IP مؤمن مؤقتاً',
-  [ErrorCode.SESSION_EXPIRED]: 'انتهت صلاحية الجلسة',
+  [ErrorCode.SESSION_EXPIRED]: 'انتهت صلاحية الدخول',
 
   [ErrorCode.FORBIDDEN]: 'ممنوع - ليس لديك صلاحية كافية',
   [ErrorCode.INSUFFICIENT_PERMISSIONS]: 'صلاحيات غير كافية',
 
   [ErrorCode.NOT_FOUND]: 'غير موجود',
   [ErrorCode.ALREADY_EXISTS]: 'موجود بالفعل',
-  [ErrorCode.CONFLICT]: 'تعارض في البيانات',
+  [ErrorCode.CONFLICT]: 'يوجد تضارب في البيانات',
   [ErrorCode.RESOURCE_LOCKED]: 'المورد مؤمن',
 
   [ErrorCode.RATE_LIMITED]: 'طلبات كثيرة جداً. يرجى المحاولة مرة أخرى لاحقاً',
 
   [ErrorCode.INTERNAL_ERROR]: 'حدث خطأ غير متوقع',
-  [ErrorCode.DATABASE_ERROR]: 'خطأ في قاعدة البيانات',
+  [ErrorCode.DATABASE_ERROR]: 'خطأ في النظام',
   [ErrorCode.EXTERNAL_SERVICE_ERROR]: 'خطأ في خدمة خارجية',
   [ErrorCode.SERVICE_UNAVAILABLE]: 'الخدمة غير متوفرة حالياً',
 };

@@ -45,6 +45,7 @@
     "framer-motion": "^12.38.0",
     "goey-toast": "^0.3.0",
     "lru-cache": "^11.2.7",
+    "msedge-tts": "^2.0.4",
     "next": "16.1.6",
     "prisma": "^7.3.0",
     "react": "19.2.3",

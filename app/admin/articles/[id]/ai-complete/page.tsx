@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Loading';
 import { ArticleCompletionResults, CompletionResults } from '@/components/admin/ArticleCompletionResults';
+import { fetchWithCsrf } from '@/lib/security/csrf-client';
 
 // Progress steps for the AI completion process
 const COMPLETION_STEPS = [
   { id: 'analyzing', label: 'تحليل المحتوى...' },
   { id: 'keywords', label: 'استخراج الكلمات المفتاحية...' },
   { id: 'categories', label: 'تصنيف المقال...' },
-  { id: 'meta', label: 'توليد البيانات الوصفية...' },
+  { id: 'meta', label: 'توليد وصف المقال...' },
   { id: 'grammar', label: 'التدقيق اللغوي...' },
   { id: 'seo', label: 'تحليل SEO...' },
 ];
@@ -137,7 +138,7 @@ export default function AiCompletePage() {
   // Save AI completion data to the article
   const saveAiCompletionData = async (results: CompletionResults) => {
     try {
-      await fetch(`/api/admin/articles/${articleId}`, {
+      await fetchWithCsrf(`/api/admin/articles/${articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,7 +205,7 @@ export default function AiCompletePage() {
       }
 
       // Update the article as draft
-      const response = await fetch(`/api/admin/articles/${articleId}`, {
+      const response = await fetchWithCsrf(`/api/admin/articles/${articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -370,7 +371,7 @@ export default function AiCompletePage() {
                   جاري تحليل المقال...
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  يقوم الذكاء الاصطناعي بتحليل المحتوى وتوليد البيانات الوصفية
+                  يقوم الذكاء الاصطناعي بتحليل المحتوى وإعداد وصف المقال
                 </p>
               </div>
 
@@ -435,7 +436,7 @@ export default function AiCompletePage() {
             </div>
             <h2 className="text-xl font-bold text-foreground mb-2">تحليل المقال بالذكاء الاصطناعي</h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              سيقوم الذكاء الاصطناعي بتحليل المقال واقتراح الكلمات المفتاحية والتصنيفات والبيانات الوصفية المناسبة
+              سيقوم الذكاء الاصطناعي بتحليل المقال واقتراح الكلمات المفتاحية والتصنيفات ووصف المقال المناسب
             </p>
             <Button onClick={runAiCompletion} size="lg" className="gap-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

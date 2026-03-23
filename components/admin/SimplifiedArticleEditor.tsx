@@ -47,7 +47,7 @@ interface SimplifiedArticleEditorProps {
   initialTitle?: string;
   initialContent?: string;
   isCompleting?: boolean;
-  onComplete: (data: { title: string; content: string }) => void;
+  onComplete: (data: { title: string; content: string; articleId?: string }) => void;
   onSaveDraft?: (data: { title: string; content: string }) => void;
   // Inline suggestions support
   enableInlineSuggestions?: boolean;
@@ -264,8 +264,8 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
   // Handle complete article
   const handleComplete = useCallback(() => {
     if (!title.trim() || !content.trim()) return;
-    onComplete({ title: title.trim(), content: content.trim() });
-  }, [title, content, onComplete]);
+    onComplete({ title: title.trim(), content: content.trim(), articleId });
+  }, [title, content, articleId, onComplete]);
 
   // Calculate word count and reading time
   const wordCount = content.replace(/<[^>]*>/g, '').split(/\s+/).filter(word => word.length > 0).length;
@@ -477,22 +477,22 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                جاري الحفظ على الخادم...
+                جاري الحفظ التلقائي...
               </span>
             ) : serverSaveError ? (
               <span className="flex items-center gap-2 text-danger bg-danger/10 px-3 py-1.5 rounded-lg">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                فشل الحفظ على الخادم
+                فشل الحفظ التلقائي
               </span>
             ) : serverLastSaved ? (
-              <span className="flex items-center gap-2 text-info bg-info/10 px-3 py-1.5 rounded-lg" title="محفوظ بأمان على الخادم">
+              <span className="flex items-center gap-2 text-info bg-info/10 px-3 py-1.5 rounded-lg" title="محفوظ تلقائياً بأمان">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                   <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                 </svg>
-                محفوظ على الخادم: {serverLastSaved.toLocaleTimeString('ar-SA')}
+                محفوظ تلقائياً: {serverLastSaved.toLocaleTimeString('ar-SA')}
               </span>
             ) : null}
           </div>
@@ -579,7 +579,7 @@ export const SimplifiedArticleEditor = forwardRef<SimplifiedArticleEditorRef, Si
               )}
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-info shrink-0" />
-                يتم الحفظ التلقائي محلياً كل ثانية وعلى الخادم كل 30 ثانية
+                يتم الحفظ التلقائي محلياً كل ثانية وفي قاعدة البيانات كل 30 ثانية
               </li>
             </ul>
             <p className="text-sm text-muted-foreground border-t border-border pt-4">
