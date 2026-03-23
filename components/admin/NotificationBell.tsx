@@ -14,7 +14,8 @@ interface Notification {
 }
 
 interface NotificationData {
-  stats: { total: number; unread: number };
+  total: number;
+  unread: number;
   recent: Notification[];
 }
 
@@ -115,7 +116,7 @@ export function NotificationBell() {
     }
   };
 
-  const unread = data?.stats.unread ?? 0;
+  const unread = data?.unread ?? 0;
   const notifications = data?.recent ?? [];
 
   return (
