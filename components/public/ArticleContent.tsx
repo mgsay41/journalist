@@ -74,6 +74,7 @@ export function ArticleContent({ content, images = [], videos = [] }: ArticleCon
         .article-content {
           direction: rtl;
           text-align: right;
+          font-size: var(--article-font-size, 18px);
         }
 
         /* ── Drop cap on first paragraph ── */

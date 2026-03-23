@@ -25,7 +25,7 @@ const cairo = Cairo({
 const amiri = Amiri({
   subsets: ["arabic", "latin"],
   variable: "--font-amiri",
-  display: "swap",
+  display: "optional", // Don't block rendering; skip if not cached
   weight: ["400", "700"],
 });
 
@@ -80,7 +80,7 @@ export default async function RootLayout({
         {/* Prevent flash of wrong theme (FOUC) by applying class before first paint */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('cms-theme');var d=document.documentElement;if(t==='dark'){d.classList.add('dark')}else if(t==='light'){d.classList.add('light')}else{if(window.matchMedia('(prefers-color-scheme: dark)').matches){d.classList.add('dark')}else{d.classList.add('light')}}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('cms-theme');var d=document.documentElement;if(t==='dark'){d.classList.add('dark')}else{d.classList.add('light')}}catch(e){}})();`,
           }}
         />
       </head>

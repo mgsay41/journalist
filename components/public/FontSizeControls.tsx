@@ -1,8 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
-import { DarkModeToggle } from './DarkModeToggle';
 
 export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
@@ -82,8 +81,13 @@ export function FontSizeProvider({ children, defaultSize = 'medium' }: FontSizeP
     setFontSize('medium');
   }, [setFontSize]);
 
+  const contextValue = useMemo(
+    () => ({ fontSize, setFontSize, increaseFontSize, decreaseFontSize, resetFontSize }),
+    [fontSize, setFontSize, increaseFontSize, decreaseFontSize, resetFontSize]
+  );
+
   return (
-    <FontSizeContext.Provider value={{ fontSize, setFontSize, increaseFontSize, decreaseFontSize, resetFontSize }}>
+    <FontSizeContext.Provider value={contextValue}>
       {children}
     </FontSizeContext.Provider>
   );
@@ -209,7 +213,7 @@ export function ArticleContent({ children, className = '' }: ArticleContentProps
 
 export default FontSizeControls;
 
-// Combined reading settings component (Dark mode + Font size)
+// Font size settings component
 interface ReadingSettingsProps {
   position?: 'fixed' | 'static';
   showLabel?: boolean;
@@ -226,22 +230,18 @@ export function ReadingSettings({
   return (
     <div
       data-reading-settings
-      className={`flex items-center gap-3 bg-card border border-border rounded-lg p-2 shadow-sm ${
+      className={`flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-sm ${
         position === 'fixed' ? 'fixed bottom-4 left-4 z-40' : ''
       } ${orientation === 'vertical' ? 'flex-col' : ''} ${className}`}
     >
-      {showLabel && (
-        <span className="text-xs font-medium text-muted-foreground">إعدادات القراءة:</span>
-      )}
+      {/* Font size label */}
+      <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">حجم الخط</span>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-border" />
 
       {/* Font Size Controls */}
       <FontSizeControls variant="buttons" orientation={orientation} />
-
-      {/* Divider */}
-      <div className={`w-px h-6 bg-border ${orientation === 'vertical' ? 'w-6 h-px' : ''}`} />
-
-      {/* Dark Mode Toggle */}
-      <DarkModeToggle variant="icon" />
     </div>
   );
 }

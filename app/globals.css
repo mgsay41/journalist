@@ -424,14 +424,23 @@ blockquote {
    ══════════════════════════════════════ */
 
 @media print {
+  @page {
+    margin: 2cm;
+  }
+
   body {
     background: white;
     color: black;
     font-size: 12pt;
     line-height: 1.6;
   }
+
   .no-print,
-  header, nav, footer,
+  header, nav, footer, aside,
+  #reading-progress,
+  [data-reading-settings],
+  .social-share,
+  .related-articles,
   [class*="ReadingProgress"],
   [class*="TableOfContents"],
   [class*="SocialShare"],
@@ -442,30 +451,163 @@ blockquote {
   [class*="BreakingNewsBanner"] {
     display: none !important;
   }
+
+  article {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  header h1 {
+    font-size: 18pt;
+    page-break-after: avoid;
+    color: black;
+  }
+
+  header .text-muted-foreground {
+    color: #666;
+  }
+
+  figure img {
+    max-width: 100%;
+    height: auto;
+    page-break-inside: avoid;
+  }
+
+  figcaption {
+    font-size: 10pt;
+    font-style: italic;
+    color: #666;
+  }
+
   .article-content {
     max-width: 100%;
     margin: 0;
     padding: 0;
     font-size: 11pt;
   }
+
   h1 { font-size: 22pt; color: black; font-family: 'Times New Roman', serif; }
   h2 { font-size: 16pt; color: black; font-family: 'Times New Roman', serif; border-top: 1px solid #ccc; }
   h3 { font-size: 13pt; color: black; font-family: 'Times New Roman', serif; }
   a  { color: black; text-decoration: underline; }
+
   blockquote {
     border-color: #666;
     background: transparent;
     font-style: italic;
   }
+
   img {
     max-width: 100% !important;
     page-break-inside: avoid;
   }
+
   p, blockquote, figure {
     page-break-inside: avoid;
   }
+
   h1, h2, h3 {
     page-break-after: avoid;
+  }
+
+  /* Article content area */
+  #article-content {
+    font-size: 12pt;
+    line-height: 1.6;
+  }
+
+  #article-content h1,
+  #article-content h2,
+  #article-content h3,
+  #article-content h4,
+  #article-content h5,
+  #article-content h6 {
+    page-break-after: avoid;
+    color: black;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  #article-content h1 { font-size: 18pt; }
+  #article-content h2 { font-size: 16pt; }
+  #article-content h3 { font-size: 14pt; }
+
+  #article-content p {
+    margin-bottom: 1em;
+    orphans: 3;
+    widows: 3;
+  }
+
+  #article-content img {
+    max-width: 100%;
+    height: auto;
+    page-break-inside: avoid;
+  }
+
+  #article-content blockquote {
+    page-break-inside: avoid;
+    border-inline-start: 3px solid #ccc;
+    padding-inline-start: 1em;
+    margin: 1.5em 0;
+  }
+
+  #article-content pre,
+  #article-content code {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    page-break-inside: avoid;
+  }
+
+  #article-content table {
+    page-break-inside: avoid;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #article-content table th,
+  #article-content table td {
+    border: 1px solid #ddd;
+    padding: 0.5em;
+  }
+
+  #article-content ul,
+  #article-content ol {
+    page-break-inside: avoid;
+  }
+
+  #article-content a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  #article-content a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    word-break: break-all;
+  }
+
+  /* Tags */
+  .flex.flex-wrap.gap-2 a {
+    border: 1px solid #ccc;
+    padding: 0.2em 0.5em;
+    display: inline-block;
+    page-break-inside: avoid;
+  }
+
+  /* Page break utility classes */
+  .page-break-before  { page-break-before: always; }
+  .page-break-after   { page-break-after: always; }
+  .page-break-inside-avoid { page-break-inside: avoid; }
+
+  /* Show article source URL after content (set via data-article-url attribute) */
+  #article-content[data-article-url]::after {
+    content: "مقتبس من: " attr(data-article-url);
+    display: block;
+    margin-top: 2em;
+    font-size: 10pt;
+    color: #666;
+    page-break-before: avoid;
   }
 }
 

@@ -29,24 +29,21 @@ interface ThemeProviderProps {
   defaultTheme?: Theme;
 }
 
-export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return defaultTheme;
+export function ThemeProvider({ children, defaultTheme = 'light' }: ThemeProviderProps) {
+  // Always initialize with defaultTheme so server and client render identically.
+  // localStorage is read after mount in a useEffect to avoid hydration mismatch.
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+
+  // Read persisted preference after hydration
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-      if (stored && ['light', 'dark', 'system'].includes(stored)) return stored;
+      if (stored && ['light', 'dark', 'system'].includes(stored)) {
+        setThemeState(stored);
+      }
     } catch {}
-    return defaultTheme;
-  });
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'light';
-    try {
-      const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-      if (stored === 'dark') return 'dark';
-      if (stored === 'light') return 'light';
-    } catch {}
-    return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
-  });
+  }, []);
 
   // Apply resolved theme class to document root
   useEffect(() => {
