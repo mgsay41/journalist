@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, ChangeEvent } from 'react';
-import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 
 interface TextToSpeechProps {
@@ -22,11 +21,8 @@ function extractText(html: string): string {
   if (typeof document === 'undefined') return html;
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
-  const scripts = tmp.querySelectorAll('script, style');
-  scripts.forEach((script) => script.remove());
-  let text = tmp.textContent || tmp.innerText || '';
-  text = text.replace(/\s+/g, ' ').trim();
-  return text;
+  tmp.querySelectorAll('script, style').forEach((el) => el.remove());
+  return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
 }
 
 function formatTime(secs: number): string {
@@ -62,6 +58,7 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
 
     if (!audioUrl) {
       setIsLoading(true);
+      setIsExpanded(true); // Show player immediately with loading state
       try {
         const text = title ? `${title}. ${extractText(content)}` : extractText(content);
         const res = await fetch('/api/tts', {
@@ -78,7 +75,6 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
         const { url } = await res.json();
         setAudioUrl(url);
         setIsLoading(false);
-        setIsExpanded(true);
 
         if (audioRef.current) {
           audioRef.current.src = url;
@@ -86,9 +82,11 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
         }
       } catch (err) {
         setIsLoading(false);
-        setError(err instanceof Error ? err.message : 'حدث خطأ');
+        setIsExpanded(false);
+        setError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحميل الصوت');
       }
     } else {
+      setIsExpanded(true); // Bug fix: re-expand when replaying after stop
       if (audioRef.current) {
         audioRef.current.play().catch(console.error);
       }
@@ -96,24 +94,18 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
   }, [audioUrl, content, slug, title]);
 
   const handlePause = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    audioRef.current?.pause();
   }, []);
 
   const handleSeek = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-    }
+    if (audioRef.current) audioRef.current.currentTime = time;
     setCurrentTime(time);
   }, []);
 
   const handleRateChange = useCallback((rate: string) => {
     setPlaybackRate(rate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = parseFloat(rate);
-    }
+    if (audioRef.current) audioRef.current.playbackRate = parseFloat(rate);
   }, []);
 
   const handleStop = useCallback(() => {
@@ -133,133 +125,159 @@ export function TextToSpeech({ content, title, slug, className = '' }: TextToSpe
     }
   }, [playbackRate]);
 
-  const handleTimeUpdate = useCallback(() => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  }, []);
-
-  const handleEnded = useCallback(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-  }, []);
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className={className}>
+    <>
+      {/* Hidden audio element */}
       <audio
         ref={audioRef}
         onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onEnded={handleEnded}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
         preload="metadata"
       />
 
-      {error && (
-        <div className="text-xs text-red-500 mb-2">{error}</div>
-      )}
-
-      {!isExpanded && !isPlaying && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handlePlay}
-          disabled={isLoading}
-          title="استماع للمقال"
-        >
-          {isLoading ? (
-            <>
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span className="mr-2">جاري التحضير...</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-              <span className="mr-2">استماع للمقال</span>
-            </>
-          )}
-        </Button>
-      )}
-
-      {isExpanded && (
-        <div className="flex flex-col gap-3 p-3 bg-muted/50 rounded-lg border border-border min-w-[300px]">
-          <div className="flex items-center gap-3">
-            {isPlaying ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handlePause}
-                title="إيقاف مؤقت"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handlePlay}
-                disabled={isLoading}
-                title="تشغيل"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </Button>
-            )}
-
-            <input
-              type="range"
-              min="0"
-              max={duration || 100}
-              step="0.1"
-              value={currentTime}
-              onChange={handleSeek}
-              className="flex-1 h-2 accent-accent cursor-pointer"
-              dir="ltr"
-            />
-
-            <span className="text-xs text-muted-foreground whitespace-nowrap min-w-[70px] text-left" dir="ltr">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleStop}
-              title="إيقاف"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-              </svg>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">سرعة:</span>
-            <Select
-              value={playbackRate}
-              onChange={(e) => handleRateChange(e.target.value)}
-              options={speedOptions}
-              className="w-auto text-xs"
-            />
-          </div>
+      {/* Inline trigger button — hidden once player is open */}
+      {!isExpanded && (
+        <div className={className}>
+          {error && <p className="text-xs text-red-500 mb-1">{error}</p>}
+          <button
+            type="button"
+            onClick={handlePlay}
+            disabled={isLoading}
+            title="استماع للمقال"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+            <span>استماع للمقال</span>
+          </button>
         </div>
       )}
-    </div>
+
+      {/* Floating player bar — fixed at bottom of viewport */}
+      {isExpanded && (
+        <div className="fixed bottom-0 inset-x-0 z-50" dir="rtl">
+          <div className="bg-card/95 backdrop-blur-md border-t border-border shadow-2xl">
+
+            {/* Seekable progress bar */}
+            <div className="relative h-1 bg-muted">
+              {/* Filled track */}
+              <div
+                className="absolute inset-y-0 left-0 bg-accent transition-none"
+                style={{ width: `${progress}%` }}
+              />
+              {/* Invisible range input for interaction */}
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                step="0.1"
+                value={currentTime}
+                onChange={handleSeek}
+                disabled={isLoading || !audioUrl}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-default"
+                dir="ltr"
+                aria-label="تقديم أو ترجيع الصوت"
+              />
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-3 px-4 py-3 max-w-4xl mx-auto">
+
+              {/* Waveform + article info */}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {/* Animated bars */}
+                <div className="flex items-end gap-0.75 h-5 shrink-0" aria-hidden="true">
+                  {[12, 16, 10, 18, 12].map((maxH, i) => (
+                    <div
+                      key={i}
+                      className="w-0.75 rounded-full bg-accent transition-all duration-300"
+                      style={{
+                        height: isPlaying ? `${maxH}px` : '4px',
+                        opacity: isPlaying ? 1 : 0.35,
+                        animation: isPlaying ? `tts-wave ${0.5 + i * 0.1}s ease-in-out ${i * 0.08}s infinite alternate` : 'none',
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Title + time */}
+                <div className="min-w-0">
+                  {title && (
+                    <p className="text-sm font-semibold text-foreground truncate leading-tight">{title}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">
+                    {isLoading
+                      ? 'جاري تحضير الصوت...'
+                      : `${formatTime(currentTime)} / ${formatTime(duration)}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Play / Pause / Loading button */}
+              {isLoading ? (
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 animate-spin text-accent" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={isPlaying ? handlePause : handlePlay}
+                  className="w-10 h-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition-all shrink-0"
+                  title={isPlaying ? 'إيقاف مؤقت' : 'تشغيل'}
+                >
+                  {isPlaying ? (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 translate-x-px" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              {/* Speed */}
+              <Select
+                value={playbackRate}
+                onChange={(e) => handleRateChange(e.target.value)}
+                options={speedOptions}
+                className="w-auto text-xs shrink-0"
+              />
+
+              {/* Close */}
+              <button
+                type="button"
+                onClick={handleStop}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                title="إغلاق المشغل"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Waveform keyframe animation */}
+          <style>{`
+            @keyframes tts-wave {
+              from { transform: scaleY(0.4); }
+              to   { transform: scaleY(1); }
+            }
+          `}</style>
+        </div>
+      )}
+    </>
   );
 }
 

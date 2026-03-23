@@ -40,8 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'النص مطلوب' }, { status: 400 });
     }
 
-    const plainText = extractTextFromHtml(text);
-    const fullText = title ? `${title}. ${plainText}` : plainText;
+    const fullText = extractTextFromHtml(text);
 
     if (fullText.length > MAX_TEXT_LENGTH) {
       return NextResponse.json(
