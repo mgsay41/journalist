@@ -729,7 +729,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                     </span>
                   </div>
                   <div style={{ background: 'var(--card)' }}>
-                    <SocialShare title={article.title} url={`/article/${slug}`} />
+                    <SocialShare title={article.title} url={articleUrl} description={article.excerpt ?? undefined} />
                   </div>
                 </div>
               </div>
@@ -741,7 +741,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
             {/* ── Sidebar ── */}
             <div className="hidden lg:flex flex-col gap-5">
               {/* Share Card */}
-              <SocialShare title={article.title} url={`/article/${slug}`} variant="sidebar" />
+              <SocialShare title={article.title} url={articleUrl} description={article.excerpt ?? undefined} variant="sidebar" />
 
               {article.series && article.series.articles.length > 1 && (
                 <SeriesNavigation

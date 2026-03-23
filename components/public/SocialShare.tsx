@@ -5,29 +5,47 @@ import { useState, useMemo } from 'react';
 interface SocialShareProps {
   title: string;
   url: string;
+  description?: string;
   variant?: 'sidebar' | 'inline';
 }
 
-export function SocialShare({ title, url, variant = 'inline' }: SocialShareProps) {
+export function SocialShare({ title, url, description, variant = 'inline' }: SocialShareProps) {
   const [copied, setCopied] = useState(false);
 
-  const fullUrl = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      return url.startsWith('http') ? url : `${window.location.origin}${url}`;
-    }
-    return url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_APP_URL || ''}${url}`;
-  }, [url]);
+  // Lazy initializer: runs once on mount (client only), never on server
+  // This avoids depending on NEXT_PUBLIC_APP_URL being set
+  const [origin] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? '')
+  );
 
-  const encodedTitle = encodeURIComponent(title);
-  const encodedUrl = encodeURIComponent(fullUrl);
+  const { fullUrl, shareLinks } = useMemo(() => {
+    const base = origin || process.env.NEXT_PUBLIC_APP_URL || '';
+    const resolved = url.startsWith('http') ? url : `${base}${url}`;
 
-  const shareLinks = useMemo(() => ({
-    whatsapp: `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`,
-    twitter: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-    telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`,
-    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-  }), [encodedTitle, encodedUrl]);
+    const encodedUrl = encodeURIComponent(resolved);
+    const encodedTitle = encodeURIComponent(title);
+
+    // Rich share text for messaging apps
+    const lines: string[] = [`📰 ${title}`];
+    if (description?.trim()) lines.push(`\n${description.trim()}`);
+    lines.push(`\n\nاقرأ المقال كاملاً 👇\n${resolved}`);
+    const richText = lines.join('');
+
+    // Telegram: title + description as text, URL passed separately
+    const telegramLines: string[] = [`📰 ${title}`];
+    if (description?.trim()) telegramLines.push(`\n${description.trim()}`);
+
+    return {
+      fullUrl: resolved,
+      shareLinks: {
+        whatsapp: `https://wa.me/?text=${encodeURIComponent(richText)}`,
+        twitter: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+        telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodeURIComponent(telegramLines.join(''))}`,
+        linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+      },
+    };
+  }, [url, origin, title, description]);
 
   const copyToClipboard = async () => {
     try {
