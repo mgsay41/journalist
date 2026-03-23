@@ -31,11 +31,11 @@ export const metadata = {
 export default async function ScheduledPage() {
   return (
     <div className="space-y-6">
-      <div className="border-b border-zinc-200 pb-4">
-        <h1 className="text-2xl font-semibold text-zinc-900">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">
           المقالات المجدولة
         </h1>
-        <p className="text-zinc-600 mt-1">
+        <p className="text-muted-foreground mt-1">
           إدارة ومراقبة المقالات المجدولة للنشر
         </p>
       </div>
@@ -71,18 +71,18 @@ async function ScheduledQueueList() {
       {/* Upcoming Scheduled Section */}
       {queue.upcoming.length > 0 ? (
         <section>
-          <h2 className="text-lg font-semibold text-zinc-900 mb-3">
+          <h2 className="text-lg font-semibold text-foreground mb-3">
             جدولة النشر القادمة ({queue.upcoming.length})
           </h2>
           <ScheduledArticlesList articles={queue.upcoming} />
         </section>
       ) : (
         <section>
-          <h2 className="text-lg font-semibold text-zinc-900 mb-3">
+          <h2 className="text-lg font-semibold text-foreground mb-3">
             جدولة النشر القادمة
           </h2>
-          <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-8 text-center">
-            <p className="text-zinc-500">لا توجد مقالات مجدولة للنشر</p>
+          <div className="bg-muted border border-border rounded-lg p-8 text-center">
+            <p className="text-muted-foreground">لا توجد مقالات مجدولة للنشر</p>
           </div>
         </section>
       )}
@@ -90,11 +90,11 @@ async function ScheduledQueueList() {
       {/* Recently Published Section */}
       {queue.recentlyPublished.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-zinc-900 mb-3">
+          <h2 className="text-lg font-semibold text-foreground mb-3">
             نُشر مؤخراً ({queue.recentlyPublished.length})
           </h2>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-800 mb-3">
+          <div className="bg-success/8 border border-success/20 rounded-lg p-4">
+            <p className="text-sm text-success mb-3">
               مقالات نُشرت خلال الـ 24 ساعة الماضية
             </p>
             <RecentArticlesList articles={queue.recentlyPublished} />
@@ -108,41 +108,41 @@ async function ScheduledQueueList() {
 function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
   if (articles.length === 0) {
     return (
-      <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-8 text-center">
-        <p className="text-zinc-500">لا توجد مقالات</p>
+      <div className="bg-muted border border-border rounded-lg p-8 text-center">
+        <p className="text-muted-foreground">لا توجد مقالات</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       <table className="w-full">
-        <thead className="bg-zinc-50 border-b border-zinc-200">
+        <thead className="bg-muted border-b border-border">
           <tr>
-            <th className="px-4 py-3 text-right text-sm font-medium text-zinc-700">
+            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
               العنوان
             </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-zinc-700">
+            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
               وقت النشر المحدد
             </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-zinc-700">
+            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
               المؤلف
             </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-zinc-700">
+            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
               التصنيفات
             </th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-zinc-700 w-32">
+            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground w-32">
               إجراءات
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200">
+        <tbody className="divide-y divide-border">
           {articles.map((article) => (
-            <tr key={article.id} className="hover:bg-zinc-50">
+            <tr key={article.id} className="hover:bg-muted/50">
               <td className="px-4 py-3">
                 <div>
-                  <p className="font-medium text-zinc-900">{article.title}</p>
-                  <p className="text-xs text-zinc-500 mt-1">
+                  <p className="font-medium text-foreground">{article.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
                     {article.slug}
                   </p>
                 </div>
@@ -150,7 +150,7 @@ function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
               <td className="px-4 py-3">
                 {article.scheduledAt && (
                   <div className="text-sm">
-                    <p className="text-zinc-900 font-medium">
+                    <p className="text-foreground font-medium">
                       {new Intl.DateTimeFormat("ar-SA", {
                         year: "numeric",
                         month: "long",
@@ -163,7 +163,7 @@ function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
                   </div>
                 )}
               </td>
-              <td className="px-4 py-3 text-sm text-zinc-600">
+              <td className="px-4 py-3 text-sm text-muted-foreground">
                 {article.author.name}
               </td>
               <td className="px-4 py-3">
@@ -171,13 +171,13 @@ function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
                   {article.categories.slice(0, 2).map((cat) => (
                     <span
                       key={cat.id}
-                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-800"
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-foreground"
                     >
                       {cat.name}
                     </span>
                   ))}
                   {article.categories.length > 2 && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-foreground">
                       +{article.categories.length - 2}
                     </span>
                   )}
@@ -187,7 +187,7 @@ function ScheduledArticlesList({ articles }: { articles: ScheduledArticle[] }) {
                 <div className="flex items-center gap-2">
                   <a
                     href={`/admin/articles/${article.id}/edit`}
-                    className="text-sm text-zinc-600 hover:text-zinc-900 underline"
+                    className="text-sm text-muted-foreground hover:text-foreground underline"
                   >
                     تعديل
                   </a>
@@ -211,11 +211,11 @@ function RecentArticlesList({ articles }: { articles: ScheduledArticle[] }) {
       {articles.map((article) => (
         <div
           key={article.id}
-          className="flex items-center justify-between bg-white border border-zinc-200 rounded-lg p-3"
+          className="flex items-center justify-between bg-card border border-border rounded-lg p-3"
         >
           <div className="flex-1">
-            <p className="font-medium text-zinc-900">{article.title}</p>
-            <p className="text-xs text-zinc-500 mt-1">
+            <p className="font-medium text-foreground">{article.title}</p>
+            <p className="text-xs text-muted-foreground mt-1">
               {article.author.name} •{" "}
               {new Intl.DateTimeFormat("ar-SA", {
                 hour: "2-digit",
@@ -225,7 +225,7 @@ function RecentArticlesList({ articles }: { articles: ScheduledArticle[] }) {
           </div>
           <a
             href={`/admin/articles/${article.id}/edit`}
-            className="text-sm text-zinc-600 hover:text-zinc-900 underline"
+            className="text-sm text-muted-foreground hover:text-foreground underline"
           >
             عرض
           </a>
@@ -265,7 +265,7 @@ function CountdownTimer({ targetDate }: { targetDate: Date }) {
   if (minutes > 0) parts.push(`${minutes} دقيقة`);
 
   return (
-    <p className="text-xs text-zinc-500">
+    <p className="text-xs text-muted-foreground">
       متبقي: {parts.length > 0 ? parts.join(" و ") : "أقل من دقيقة"}
     </p>
   );

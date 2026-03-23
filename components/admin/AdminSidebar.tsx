@@ -10,9 +10,10 @@ interface SidebarProps {
   className?: string;
   isCollapsed?: boolean;
   onToggle?: () => void;
+  siteName?: string;
 }
 
-export function AdminSidebar({ className, isCollapsed = false, onToggle }: SidebarProps) {
+export function AdminSidebar({ className, isCollapsed = false, onToggle, siteName = 'صحيفتي' }: SidebarProps) {
   const pathname = usePathname();
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -68,9 +69,9 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle }: Sideb
           </button>
 
           {/* Logo - always visible */}
-          <Link href="/admin/dashboard" className="flex items-center justify-center no-underline order-2">
-            <div className="w-9 h-9 bg-foreground rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-background" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Link href="/admin/dashboard" className="flex items-center gap-2 no-underline order-2 min-w-0">
+            <div className="w-9 h-9 bg-accent rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -79,6 +80,9 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle }: Sideb
                 />
               </svg>
             </div>
+            {!isCollapsed && (
+              <span className="text-sm font-bold text-foreground truncate">{siteName}</span>
+            )}
           </Link>
         </div>
 

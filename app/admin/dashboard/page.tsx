@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ArticleStatusBadge } from '@/components/ui/Badge';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
@@ -334,31 +335,66 @@ export default async function DashboardPage({
           <CardTitle>إجراءات سريعة</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Link href="/admin/articles/new">
-              <Button fullWidth variant="primary">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              {
+                href: '/admin/articles/new',
+                label: 'إنشاء مقال جديد',
+                description: 'اكتب وانشر محتوى جديداً',
+                iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+              },
+              {
+                href: '/admin/media/images',
+                label: 'إدارة الصور',
+                description: 'رفع وتنظيم مكتبة الوسائط',
+                iconPath: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z',
+              },
+              {
+                href: '/admin/categories',
+                label: 'إدارة التصنيفات',
+                description: 'تنظيم وتصنيف المحتوى',
+                iconPath: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
+              },
+            ].map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="group relative flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-accent/40 hover:bg-muted/60 transition-all duration-200 no-underline overflow-hidden"
+              >
+                {/* Amber top-edge accent line on hover */}
+                <span
+                  className="absolute inset-x-0 top-0 h-0.5 bg-accent scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-right rounded-full"
+                  aria-hidden="true"
+                />
+                {/* Icon well */}
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center group-hover:bg-accent/15 transition-colors duration-200">
+                  <svg
+                    className="w-5 h-5 text-accent"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.75}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d={action.iconPath} />
+                  </svg>
+                </div>
+                {/* Text */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground leading-tight">{action.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{action.description}</p>
+                </div>
+                {/* Directional arrow — RTL points left */}
+                <svg
+                  className="w-4 h-4 text-muted-foreground/40 group-hover:text-accent/60 rotate-180 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
-                إنشاء مقال جديد
-              </Button>
-            </Link>
-            <Link href="/admin/media/images">
-              <Button fullWidth variant="secondary">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                إدارة الصور
-              </Button>
-            </Link>
-            <Link href="/admin/categories">
-              <Button fullWidth variant="secondary">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                إدارة التصنيفات
-              </Button>
-            </Link>
+              </Link>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -410,14 +446,7 @@ export default async function DashboardPage({
                       {article.author.name} • {new Date(article.createdAt).toLocaleDateString('ar-SA')}
                     </p>
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded ${
-                    article.status === 'published' ? 'bg-success/10 text-success' :
-                    article.status === 'draft' ? 'bg-warning/10 text-warning' :
-                    'bg-blue-50 text-blue-600'
-                  }`}>
-                    {article.status === 'published' ? 'منشور' :
-                     article.status === 'draft' ? 'مسودة' : 'مجدول'}
-                  </span>
+                  <ArticleStatusBadge status={article.status as 'draft' | 'published' | 'scheduled' | 'archived'} />
                 </Link>
               ))}
             </div>
@@ -465,9 +494,7 @@ export default async function DashboardPage({
                       {article.author.name} • {new Date(article.createdAt).toLocaleDateString('ar-SA')}
                     </p>
                   </div>
-                  <span className="px-2 py-1 text-xs rounded bg-blue-50 text-blue-600">
-                    مجدول
-                  </span>
+                  <ArticleStatusBadge status="scheduled" />
                 </Link>
               ))}
             </div>
@@ -494,7 +521,7 @@ function StatsCard({ title, value, icon, color, suffix, trend, chartData }: Stat
     primary: 'text-foreground',
     success: 'text-success',
     warning: 'text-warning',
-    info: 'text-blue-600',
+    info: 'text-accent',
   };
 
   const icons = {

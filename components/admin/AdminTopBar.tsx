@@ -4,6 +4,8 @@ import { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getBreadcrumbs } from "@/lib/admin-nav";
+import { DarkModeToggle } from "@/components/admin/DarkModeToggle";
+import { NotificationBell } from "@/components/admin/NotificationBell";
 
 interface BreadcrumbProps {
   className?: string;
@@ -96,6 +98,8 @@ export function AdminTopBar({
 
       {/* Left side - Actions, User */}
       <div className="flex items-center gap-4">
+        <DarkModeToggle />
+        <NotificationBell />
         {actions}
 
         {/* User menu */}

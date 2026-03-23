@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 export interface EmptyStateProps {
@@ -7,7 +8,8 @@ export interface EmptyStateProps {
   description?: string;
   action?: {
     label: string;
-    onClick: () => void;
+    onClick?: () => void;
+    href?: string;
   };
   className?: string;
 }
@@ -41,12 +43,21 @@ export function EmptyState({
         </p>
       )}
       {action && (
-        <button
-          onClick={action.onClick}
-          className="px-4 py-2 bg-foreground text-background rounded-md hover:bg-foreground/90 transition-colors text-sm font-medium"
-        >
-          {action.label}
-        </button>
+        action.href ? (
+          <Link
+            href={action.href}
+            className="px-4 py-2 bg-foreground text-background rounded-md hover:bg-foreground/90 transition-colors text-sm font-medium"
+          >
+            {action.label}
+          </Link>
+        ) : (
+          <button
+            onClick={action.onClick}
+            className="px-4 py-2 bg-foreground text-background rounded-md hover:bg-foreground/90 transition-colors text-sm font-medium"
+          >
+            {action.label}
+          </button>
+        )
       )}
     </div>
   );

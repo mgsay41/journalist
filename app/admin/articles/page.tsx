@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Loading, SkeletonTable } from '@/components/ui/Loading';
+import { PaginationLink } from '@/components/ui/PaginationLink';
 import { ArticlesListClient } from '@/components/admin/ArticlesListClient';
 import { ArticlesFilters } from '@/components/admin/ArticlesFilters';
 
@@ -221,11 +222,13 @@ export default async function ArticlesPage({
             إدارة وتنظيم جميع المقالات
           </p>
         </div>
-        <Link href="/admin/articles/new" className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-md hover:bg-foreground/90 transition-colors">
-          <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          إضافة مقال جديد
+        <Link href="/admin/articles/new">
+          <Button variant="primary" size="sm">
+            <svg className="w-4 h-4 ms-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            إضافة مقال جديد
+          </Button>
         </Link>
       </div>
 
@@ -255,11 +258,9 @@ export default async function ArticlesPage({
               description={hasFilters
                 ? 'لم يتم العثور على مقالات تطابق البحث'
                 : 'ابدأ بإضافة مقالك الأول'}
-              action={{
+              action={hasFilters ? undefined : {
                 label: 'إضافة مقال جديد',
-                onClick: () => {
-                  window.location.href = '/admin/articles/new';
-                },
+                href: '/admin/articles/new',
               }}
             />
           ) : (
@@ -279,22 +280,20 @@ export default async function ArticlesPage({
             الصفحة {pagination.page} من {pagination.totalPages}
           </div>
           <div className="flex gap-2">
-            {pagination.page > 1 && (
-              <Link
-                href={buildFilterUrl(params, { page: String(pagination.page - 1) })}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
-              >
-                السابق
-              </Link>
-            )}
-            {pagination.page < pagination.totalPages && (
-              <Link
-                href={buildFilterUrl(params, { page: String(pagination.page + 1) })}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
-              >
-                التالي
-              </Link>
-            )}
+            <PaginationLink
+              href={buildFilterUrl(params, { page: String(pagination.page - 1) })}
+              variant="secondary"
+              disabled={pagination.page <= 1}
+            >
+              السابق
+            </PaginationLink>
+            <PaginationLink
+              href={buildFilterUrl(params, { page: String(pagination.page + 1) })}
+              variant="secondary"
+              disabled={pagination.page >= pagination.totalPages}
+            >
+              التالي
+            </PaginationLink>
           </div>
         </div>
       )}

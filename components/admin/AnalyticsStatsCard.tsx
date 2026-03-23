@@ -18,26 +18,26 @@ function AnalyticsStatsCardComponent({
   const getChangeColor = () => {
     switch (changeType) {
       case "positive":
-        return "text-green-600";
+        return "text-success";
       case "negative":
-        return "text-red-600";
+        return "text-danger";
       default:
-        return "text-zinc-500";
+        return "text-muted-foreground";
     }
   };
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg p-6">
+    <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm text-zinc-600 mb-1">{title}</p>
-          <p className="text-2xl font-semibold text-zinc-900">{value}</p>
+          <p className="text-sm text-muted-foreground mb-1">{title}</p>
+          <p className="text-2xl font-semibold text-foreground">{value}</p>
           {change && (
             <p className={`text-xs mt-1 ${getChangeColor()}`}>{change}</p>
           )}
         </div>
         {icon && (
-          <div className="ml-4 text-zinc-400">
+          <div className="ms-4 text-muted-foreground/40">
             {icon}
           </div>
         )}
