@@ -35,11 +35,14 @@ export function ThemeProvider({ children, defaultTheme = 'light' }: ThemeProvide
   const [theme, setThemeState] = useState<Theme>(defaultTheme);
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
-  // Read persisted preference after hydration
+  // Read persisted preference after hydration.
+  // Calling setState here is intentional — this is a one-time sync from localStorage
+  // to React state after hydration, not a cascading side effect.
   useEffect(() => {
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
       if (stored && ['light', 'dark', 'system'].includes(stored)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeState(stored);
       }
     } catch {}

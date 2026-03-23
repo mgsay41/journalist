@@ -11,57 +11,49 @@ import { logger } from '@/lib/monitoring/logger';
  * Receive Web Vitals metrics from client-side
  * Phase 3 Frontend Audit - Web Vitals Monitoring
  */
+interface MetricPayload {
+  name: string;
+  value: number;
+  id: string;
+  rating?: string;
+  url?: string;
+  navigationType?: string;
+  timestamp?: number;
+}
+
+function isValidMetric(m: unknown): m is MetricPayload {
+  if (!m || typeof m !== 'object') return false;
+  const metric = m as Record<string, unknown>;
+  return typeof metric.name === 'string' && typeof metric.value === 'number' && typeof metric.id === 'string';
+}
+
 export const POST = withErrorHandler(async (request: Request) => {
   try {
     const body = await request.json();
 
-    // Validate required fields
-    const { name, value, id, rating, url, userAgent } = body;
+    // Accept both a single metric { name, value, id, ... }
+    // and a batched payload { metrics: [...] } from the client-side queue
+    const metrics: MetricPayload[] = Array.isArray(body.metrics) ? body.metrics : [body];
 
-    if (!name || typeof value !== 'number' || !id) {
-      return NextResponse.json(
-        { error: 'Invalid metric data' },
-        { status: 400 }
-      );
+    const valid = metrics.filter(isValidMetric);
+    if (valid.length === 0) {
+      return NextResponse.json({ error: 'Invalid metric data' }, { status: 400 });
     }
 
-    // Log Web Vitals metrics
-    logger.info('Web Vitals metric received', {
-      name,
-      value,
-      rating,
-      url,
-      metricId: id,
-    });
+    for (const metric of valid) {
+      logger.info('Web Vitals metric received', {
+        name: metric.name,
+        value: metric.value,
+        rating: metric.rating,
+        url: metric.url,
+        metricId: metric.id,
+      });
+    }
 
-    // In production, you might want to:
-    // 1. Store metrics in a database for analysis
-    // 2. Send to external monitoring service (e.g., Vercel Analytics, Google Analytics)
-    // 3. Aggregate metrics for dashboard display
-
-    // For now, we'll log and return success
-    // In a future update, we could store metrics in Prisma:
-    // await prisma.webVitalMetric.create({
-    //   data: {
-    //     name,
-    //     value,
-    //     rating,
-    //     url,
-    //     userAgent,
-    //     timestamp: new Date(body.timestamp),
-    //   },
-    // });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Metric recorded',
-    });
+    return NextResponse.json({ success: true, received: valid.length });
   } catch (error) {
     logger.error('Failed to process Web Vitals metric', { error });
-    return NextResponse.json(
-      { error: 'Failed to process metric' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to process metric' }, { status: 500 });
   }
 });
 

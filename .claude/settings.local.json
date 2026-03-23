@@ -69,7 +69,9 @@
       "Bash(npm run:*)",
       "Bash(grep -E \"^\\\\S.*\\\\.tsx?$\")",
       "Read(//tmp/**)",
-      "Bash(grep -E \"error|\\\\.ts$|\\\\.tsx$\")"
+      "Bash(grep -E \"error|\\\\.ts$|\\\\.tsx$\")",
+      "Bash(npx eslint:*)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(m[''''ruleId''''], m[''''message''''][:60]\\) for r in data for m in r.get\\(''''messages'''',[]\\) if m.get\\(''''severity''''\\)==2]\")"
     ]
   }
 }

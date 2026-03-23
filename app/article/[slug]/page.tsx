@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import Image from 'next/image';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { PublicLayout } from '@/components/public';
 import { ArticleContent } from '@/components/public/ArticleContent';
@@ -7,9 +9,12 @@ import { SocialShare } from '@/components/public/SocialShare';
 import { RelatedArticles } from '@/components/public/RelatedArticles';
 import { ArticleViewTracker } from '@/components/public/ArticleViewTracker';
 import { ReadingProgress } from '@/components/public/ReadingProgress';
-import { TableOfContentsSticky } from '@/components/public/TableOfContents';
-import { ReadingSettings } from '@/components/public/FontSizeControls';
-import { TextToSpeech } from '@/components/public/TextToSpeech';
+// Lazy-loaded via a client-component wrapper (ssr:false requires a Client Component with Turbopack)
+import {
+  TableOfContentsSticky,
+  ReadingSettings,
+  TextToSpeech,
+} from '@/components/public/ArticleLazyComponents';
 import type { Metadata } from 'next';
 import { SeriesNavigation } from '@/components/public/SeriesNavigation';
 import Link from 'next/link';
@@ -63,7 +68,14 @@ async function getArticleData(slug: string) {
           caption: true,
         },
       },
-      videos: true,
+      videos: {
+        select: {
+          youtubeId: true,
+          title: true,
+          privacyMode: true,
+          startTime: true,
+        },
+      },
       series: {
         select: {
           title: true,
@@ -90,8 +102,9 @@ async function getArticleData(slug: string) {
   return article;
 }
 
-async function getCategories() {
-  return prisma.category.findMany({
+// Cached for 5 min — same data as the homepage; reused across all article pages
+const getCategories = unstable_cache(
+  async () => prisma.category.findMany({
     where: {
       articles: {
         some: {
@@ -101,16 +114,14 @@ async function getCategories() {
       },
     },
     orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-    },
-  });
-}
+    select: { id: true, name: true, slug: true },
+  }),
+  ['nav-categories'],
+  { revalidate: 300, tags: ['categories'] }
+);
 
-async function getPopularTags() {
-  return prisma.tag.findMany({
+const getPopularTags = unstable_cache(
+  async () => prisma.tag.findMany({
     where: {
       articles: {
         some: {
@@ -119,17 +130,13 @@ async function getPopularTags() {
         },
       },
     },
-    orderBy: {
-      articles: { _count: 'desc' },
-    },
+    orderBy: { articles: { _count: 'desc' } },
     take: 9,
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-    },
-  });
-}
+    select: { id: true, name: true, slug: true },
+  }),
+  ['nav-popular-tags'],
+  { revalidate: 300, tags: ['tags'] }
+);
 
 async function getRelatedArticles(
   articleId: string,
@@ -199,6 +206,15 @@ async function getRelatedArticles(
   });
 }
 
+// Pre-render all published articles at build time — served instantly from CDN
+export async function generateStaticParams() {
+  const articles = await prisma.article.findMany({
+    where: { status: 'published', publishedAt: { lte: new Date() } },
+    select: { slug: true },
+  });
+  return articles.map((a) => ({ slug: a.slug }));
+}
+
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
   const article = await prisma.article.findUnique({
@@ -263,6 +279,46 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
   };
 }
 
+// Async server component — rendered inside a Suspense boundary so the
+// main article body streams to the browser immediately without waiting.
+async function RelatedArticlesSection({
+  articleId,
+  categoryIds,
+  tagIds,
+}: {
+  articleId: string;
+  categoryIds: string[];
+  tagIds: string[];
+}) {
+  const relatedArticles = await getRelatedArticles(articleId, categoryIds, tagIds);
+  if (relatedArticles.length === 0) return null;
+
+  const formatted = relatedArticles
+    .filter((a) => a.publishedAt !== null)
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      slug: a.slug,
+      excerpt: a.excerpt,
+      featuredImage: a.featuredImage?.url ?? null,
+      publishedAt: a.publishedAt!,
+      readingTime: a.readingTime,
+      categories: a.categories,
+    }));
+
+  if (formatted.length === 0) return null;
+
+  return (
+    <section className="related-articles border-t border-border bg-muted/30 py-8">
+      <div className="container mx-auto px-4">
+        <div className="max-w-4xl mx-auto">
+          <RelatedArticles articles={formatted} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const { slug } = await params;
 
@@ -278,22 +334,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
   const categoryIds = article.categories.map((c) => c.id);
   const tagIds = article.tags.map((t) => t.id);
-
-  const relatedArticles = await getRelatedArticles(article.id, categoryIds, tagIds);
-
-  // Transform related articles to match component props (filter out nulls)
-  const formattedRelatedArticles = relatedArticles
-    .filter(article => article.publishedAt !== null)
-    .map(article => ({
-      id: article.id,
-      title: article.title,
-      slug: article.slug,
-      excerpt: article.excerpt,
-      featuredImage: article.featuredImage?.url ?? null,
-      publishedAt: article.publishedAt!,
-      readingTime: article.readingTime,
-      categories: article.categories,
-    }));
 
   // Transform images to match ArticleContent props
   const allImages = article.images.map(img => ({
@@ -370,6 +410,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 
   return (
     <PublicLayout categories={categories} popularTags={popularTags}>
+      {/* Preload LCP image — tells browser to fetch it at highest priority before HTML is parsed */}
+      {article.featuredImage && (
+        <link rel="preload" as="image" href={article.featuredImage.url} fetchPriority="high" />
+      )}
       <ReadingProgress contentId="article-content" color="var(--accent)" />
       <ArticleViewTracker slug={slug} />
       <script
@@ -402,9 +446,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           </div>
         </nav>
       )}
-
-      {/* Reading Settings - Fixed position controls */}
-      <ReadingSettings position="fixed" showLabel={false} />
 
       <article className="py-6 md:py-8">
         <div className="container mx-auto px-4">
@@ -586,6 +627,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
             <div className="mt-6 pt-6 border-t border-border lg:hidden">
               <SocialShare title={article.title} url={`/article/${slug}`} />
             </div>
+
+            {/* Font size controls — sticky within article column only */}
+            <ReadingSettings position="sticky" showLabel={false} />
             </div>
 
             {/* Sidebar */}
@@ -605,16 +649,14 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         </div>
       </article>
 
-      {/* Related Articles */}
-      {relatedArticles.length > 0 && (
-        <section className="related-articles border-t border-border bg-muted/30 py-8">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <RelatedArticles articles={formattedRelatedArticles} />
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Related Articles — streamed after main content; doesn't block article render */}
+      <Suspense fallback={null}>
+        <RelatedArticlesSection
+          articleId={article.id}
+          categoryIds={categoryIds}
+          tagIds={tagIds}
+        />
+      </Suspense>
 
 
     </PublicLayout>

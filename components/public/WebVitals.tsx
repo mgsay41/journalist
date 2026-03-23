@@ -106,36 +106,80 @@ function getMetricUnit(name: string): string {
   }
 }
 
-/**
- * Send metric to analytics endpoint
- */
-async function sendToAnalytics(metric: Metric) {
-  const rating = getMetricRating(metric);
+// ── Batched metric queue ────────────────────────────────────────────────────
+// Module-level so the queue survives React re-renders and component remounts.
+// Metrics are queued and flushed either:
+//   • when the page becomes hidden (visibilitychange → hidden), or
+//   • after 10 seconds of inactivity (trailing timer)
+// Both paths use sendBeacon (non-blocking, survives page navigation) with
+// a fetch+keepalive fallback for browsers that lack sendBeacon.
 
-  // Send to internal analytics endpoint
+interface MetricPayload {
+  name: string;
+  value: number;
+  id: string;
+  rating: string;
+  navigationType: string | undefined;
+  timestamp: number;
+  url: string;
+}
+
+const metricQueue: MetricPayload[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let visibilityListenerAdded = false;
+
+function flushQueue() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  if (metricQueue.length === 0) return;
+
+  const batch = metricQueue.splice(0); // drain in-place
+  const body = JSON.stringify({ metrics: batch });
+
   try {
-    await fetch('/api/admin/monitoring/performance', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: metric.name,
-        value: metric.value,
-        id: metric.id,
-        rating,
-        navigationType: metric.navigationType,
-        timestamp: Date.now(),
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-      }),
-      // Use keepalive for better reliability during page unload
-      keepalive: true,
-    });
-  } catch (error) {
-    // Silently fail to not affect user experience
-    console.debug('[Web Vitals] Failed to send metric:', error);
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      // sendBeacon requires a Blob to set Content-Type
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon('/api/admin/monitoring/performance', blob);
+    } else {
+      fetch('/api/admin/monitoring/performance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    }
+  } catch {
+    // Silently fail — never affect the user
   }
+}
+
+function queueMetric(payload: MetricPayload) {
+  metricQueue.push(payload);
+  // Reschedule the trailing flush
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushQueue, 10_000);
+}
+
+function ensureVisibilityListener() {
+  if (visibilityListenerAdded || typeof document === 'undefined') return;
+  visibilityListenerAdded = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushQueue();
+  });
+}
+
+function sendToAnalytics(metric: Metric) {
+  const rating = getMetricRating(metric);
+  ensureVisibilityListener();
+  queueMetric({
+    name: metric.name,
+    value: metric.value,
+    id: metric.id,
+    rating,
+    navigationType: metric.navigationType,
+    timestamp: Date.now(),
+    url: typeof window !== 'undefined' ? window.location.href : '',
+  });
 }
 
 /**

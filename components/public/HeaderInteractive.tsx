@@ -6,10 +6,9 @@ import { DarkModeToggle } from './DarkModeToggle';
 
 interface HeaderInteractiveProps {
   mainCategories: Array<{ id: string; name: string; slug: string }>;
-  today: string;
 }
 
-export function HeaderInteractive({ mainCategories, today }: HeaderInteractiveProps) {
+export function HeaderInteractive({ mainCategories }: HeaderInteractiveProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -19,7 +18,10 @@ export function HeaderInteractive({ mainCategories, today }: HeaderInteractivePr
     const handleScroll = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        setScrolled(window.scrollY > 60);
+        const y = window.scrollY;
+        // Hysteresis: collapse after 80px, re-expand only when back near top (< 5px).
+        // The wide gap prevents the header's own height change from flipping the state.
+        setScrolled(prev => (prev ? y > 5 : y > 80));
       });
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -31,20 +33,6 @@ export function HeaderInteractive({ mainCategories, today }: HeaderInteractivePr
 
   return (
     <header className="sticky top-0 z-50 w-full">
-      {/* Top ticker bar — collapses on scroll */}
-      <div
-        className={`bg-foreground text-primary-foreground overflow-hidden transition-all duration-300 ease-in-out ${
-          scrolled ? 'max-h-0' : 'max-h-10'
-        }`}
-      >
-        <div className="container mx-auto px-4 h-9 flex items-center justify-between">
-          <span className="text-xs opacity-70 select-none">{today}</span>
-          <span className="text-xs opacity-50 hidden sm:block tracking-widest">
-            صحافة مستقلة · صوت حر
-          </span>
-        </div>
-      </div>
-
       {/* Main header panel */}
       <div className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 border-b border-border">
         <div className="container mx-auto px-4">

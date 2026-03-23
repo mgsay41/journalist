@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { PublicHeader } from './PublicHeader';
 import { PublicFooter } from './PublicFooter';
 import { BreakingNewsBanner } from './BreakingNewsBanner';
@@ -9,23 +10,28 @@ interface PublicLayoutProps {
   popularTags?: Array<{ id: string; name: string; slug: string }>;
 }
 
-async function getBreakingNews() {
-  try {
-    const settings = await prisma.settings.findFirst({
-      select: {
-        breakingNewsEnabled: true,
-        breakingNewsText: true,
-        breakingNewsUrl: true,
-      },
-    });
-    if (settings?.breakingNewsEnabled && settings.breakingNewsText) {
-      return { text: settings.breakingNewsText, url: settings.breakingNewsUrl };
+// Cache for 1 hour — breaking news rarely changes; invalidated when settings are saved
+const getBreakingNews = unstable_cache(
+  async () => {
+    try {
+      const settings = await prisma.settings.findFirst({
+        select: {
+          breakingNewsEnabled: true,
+          breakingNewsText: true,
+          breakingNewsUrl: true,
+        },
+      });
+      if (settings?.breakingNewsEnabled && settings.breakingNewsText) {
+        return { text: settings.breakingNewsText, url: settings.breakingNewsUrl };
+      }
+      return null;
+    } catch {
+      return null;
     }
-    return null;
-  } catch {
-    return null;
-  }
-}
+  },
+  ['breaking-news'],
+  { revalidate: 3600, tags: ['settings'] }
+);
 
 export async function PublicLayout({ children, categories = [], popularTags = [] }: PublicLayoutProps) {
   const breakingNews = await getBreakingNews();

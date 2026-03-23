@@ -39,6 +39,12 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    // Client-side router cache: keep dynamic pages fresh for 30s,
+    // static/ISR pages for 3 minutes — avoids redundant refetches on back-navigation
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
 
   // Compiler optimizations

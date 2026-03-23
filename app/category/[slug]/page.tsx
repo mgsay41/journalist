@@ -1,9 +1,13 @@
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { PublicLayout, ArticleCard } from '@/components/public';
 import { ScrollReveal } from '@/components/public/ScrollReveal';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+
+// ISR — revalidate every 5 minutes; served from CDN edge between revalidations
+export const revalidate = 300;
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;
@@ -11,10 +15,13 @@ interface CategoryPageProps {
 
 const ARTICLES_PER_PAGE = 12;
 
+// cache() deduplicates this within a single request — shared by generateMetadata and the page
+const getCategoryBySlug = cache((slug: string) =>
+  prisma.category.findUnique({ where: { slug } })
+);
+
 async function getCategoryData(slug: string, page: number) {
-  const category = await prisma.category.findUnique({
-    where: { slug },
-  });
+  const category = await getCategoryBySlug(slug);
 
   if (!category) {
     return null;
@@ -122,11 +129,17 @@ async function getCategoryData(slug: string, page: number) {
   };
 }
 
+// Pre-render all category pages at build time
+export async function generateStaticParams() {
+  const categories = await prisma.category.findMany({
+    select: { slug: true },
+  });
+  return categories.map((c) => ({ slug: c.slug }));
+}
+
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const category = await prisma.category.findUnique({
-    where: { slug },
-  });
+  const category = await getCategoryBySlug(slug);
 
   if (!category) {
     return {};

@@ -1,9 +1,13 @@
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { PublicLayout, ArticleCard } from '@/components/public';
 import { ScrollReveal } from '@/components/public/ScrollReveal';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+
+// ISR — revalidate every 5 minutes; served from CDN edge between revalidations
+export const revalidate = 300;
 
 interface TagPageProps {
   params: Promise<{ slug: string }>;
@@ -11,10 +15,13 @@ interface TagPageProps {
 
 const ARTICLES_PER_PAGE = 12;
 
+// cache() deduplicates this within a single request — shared by generateMetadata and the page
+const getTagBySlug = cache((slug: string) =>
+  prisma.tag.findUnique({ where: { slug } })
+);
+
 async function getTagData(slug: string, page: number) {
-  const tag = await prisma.tag.findUnique({
-    where: { slug },
-  });
+  const tag = await getTagBySlug(slug);
 
   if (!tag) {
     return null;
@@ -122,11 +129,17 @@ async function getTagData(slug: string, page: number) {
   };
 }
 
+// Pre-render all tag pages at build time
+export async function generateStaticParams() {
+  const tags = await prisma.tag.findMany({
+    select: { slug: true },
+  });
+  return tags.map((t) => ({ slug: t.slug }));
+}
+
 export async function generateMetadata({ params }: TagPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const tag = await prisma.tag.findUnique({
-    where: { slug },
-  });
+  const tag = await getTagBySlug(slug);
 
   if (!tag) {
     return {};

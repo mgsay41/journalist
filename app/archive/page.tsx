@@ -1,54 +1,58 @@
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { PublicLayout } from '@/components/public/PublicLayout';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: 'الأرشيف',
   description: 'تصفح المقالات حسب التاريخ',
 };
 
-async function getArchiveIndex() {
-  const articles = await prisma.article.findMany({
-    where: { status: 'published', publishedAt: { lte: new Date() } },
-    select: { publishedAt: true },
-    orderBy: { publishedAt: 'desc' },
-  });
+// Single SQL aggregation — no in-memory grouping; cached for 5 min
+const getArchiveIndex = unstable_cache(
+  async () => {
+    const rows = await prisma.$queryRaw<Array<{ year: number; month: number; count: bigint }>>`
+      SELECT
+        EXTRACT(YEAR  FROM "publishedAt")::int AS year,
+        EXTRACT(MONTH FROM "publishedAt")::int AS month,
+        COUNT(*)                               AS count
+      FROM "Article"
+      WHERE status = 'published'
+        AND "publishedAt" IS NOT NULL
+        AND "publishedAt" <= NOW()
+      GROUP BY year, month
+      ORDER BY year DESC, month DESC
+    `;
+    return rows.map((r) => ({ year: r.year, month: r.month, count: Number(r.count) }));
+  },
+  ['archive-index'],
+  { revalidate: 300, tags: ['articles'] }
+);
 
-  // Group by year/month
-  const monthMap = new Map<string, { year: number; month: number; count: number }>();
-  for (const a of articles) {
-    if (!a.publishedAt) continue;
-    const year = a.publishedAt.getFullYear();
-    const month = a.publishedAt.getMonth() + 1;
-    const key = `${year}-${month}`;
-    if (!monthMap.has(key)) {
-      monthMap.set(key, { year, month, count: 0 });
-    }
-    monthMap.get(key)!.count++;
-  }
-
-  return Array.from(monthMap.values()).sort((a, b) =>
-    b.year !== a.year ? b.year - a.year : b.month - a.month
-  );
-}
-
-async function getLayoutData() {
-  const [categories, popularTags] = await Promise.all([
-    prisma.category.findMany({
-      where: { articles: { some: { status: 'published', publishedAt: { lte: new Date() } } } },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, slug: true },
-    }),
-    prisma.tag.findMany({
-      where: { articles: { some: { status: 'published', publishedAt: { lte: new Date() } } } },
-      orderBy: { articles: { _count: 'desc' } },
-      take: 9,
-      select: { id: true, name: true, slug: true },
-    }),
-  ]);
-  return { categories, popularTags };
-}
+// Cached nav data — reuses same cache key as the homepage/article pages
+const getLayoutData = unstable_cache(
+  async () => {
+    const [categories, popularTags] = await Promise.all([
+      prisma.category.findMany({
+        where: { articles: { some: { status: 'published', publishedAt: { lte: new Date() } } } },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, slug: true },
+      }),
+      prisma.tag.findMany({
+        where: { articles: { some: { status: 'published', publishedAt: { lte: new Date() } } } },
+        orderBy: { articles: { _count: 'desc' } },
+        take: 9,
+        select: { id: true, name: true, slug: true },
+      }),
+    ]);
+    return { categories, popularTags };
+  },
+  ['archive-layout'],
+  { revalidate: 300, tags: ['categories', 'tags'] }
+);
 
 const ARABIC_MONTHS = [
   'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',

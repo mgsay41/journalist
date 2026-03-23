@@ -25,7 +25,7 @@ const cairo = Cairo({
 const amiri = Amiri({
   subsets: ["arabic", "latin"],
   variable: "--font-amiri",
-  display: "optional", // Don't block rendering; skip if not cached
+  display: "swap", // Show fallback immediately, swap when loaded — no invisible text
   weight: ["400", "700"],
 });
 
@@ -73,6 +73,8 @@ export default async function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${amiri.variable}`} suppressHydrationWarning>
       <head>
+        {/* Preconnect to Cloudinary CDN — crossOrigin required so the connection is reused for CORS image requests */}
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="alternate" type="application/rss+xml" title="الموقع الصحفي - RSS" href="/feed.xml" />
         <meta name="theme-color" content="#C8892A" />

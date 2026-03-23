@@ -227,12 +227,15 @@ export function ReadingSettings({
   orientation = 'horizontal',
   className = '',
 }: ReadingSettingsProps) {
+  const positionClass =
+    position === 'fixed' ? 'fixed bottom-4 left-4 z-40' :
+    position === 'sticky' ? 'sticky bottom-4 z-40 w-fit ms-auto' :
+    '';
+
   return (
     <div
       data-reading-settings
-      className={`flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-sm ${
-        position === 'fixed' ? 'fixed bottom-4 left-4 z-40' : ''
-      } ${orientation === 'vertical' ? 'flex-col' : ''} ${className}`}
+      className={`flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-sm ${positionClass} ${orientation === 'vertical' ? 'flex-col' : ''} ${className}`}
     >
       {/* Font size label */}
       <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">حجم الخط</span>

@@ -165,6 +165,26 @@ export function validateImage(
 }
 
 /**
+ * Inject Cloudinary transformation parameters into an existing Cloudinary URL.
+ * Works on URLs already stored in the database (e.g. from uploaded images).
+ *
+ * @param url   - Existing Cloudinary URL (must contain /upload/)
+ * @param width - Desired display width in CSS pixels
+ * @returns URL with q_auto, f_auto, w_{width}, dpr_auto transformations applied,
+ *          or the original URL unchanged if it is not a Cloudinary upload URL.
+ *
+ * @example
+ * cloudinaryOptimizeUrl('https://res.cloudinary.com/demo/image/upload/v1/sample.jpg', 800)
+ * // → 'https://res.cloudinary.com/demo/image/upload/q_auto,f_auto,w_800,dpr_auto/v1/sample.jpg'
+ */
+export function cloudinaryOptimizeUrl(url: string, width: number): string {
+  if (!url.includes('/upload/')) return url;
+  // Avoid double-injecting transformations
+  if (url.includes('q_auto') || url.includes('f_auto')) return url;
+  return url.replace('/upload/', `/upload/q_auto,f_auto,w_${width},dpr_auto/`);
+}
+
+/**
  * Extract public ID from Cloudinary URL
  * @param url - The Cloudinary URL
  * @returns The public ID or null if not found
