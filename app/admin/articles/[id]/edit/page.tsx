@@ -100,6 +100,7 @@ export default function EditArticlePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
 
@@ -355,6 +356,7 @@ export default function EditArticlePage() {
 
         if (response.ok) {
           setHasUnsavedChanges(false);
+          setLastSavedAt(new Date());
         }
       } catch (err) {
         console.error('Auto-save failed:', err);
@@ -420,7 +422,22 @@ export default function EditArticlePage() {
                 {hasUnsavedChanges && !autoSaving && (
                   <p className="text-sm text-warning">يوجد تغييرات غير محفوظة</p>
                 )}
+                {lastSavedAt && !hasUnsavedChanges && !autoSaving && (
+                  <p className="text-sm text-muted-foreground">
+                    آخر حفظ: {lastSavedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
               </div>
+            </div>
+
+            {/* Workflow progress indicator */}
+            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
+              {[{ label: 'كتابة', step: 1 }, { label: 'تحليل AI', step: 2 }, { label: 'تحرير', step: 3 }].map(({ label, step }) => (
+                <span key={step} className="flex items-center gap-1">
+                  {step > 1 && <span>›</span>}
+                  <span className={step === 3 ? 'text-primary font-semibold' : ''}>{label}</span>
+                </span>
+              ))}
             </div>
 
             <div className="flex items-center gap-2">
@@ -528,7 +545,7 @@ export default function EditArticlePage() {
                       content={content}
                       category={selectedCategoryName}
                       onHeadlineSelect={(newHeadline) => setTitle(newHeadline)}
-                      autoAnalyze={true}
+                      autoAnalyze={false}
                     />
                   </div>
                 )}

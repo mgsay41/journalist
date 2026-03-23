@@ -239,18 +239,25 @@ export function ArticleCompletionResults({
   }, [customSlug, results.slug]);
 
   const liveSeoScore = useMemo(() => {
-    const currentMetaTitle = getCurrentMetaTitle();
-    const currentMetaDescription = getCurrentMetaDescription();
-    const currentSlug = getCurrentSlug();
-    const currentTitleValue = getCurrentTitle();
+    // Inline state derivations to avoid stale useCallback references
+    const currentTitleValue = selectedTitleIndex === -1
+      ? currentTitle
+      : (results.titleSuggestions?.[selectedTitleIndex]?.title || currentTitle);
+    const metaTitle = selectedMetaTitleIndex === -1
+      ? customMetaTitle
+      : (results.metaTitles[selectedMetaTitleIndex]?.title || '');
+    const metaDescription = selectedMetaDescriptionIndex === -1
+      ? customMetaDescription
+      : (results.metaDescriptions[selectedMetaDescriptionIndex]?.description || '');
+    const slug = customSlug || results.slug;
 
     const articleContent: ArticleContent = {
       title: currentTitleValue,
       content: currentContent,
-      metaTitle: currentMetaTitle || undefined,
-      metaDescription: currentMetaDescription || undefined,
+      metaTitle: metaTitle || undefined,
+      metaDescription: metaDescription || undefined,
       focusKeyword: focusKeyword || undefined,
-      slug: currentSlug || undefined,
+      slug: slug || undefined,
       hasFeaturedImage: false,
       imageCount: 0,
       imagesWithAlt: 0,
@@ -263,12 +270,11 @@ export function ArticleCompletionResults({
       topIssues: result.suggestions.slice(0, 3).map((s) => s.messageAr),
     };
   }, [
-    focusKeyword,
-    currentContent,
-    getCurrentTitle,
-    getCurrentMetaTitle,
-    getCurrentMetaDescription,
-    getCurrentSlug,
+    selectedTitleIndex, currentTitle, results.titleSuggestions,
+    selectedMetaTitleIndex, customMetaTitle, results.metaTitles,
+    selectedMetaDescriptionIndex, customMetaDescription, results.metaDescriptions,
+    customSlug, results.slug,
+    focusKeyword, currentContent,
   ]);
 
   // Handle content improvements
@@ -315,8 +321,19 @@ export function ArticleCompletionResults({
     }
 
     if (replaced) {
+      // Safety check: verify HTML tag balance wasn't disrupted by the replacement
+      const countTags = (html: string, tag: string) =>
+        (html.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length;
+      const tagsToCheck = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li'];
+      const isStructureSafe = tagsToCheck.every(
+        tag => countTags(newContent, tag) === countTags(currentContent, tag)
+      );
+      if (!isStructureSafe) {
+        console.warn('Grammar fix skipped — would corrupt HTML structure:', original);
+        setAppliedFixes(prev => [...prev, original]);
+        return;
+      }
       onContentChange(newContent);
-      // Remove the fixed issue from display by updating local state
       setAppliedFixes(prev => [...prev, original]);
     } else {
       console.log('Could not find text to replace:', original);

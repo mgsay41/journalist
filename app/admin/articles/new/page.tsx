@@ -84,12 +84,17 @@ export default function NewArticlePage() {
               </Link>
             </div>
 
-            {/* Center - Title */}
+            {/* Center - Title + workflow steps */}
             <div className="text-center">
               <h1 className="text-xl font-bold text-foreground">مقال جديد</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                اكتب المحتوى ودع الذكاء الاصطناعي يكمل الباقي
-              </p>
+              <div className="hidden sm:flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                {[{ label: 'كتابة', step: 1 }, { label: 'تحليل AI', step: 2 }, { label: 'تحرير', step: 3 }].map(({ label, step }) => (
+                  <span key={step} className="flex items-center gap-1">
+                    {step > 1 && <span>›</span>}
+                    <span className={step === 1 ? 'text-primary font-semibold' : ''}>{label}</span>
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Left side - Empty for balance */}

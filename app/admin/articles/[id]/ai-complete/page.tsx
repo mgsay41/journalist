@@ -50,6 +50,7 @@ export default function AiCompletePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTimeout, setIsTimeout] = useState(false);
 
   const hasAttemptedRef = useRef(false);
 
@@ -91,8 +92,16 @@ export default function AiCompletePage() {
   const runAiCompletion = useCallback(async () => {
     if (!article) return;
 
+    // Guard: require minimum 50 words before running analysis
+    const wordCount = content.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount < 50) {
+      setError('المقال قصير جداً للتحليل. يرجى إضافة ما لا يقل عن 50 كلمة.');
+      return;
+    }
+
     setCompletionResults(null);
     setError(null);
+    setIsTimeout(false);
     setIsCompleting(true);
     setCompletionStep(0);
 
@@ -102,17 +111,22 @@ export default function AiCompletePage() {
       setCompletionStep(stepCount % (COMPLETION_STEPS.length - 1));
     }, 1000);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
     try {
       // Call the API
       const response = await fetch('/api/admin/ai/complete-article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: article.title,
+          title: title,
           content: content,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       clearInterval(stepInterval);
 
       if (!response.ok) {
@@ -127,12 +141,18 @@ export default function AiCompletePage() {
       await saveAiCompletionData(results);
       setIsCompleting(false);
     } catch (err) {
+      clearTimeout(timeoutId);
       clearInterval(stepInterval);
       console.error('Completion error:', err);
-      setError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحليل المقال');
+      if (err instanceof Error && err.name === 'AbortError') {
+        setIsTimeout(true);
+        setError('انتهت مهلة التحليل (45 ثانية). يرجى المحاولة مجدداً.');
+      } else {
+        setError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحليل المقال');
+      }
       setIsCompleting(false);
     }
-  }, [article, content]);
+  }, [article, content, title]);
 
   // Save AI completion data to the article
   const saveAiCompletionData = async (results: CompletionResults) => {
@@ -175,8 +195,9 @@ export default function AiCompletePage() {
     try {
       // First, create any new categories
       const newCategoryIds: string[] = [];
+      const failedCategories: string[] = [];
       for (const categoryName of saveData.newCategoryNames) {
-        const categoryResponse = await fetch('/api/admin/categories', {
+        const categoryResponse = await fetchWithCsrf('/api/admin/categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: categoryName }),
@@ -185,13 +206,19 @@ export default function AiCompletePage() {
         if (categoryResponse.ok) {
           const newCategory = await categoryResponse.json();
           newCategoryIds.push(newCategory.id);
+        } else {
+          failedCategories.push(categoryName);
         }
+      }
+      if (failedCategories.length > 0) {
+        throw new Error(`فشل إنشاء التصنيفات: ${failedCategories.join('، ')}`);
       }
 
       // Then, create any new tags
       const newTagIds: string[] = [];
+      const failedTags: string[] = [];
       for (const tagName of saveData.newTagNames) {
-        const tagResponse = await fetch('/api/admin/tags', {
+        const tagResponse = await fetchWithCsrf('/api/admin/tags', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: tagName }),
@@ -200,7 +227,12 @@ export default function AiCompletePage() {
         if (tagResponse.ok) {
           const newTag = await tagResponse.json();
           newTagIds.push(newTag.id);
+        } else {
+          failedTags.push(tagName);
         }
+      }
+      if (failedTags.length > 0) {
+        throw new Error(`فشل إنشاء الوسوم: ${failedTags.join('، ')}`);
       }
 
       // Update the article as draft
@@ -321,12 +353,17 @@ export default function AiCompletePage() {
               </Link>
             </div>
 
-            {/* Center - Title */}
+            {/* Center - Title + workflow steps */}
             <div className="text-center">
               <h1 className="text-xl font-bold text-foreground">تحليل الذكاء الاصطناعي</h1>
-              <p className="text-sm text-muted-foreground mt-0.5 truncate max-w-xs mx-auto" title={article.title}>
-                {article.title}
-              </p>
+              <div className="hidden sm:flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                {[{ label: 'كتابة', step: 1 }, { label: 'تحليل AI', step: 2 }, { label: 'تحرير', step: 3 }].map(({ label, step }) => (
+                  <span key={step} className="flex items-center gap-1">
+                    {step > 1 && <span>›</span>}
+                    <span className={step === 2 ? 'text-primary font-semibold' : ''}>{label}</span>
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Left side - Skip to edit */}
@@ -413,6 +450,18 @@ export default function AiCompletePage() {
                   </div>
                 ))}
               </div>
+
+              {/* Retry button shown after timeout */}
+              {isTimeout && (
+                <Button
+                  onClick={() => { setIsTimeout(false); runAiCompletion(); }}
+                  size="sm"
+                  variant="outline"
+                  className="mt-4 w-full"
+                >
+                  إعادة المحاولة
+                </Button>
+              )}
             </div>
           </div>
         )}
