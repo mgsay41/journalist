@@ -9,7 +9,7 @@ interface ArticleCardProps {
     slug: string;
     excerpt?: string | null;
     featuredImage?: string | null;
-    publishedAt: Date | null;
+    publishedAt: Date | string | null;
     readingTime?: number | null;
     categories?: Array<{ id: string; name: string; slug: string }>;
     author?: {
@@ -80,8 +80,8 @@ const ArticleCardMemo = function ArticleCard({ article, size = 'default', reveal
             {/* Date meta */}
             <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
               {article.publishedAt && (
-                <time dateTime={article.publishedAt.toISOString()}>
-                  {formatDate.format(article.publishedAt)}
+                <time dateTime={new Date(article.publishedAt).toISOString()}>
+                  {formatDate.format(new Date(article.publishedAt))}
                 </time>
               )}
               {article.readingTime && (

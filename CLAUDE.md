@@ -15,7 +15,13 @@ Essential rules, patterns, and learnings for developing the Arabic Journalist CM
 ## General Rules
 
 1. **Always Read Before Writing** - Never write to a file without reading it first
-2. **Test Builds Frequently** - Run `npm run build` after completing significant features
+2. **Run All 3 Checks After Every Edit** - After any code change, always run all three in order:
+   ```bash
+   npx tsc --noEmit        # TypeScript type check
+   npm run lint            # ESLint (must have 0 errors)
+   npm run build           # Full build verification
+   ```
+   Fix any errors before considering the task done.
 3. **Mark Tasks as Done** - Update [Tasks.md](Tasks.md) with `[x]` for completed tasks after each phase
 4. **Document Errors & Solutions** - When you solve any error or edit code to fix issues, add the pattern to the "Common Mistakes to Avoid" section
 5. **Use TodoWrite for Complex Tasks** - Create todo items for multi-step work
@@ -25,7 +31,7 @@ Essential rules, patterns, and learnings for developing the Arabic Journalist CM
 
 ## Workflow After Each Phase
 
-1. Run `npm run build` and ensure no errors
+1. Run all 3 checks: `npx tsc --noEmit` → `npm run lint` (0 errors) → `npm run build`
 2. Mark all completed tasks in [Tasks.md](Tasks.md) with `[x]`
 3. Add any new errors encountered and their fixes to the "Common Mistakes to Avoid" section below
 4. Update the "Current Phase" at the top of this file

@@ -169,8 +169,8 @@ async function HeroSection() {
                     {heroArticle.publishedAt && (
                       <>
                         <span aria-hidden="true">·</span>
-                        <time dateTime={heroArticle.publishedAt.toISOString()}>
-                          {formatDate.format(heroArticle.publishedAt)}
+                        <time dateTime={new Date(heroArticle.publishedAt).toISOString()}>
+                          {formatDate.format(new Date(heroArticle.publishedAt))}
                         </time>
                       </>
                     )}
