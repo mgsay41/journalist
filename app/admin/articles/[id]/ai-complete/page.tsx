@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -51,6 +51,8 @@ export default function AiCompletePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const hasAttemptedRef = useRef(false);
+
   // Fetch article on mount
   useEffect(() => {
     async function fetchArticle() {
@@ -89,21 +91,18 @@ export default function AiCompletePage() {
   const runAiCompletion = useCallback(async () => {
     if (!article) return;
 
+    setCompletionResults(null);
     setError(null);
     setIsCompleting(true);
     setCompletionStep(0);
 
-    try {
-      // Simulate step progress
-      const stepInterval = setInterval(() => {
-        setCompletionStep(prev => {
-          if (prev < COMPLETION_STEPS.length - 1) {
-            return prev + 1;
-          }
-          return prev;
-        });
-      }, 800);
+    let stepCount = 0;
+    const stepInterval = setInterval(() => {
+      stepCount += 1;
+      setCompletionStep(stepCount % (COMPLETION_STEPS.length - 1));
+    }, 1000);
 
+    try {
       // Call the API
       const response = await fetch('/api/admin/ai/complete-article', {
         method: 'POST',
@@ -122,15 +121,15 @@ export default function AiCompletePage() {
       }
 
       const results = await response.json();
-      setCompletionResults(results);
       setCompletionStep(COMPLETION_STEPS.length);
-
-      // Save AI completion data to the article
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      setCompletionResults(results);
       await saveAiCompletionData(results);
+      setIsCompleting(false);
     } catch (err) {
+      clearInterval(stepInterval);
       console.error('Completion error:', err);
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحليل المقال');
-    } finally {
       setIsCompleting(false);
     }
   }, [article, content]);
@@ -254,10 +253,16 @@ export default function AiCompletePage() {
 
   // Start AI completion automatically if no results exist
   useEffect(() => {
-    if (article && !completionResults && !isCompleting && !error) {
+    if (
+      article &&
+      !completionResults &&
+      !isCompleting &&
+      !hasAttemptedRef.current
+    ) {
+      hasAttemptedRef.current = true;
       runAiCompletion();
     }
-  }, [article, completionResults, isCompleting, error, runAiCompletion]);
+  }, [article, completionResults, isCompleting, runAiCompletion]);
 
   // Loading state
   if (isLoading) {

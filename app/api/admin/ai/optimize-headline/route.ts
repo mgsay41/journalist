@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { generateContent } from '@/lib/gemini';
-import { recordAiUsage, isGeminiConfigured } from '@/lib/ai';
+import { recordAiUsage, isGeminiConfigured, parseJsonResponse } from '@/lib/ai';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 
@@ -109,7 +109,26 @@ ${category ? `التصنيف: ${category}` : ''}
     // Parse response
     let analysis;
     try {
-      analysis = JSON.parse(result.text);
+      analysis = parseJsonResponse<{
+        currentHeadline: {
+          headline: string;
+          score: number;
+          length: number;
+          hasPowerWords: boolean;
+          hasNumber: boolean;
+          issues: string[];
+        };
+        suggestions: Array<{
+          headline: string;
+          score: number;
+          length: number;
+          type: 'professional' | 'catchy' | 'power-words' | 'number';
+          hasPowerWords: boolean;
+          hasNumber: boolean;
+          improvements: string[];
+        }>;
+        recommended: number;
+      }>(result.text);
     } catch {
       return NextResponse.json(
         { error: 'Failed to parse AI response' },

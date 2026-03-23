@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SeoScoreCard } from './SeoScoreCard';
 import { CategoryTagSelector } from './CategoryTagSelector';
 import { MetaOptionsSelector } from './MetaOptionsSelector';
 import { ContentImprovementCard } from './ContentImprovementCard';
 import { AiImageGenerator, type GeneratedImageData } from './AiImageGenerator';
+import { analyzeArticle } from '@/lib/seo';
+import type { ArticleContent } from '@/lib/seo';
 
 // Types matching the API response
 interface SuggestedCategory {
@@ -235,6 +237,39 @@ export function ArticleCompletionResults({
   const getCurrentSlug = useCallback(() => {
     return customSlug || results.slug;
   }, [customSlug, results.slug]);
+
+  const liveSeoScore = useMemo(() => {
+    const currentMetaTitle = getCurrentMetaTitle();
+    const currentMetaDescription = getCurrentMetaDescription();
+    const currentSlug = getCurrentSlug();
+    const currentTitleValue = getCurrentTitle();
+
+    const articleContent: ArticleContent = {
+      title: currentTitleValue,
+      content: currentContent,
+      metaTitle: currentMetaTitle || undefined,
+      metaDescription: currentMetaDescription || undefined,
+      focusKeyword: focusKeyword || undefined,
+      slug: currentSlug || undefined,
+      hasFeaturedImage: false,
+      imageCount: 0,
+      imagesWithAlt: 0,
+    };
+
+    const result = analyzeArticle(articleContent);
+    return {
+      score: result.percentage,
+      status: result.status,
+      topIssues: result.suggestions.slice(0, 3).map((s) => s.messageAr),
+    };
+  }, [
+    focusKeyword,
+    currentContent,
+    getCurrentTitle,
+    getCurrentMetaTitle,
+    getCurrentMetaDescription,
+    getCurrentSlug,
+  ]);
 
   // Handle content improvements
   const handleAddIntro = useCallback((intro: string) => {
@@ -562,9 +597,9 @@ export function ArticleCompletionResults({
 
       {/* SEO Score Card */}
       <SeoScoreCard
-        score={results.seoAnalysis.score}
-        status={results.seoAnalysis.status}
-        topIssues={results.seoAnalysis.topIssues}
+        score={liveSeoScore.score}
+        status={liveSeoScore.status}
+        topIssues={liveSeoScore.topIssues}
       />
 
       {/* Title Suggestions */}

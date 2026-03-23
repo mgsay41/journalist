@@ -1,241 +1,278 @@
-# TTS Upgrade: Edge TTS (Free) + Full Audio Player
+# AI Article Flow Enhancement Plan
 
 ## Context
 
-The current `TextToSpeech.tsx` uses the browser's Web Speech API — robotic-sounding on most desktops, no real time tracking, and no seeking. The user wants natural Arabic audio with a proper audio player UI (progress bar, time display, scrubbing).
+The article creation workflow has three confirmed bugs between the AI analysis page (`ai-complete`) and the edit page:
 
-**Solution**: Use the **`msedge-tts`** npm package — a free, no-API-key client for Microsoft Edge's "Read Aloud" service that gives access to the neural voice `ar-SA-ZariyahNeural` (the same voice used in Edge browser). It returns a real MP3 stream → served via a Next.js API route → cached in Cloudinary → HTML5 `<audio>` element handles perfect seeking and time display.
-
-**Why this approach:**
-
-- 100% free, no API key, no account needed
-- `ar-SA-ZariyahNeural` = natural, non-robotic Saudi Arabic voice
-- Real MP3 output → HTML5 `<audio>` → exact time display + real seek/scrub
-- Cloudinary caching (already configured) → instant playback after first load
-- Works in all browsers consistently (audio is generated server-side)
+1. **Loading screen gets stuck** — fake step animation caps at the last step and spins indefinitely
+2. **AI parsing fails in edit page** — `HeadlineOptimizer` auto-triggers on load but the API route uses bare `JSON.parse`, which fails when Gemini wraps JSON in markdown code blocks
+3. **SEO scores differ** — AI page shows a subjective AI-estimated score; edit page shows a deterministic algorithmic score; even the "good" threshold is different (>= 70 vs >= 81)
 
 ---
 
-## Architecture
+## Issue 1: AI Loading Screen Fix
 
-```
-User clicks Play
-  → Client POSTs { slug, text, title } to /api/tts
-  → Server checks Cloudinary cache (public_id: tts/{slug})
-  → Cache HIT  → return { url: cloudinary_url }  (fast)
-  → Cache MISS → msedge-tts synthesizes MP3 stream
-               → Buffer collected → uploaded to Cloudinary
-               → return { url: cloudinary_url }
-  → Client sets <audio>.src = url → full native seeking + time display
-```
+**Root cause**: `setInterval` in `runAiCompletion` caps at step 5 (`COMPLETION_STEPS.length - 1 = 5`) and stays stuck in "spinning" state while waiting for the API (which can take 10–30s). Also: old results aren't cleared on regenerate; dismissed errors re-trigger auto-analysis.
 
----
+**File**: `app/admin/articles/[id]/ai-complete/page.tsx`
 
-## Files to Create / Modify
+**Changes**:
 
-### 1. NEW: `app/api/tts/route.ts`
+### 1a — Clear stale results on regenerate
 
-**Install first**: `npm install msedge-tts`
-
-Logic:
-
-1. `POST` accepts `{ slug: string, text: string, title?: string }`
-2. Validate: non-empty text, max 50,000 chars, `slug` required
-3. Check Cloudinary: `cloudinary.api.resource('tts/{slug}', { resource_type: 'video' })`
-   - If found → return `{ url: result.secure_url }` immediately
-4. Prepare text: extract plain text from HTML (if needed) + prepend title
-5. Synthesize via `msedge-tts`:
-
-   ```typescript
-   import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
-
-   const tts = new MsEdgeTTS();
-   await tts.setMetadata(
-     "ar-SA-ZariyahNeural", // female, natural Saudi Arabic
-     OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
-   );
-   const readable = tts.toStream(text);
-   // Collect chunks into Buffer
-   const chunks: Buffer[] = [];
-   for await (const chunk of readable) {
-     chunks.push(chunk);
-   }
-   const audioBuffer = Buffer.concat(chunks);
-   ```
-
-6. Upload to Cloudinary (resource_type: 'video', public_id: 'tts/{slug}')
-7. Return `{ url: secure_url }`
-
-**Error handling**: If Edge TTS fails (network issue), return 503 with message. Client shows error state.
-
-**Voice alternative**: `ar-SA-HamedNeural` for male voice — could expose as a toggle.
-
-### 2. MODIFIED: `components/public/TextToSpeech.tsx`
-
-Complete rewrite. New interface:
+Add at top of `runAiCompletion` (after `if (!article) return`):
 
 ```typescript
-interface TextToSpeechProps {
-  content: string; // HTML article content
-  title?: string;
-  slug: string; // Cloudinary cache key
-  className?: string;
+setCompletionResults(null); // Clear old results before new analysis starts
+```
+
+### 1b — Fix the stuck interval animation
+
+Replace the capped interval logic:
+
+```typescript
+// BEFORE — gets stuck at step 5
+const stepInterval = setInterval(() => {
+  setCompletionStep((prev) => {
+    if (prev < COMPLETION_STEPS.length - 1) return prev + 1;
+    return prev; // stuck forever
+  });
+}, 800);
+```
+
+With a cycling loop that re-uses steps 0–4 (step 5 is reserved for "done"):
+
+```typescript
+// AFTER — cycles through steps 0-4 while waiting
+let stepCount = 0;
+const stepInterval = setInterval(() => {
+  stepCount += 1;
+  setCompletionStep(stepCount % (COMPLETION_STEPS.length - 1));
+}, 1000);
+```
+
+### 1c — Add completion animation + remove finally block
+
+Replace `finally { setIsCompleting(false) }` with explicit try/catch branches so a short delay shows "all steps done":
+
+```typescript
+try {
+  // ... API call ...
+  clearInterval(stepInterval);
+  setCompletionStep(COMPLETION_STEPS.length); // All steps lit up
+  await new Promise((resolve) => setTimeout(resolve, 600)); // Brief "done" flash
+  setCompletionResults(results);
+  await saveAiCompletionData(results);
+  setIsCompleting(false);
+} catch (err) {
+  clearInterval(stepInterval);
+  setError(err instanceof Error ? err.message : "حدث خطأ أثناء تحليل المقال");
+  setIsCompleting(false);
 }
+// Remove finally block
 ```
 
-State:
+### 1d — Fix auto-restart on error dismiss
 
-- `audioUrl: string | null`
-- `isLoading: boolean` — true while fetching from /api/tts
-- `isPlaying: boolean`
-- `currentTime: number` (seconds)
-- `duration: number` (seconds)
-- `playbackRate: string` — '0.75' | '1' | '1.25' | '1.5'
-- `error: string | null`
-
-Refs:
-
-- `audioRef = useRef<HTMLAudioElement>(null)`
-
-Key logic:
+Add a `useRef` flag so the auto-trigger `useEffect` only fires once:
 
 ```typescript
-// On play click
-async function handlePlay() {
-  if (!audioUrl) {
-    setIsLoading(true);
-    const text = title
-      ? `${title}. ${extractText(content)}`
-      : extractText(content);
-    const res = await fetch("/api/tts", {
-      method: "POST",
-      body: JSON.stringify({ slug, text, title }),
-      headers: { "Content-Type": "application/json" },
-    });
-    const { url } = await res.json();
-    setAudioUrl(url);
-    setIsLoading(false);
-    // audio.src triggers onLoadedMetadata, then play
-    audioRef.current!.src = url;
-    audioRef.current!.play();
-  } else {
-    audioRef.current!.play();
+const hasAttemptedRef = useRef(false);
+```
+
+Update the `useEffect` (line 256–260):
+
+```typescript
+// BEFORE
+useEffect(() => {
+  if (article && !completionResults && !isCompleting && !error) {
+    runAiCompletion();
   }
-  setIsPlaying(true);
-}
+}, [article, completionResults, isCompleting, error, runAiCompletion]);
 
-// Seek
-function handleSeek(e: ChangeEvent<HTMLInputElement>) {
-  const time = parseFloat(e.target.value);
-  audioRef.current!.currentTime = time;
-  setCurrentTime(time);
-}
-
-// Speed change
-function handleRateChange(rate: string) {
-  setPlaybackRate(rate);
-  if (audioRef.current) audioRef.current.playbackRate = parseFloat(rate);
-}
+// AFTER
+useEffect(() => {
+  if (
+    article &&
+    !completionResults &&
+    !isCompleting &&
+    !hasAttemptedRef.current
+  ) {
+    hasAttemptedRef.current = true;
+    runAiCompletion();
+  }
+}, [article, completionResults, isCompleting, runAiCompletion]);
 ```
 
-`<audio>` element events:
+`hasAttemptedRef` is a ref (not state) to avoid extra renders. Manual "Regenerate" button still works because it calls `runAiCompletion()` directly, bypassing the ref check.
 
-- `onLoadedMetadata` → `setDuration(audio.duration)`
-- `onTimeUpdate` → `setCurrentTime(audio.currentTime)`
-- `onEnded` → `setIsPlaying(false); setCurrentTime(0)`
-- `onPause` → `setIsPlaying(false)`
-- `onPlay` → `setIsPlaying(true)`
+---
 
-**UI Layout** (RTL, Arabic labels):
+## Issue 2: Fix AI Parsing in optimize-headline Route
 
-```
-Before play (compact):
-[ 🔊 استماع للمقال ]
+**Root cause**: `app/api/admin/ai/optimize-headline/route.ts` (line 112) uses `JSON.parse(result.text)` — fails when Gemini wraps JSON in ` ```json ``` ` code blocks.
 
-While loading:
-[ ⏳ جاري التحضير... ]
+**Solution**: Export the robust `parseJsonResponse` function from `lib/ai/service.ts` (where it already exists at line 65 but is not exported) and use it in the route.
 
-Player (expanded):
-┌────────────────────────────────────────────────────┐
-│ [▶/⏸] [══════════●────────────] 2:34 / 8:12  [■] │
-│        سرعة: [1x ▼]                               │
-└────────────────────────────────────────────────────┘
-```
-
-- Progress bar: `<input type="range" min="0" max={duration} step="0.1" value={currentTime} />`
-- Time: `formatTime(currentTime) / formatTime(duration)` — using Arabic digits via `.toLocaleString('ar-EG')`
-- Speed dropdown: existing `<Select>` component with voiceOptions
-- Stop button: resets currentTime and pauses
-
-Helper:
+### 2a — Export from `lib/ai/service.ts`
 
 ```typescript
-function formatTime(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+// Change line 65 from:
+function parseJsonResponse<T>(text: string): T {
+// To:
+export function parseJsonResponse<T>(text: string): T {
+```
+
+### 2b — Re-export from `lib/ai/index.ts`
+
+Add to the `export { ... } from "./service"` block (line 9–27):
+
+```typescript
+parseJsonResponse,
+```
+
+### 2c — Use in `optimize-headline/route.ts`
+
+Update import:
+
+```typescript
+import { recordAiUsage, isGeminiConfigured, parseJsonResponse } from "@/lib/ai";
+```
+
+Replace lines 110–118:
+
+```typescript
+// BEFORE
+let analysis;
+try {
+  analysis = JSON.parse(result.text);
+} catch {
+  return NextResponse.json(
+    { error: "Failed to parse AI response" },
+    { status: 500 },
+  );
+}
+
+// AFTER
+let analysis;
+try {
+  analysis = parseJsonResponse<{
+    currentHeadline: object;
+    suggestions: object[];
+    recommended: number;
+  }>(result.text);
+} catch {
+  return NextResponse.json(
+    { error: "Failed to parse AI response" },
+    { status: 500 },
+  );
 }
 ```
 
-### 3. MODIFIED: `app/article/[slug]/page.tsx` (line ~517)
+---
 
-Change:
+## Issue 3: Consistent SEO Scores
 
-```tsx
-// Before
-<TextToSpeech content={article.content} title={article.title} />
+**Root cause**: Two separate systems produce different scores:
 
-// After
-<TextToSpeech content={article.content} title={article.title} slug={article.slug} />
+- AI page uses `results.seoAnalysis.score` — subjective AI estimate
+- Edit page uses `analyzeArticle()` — deterministic algorithm with `>= 81` threshold for "good"
+- `SeoScoreCard` hardcodes `>= 70` as "good" threshold instead of matching the analyzer's `>= 81`
+
+### 3a — Fix thresholds in `SeoScoreCard.tsx`
+
+Update all comparisons from `>= 70 / >= 50` to `>= 81 / >= 51` in `components/admin/SeoScoreCard.tsx` (affects `getScoreColor`, `getScoreBackground`, SVG stroke color, and descriptive text — 4 places total).
+
+### 3b — Live SEO score in `ArticleCompletionResults.tsx`
+
+The component already has all needed state: `focusKeyword` (line 199), `getCurrentTitle()`, `getCurrentMetaTitle()`, `getCurrentMetaDescription()`, `getCurrentSlug()`.
+
+Add import at top of `components/admin/ArticleCompletionResults.tsx`:
+
+```typescript
+import { analyzeArticle } from "@/lib/seo";
+import type { ArticleContent } from "@/lib/seo";
 ```
 
-### 4. MODIFIED: `.env.example`
+Add `useMemo` hook after the existing `getCurrentSlug` callback (around line 237):
 
-Add comment (no key needed, but document the feature):
+```typescript
+// Compute live SEO score using same algorithm as edit page
+const liveSeoScore = useMemo(() => {
+  const currentMetaTitle = getCurrentMetaTitle();
+  const currentMetaDescription = getCurrentMetaDescription();
+  const currentSlug = getCurrentSlug();
+  const currentTitleValue = getCurrentTitle();
 
+  const articleContent: ArticleContent = {
+    title: currentTitleValue,
+    content: currentContent,
+    metaTitle: currentMetaTitle || undefined,
+    metaDescription: currentMetaDescription || undefined,
+    focusKeyword: focusKeyword || undefined,
+    slug: currentSlug || undefined,
+    hasFeaturedImage: false, // not available at this stage
+    imageCount: 0,
+    imagesWithAlt: 0,
+  };
+
+  const result = analyzeArticle(articleContent);
+  return {
+    score: result.percentage,
+    status: result.status,
+    topIssues: result.suggestions.slice(0, 3).map((s) => s.messageAr),
+  };
+}, [
+  focusKeyword,
+  currentContent,
+  getCurrentTitle,
+  getCurrentMetaTitle,
+  getCurrentMetaDescription,
+  getCurrentSlug,
+]);
 ```
-# Text-to-Speech (uses Microsoft Edge TTS - free, no API key required)
-# Optional: TTS voice (default: ar-SA-ZariyahNeural | alt: ar-SA-HamedNeural)
-# NEXT_PUBLIC_TTS_VOICE="ar-SA-ZariyahNeural"
+
+Replace `SeoScoreCard` usage at line 564–568:
+
+```typescript
+// BEFORE
+<SeoScoreCard
+  score={results.seoAnalysis.score}
+  status={results.seoAnalysis.status}
+  topIssues={results.seoAnalysis.topIssues}
+/>
+
+// AFTER
+<SeoScoreCard
+  score={liveSeoScore.score}
+  status={liveSeoScore.status}
+  topIssues={liveSeoScore.topIssues}
+/>
 ```
 
 ---
 
-## Cloudinary Audio Caching Notes
+## Critical Files
 
-- Cloudinary uses `resource_type: "video"` for audio files
-- Cache key: `tts/{article-slug}` (e.g., `tts/article-about-politics`)
-- One-time generation per article — subsequent plays load instantly from CDN
-- Cache invalidation (optional, for when article content changes): call
-  `cloudinary.uploader.destroy('tts/{slug}', { resource_type: 'video' })`
-  from the article update API route
+| File                                            | Change                                         |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `app/admin/articles/[id]/ai-complete/page.tsx`  | Issues 1a–1d (loading screen + auto-restart)   |
+| `lib/ai/service.ts`                             | Issue 2a (export `parseJsonResponse`)          |
+| `lib/ai/index.ts`                               | Issue 2b (re-export `parseJsonResponse`)       |
+| `app/api/admin/ai/optimize-headline/route.ts`   | Issue 2c (use robust parser)                   |
+| `components/admin/SeoScoreCard.tsx`             | Issue 3a (fix score thresholds)                |
+| `components/admin/ArticleCompletionResults.tsx` | Issue 3b (live SEO score via `analyzeArticle`) |
 
----
+## Implementation Order
+
+1. Issues 2a → 2b → 2c (export chain — each depends on the previous)
+2. Issues 1a–1d together (all in same file, all independent)
+3. Issue 3a (threshold fix in SeoScoreCard)
+4. Issue 3b (live score in ArticleCompletionResults — depends on 3a for correct colors)
 
 ## Verification
 
-1. Run `npm install msedge-tts`
-2. Run `npm run dev`
-3. Open a published article on the public site
-4. Click "استماع للمقال"
-5. Verify:
-   - Loading indicator appears while audio is generated (~2-5s first time)
-   - Audio plays with natural Arabic voice (`ar-SA-ZariyahNeural`) — not robotic
-   - Time display shows `0:00 / X:XX` (real duration)
-   - Progress bar advances as audio plays
-   - Dragging the progress bar seeks to that point correctly
-   - Speed change works
-   - Second play of same article is instant (Cloudinary cache)
-6. Run `npx tsc --noEmit` → 0 errors
-7. Run `npm run lint` → 0 errors
-8. Run `npm run build` → success
-
----
-
-## Notes
-
-- `ArticleLazyComponents.tsx` stays unchanged (still lazy-loads `TextToSpeech` with `ssr: false`)
-- No Prisma schema changes
-- `VoiceInputButton.tsx` (admin speech-to-text) unaffected
-- `msedge-tts` uses Microsoft's Edge Read Aloud service — unofficial but stable and widely used
-- If Edge TTS is unavailable (rare), API returns 503 and component shows a friendly error message
+- Run `npx tsc --noEmit` + `npm run lint` + `npm run build` after all changes
+- **Issue 1**: Create new article → observe loading overlay: steps should cycle, not get stuck; overlay closes with brief "all done" flash; error → dismiss → no auto-restart
+- **Issue 2**: Open any article in edit mode → HeadlineOptimizer should load suggestions without error (check browser Network tab for `/api/admin/ai/optimize-headline` — should return 200)
+- **Issue 3**: On AI analysis page, change focus keyword → SEO score circle should update immediately; score on AI page should be close to (same algorithm as) the edit page score

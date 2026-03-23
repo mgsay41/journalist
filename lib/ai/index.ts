@@ -24,6 +24,7 @@ export {
   autoFixLongParagraphs,
   autoFixSeoIssues,
   safeAiCall,
+  parseJsonResponse,
 } from "./service";
 
 // Re-export types

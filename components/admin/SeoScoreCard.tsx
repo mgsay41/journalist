@@ -16,14 +16,14 @@ export function SeoScoreCard({
   onViewDetails,
 }: SeoScoreCardProps) {
   const getScoreColor = () => {
-    if (score >= 70) return 'text-success';
-    if (score >= 50) return 'text-warning';
+    if (score >= 81) return 'text-success';
+    if (score >= 51) return 'text-warning';
     return 'text-danger';
   };
 
   const getScoreBackground = () => {
-    if (score >= 70) return 'bg-success/10';
-    if (score >= 50) return 'bg-warning/10';
+    if (score >= 81) return 'bg-success/10';
+    if (score >= 51) return 'bg-warning/10';
     return 'bg-danger/10';
   };
 
@@ -90,7 +90,7 @@ export function SeoScoreCard({
               <path
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                stroke={score >= 70 ? 'var(--success)' : score >= 50 ? 'var(--warning)' : 'var(--danger)'}
+                stroke={score >= 81 ? 'var(--success)' : score >= 51 ? 'var(--warning)' : 'var(--danger)'}
                 strokeWidth="3"
                 strokeDasharray={`${score}, 100`}
                 strokeLinecap="round"
@@ -112,9 +112,9 @@ export function SeoScoreCard({
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              {score >= 70
+              {score >= 81
                 ? 'المقال محسّن بشكل جيد لمحركات البحث'
-                : score >= 50
+                : score >= 51
                 ? 'يمكن تحسين ترتيب المقال في محركات البحث'
                 : 'يحتاج المقال لتحسينات كبيرة في SEO'}
             </p>

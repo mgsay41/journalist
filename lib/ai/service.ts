@@ -62,7 +62,7 @@ export interface AiResultWithUsage<T> {
 }
 
 // Helper to parse JSON from AI response
-function parseJsonResponse<T>(text: string): T {
+export function parseJsonResponse<T>(text: string): T {
   let jsonStr = text.trim();
 
   // Remove markdown code block wrapper if present
