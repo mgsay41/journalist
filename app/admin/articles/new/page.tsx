@@ -268,10 +268,10 @@ export default function NewArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-20">
+      <header className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-3 px-5 z-20">
         <Link
           href="/admin/articles"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
           dir="rtl"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,15 +280,15 @@ export default function NewArticlePage() {
           المقالات
         </Link>
 
-        <div className="w-px h-4 bg-border shrink-0" />
+        <div className="w-px h-4 bg-border/60 shrink-0" />
 
         <span className="flex-1 text-sm text-muted-foreground/50 truncate text-right" dir="rtl">
           {title || 'مقال جديد'}
         </span>
 
-        <div className="shrink-0 text-xs">
+        <div className="shrink-0">
           {saveStatus === 'saving' && (
-            <span className="flex items-center gap-1 text-amber-500">
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -297,14 +297,16 @@ export default function NewArticlePage() {
             </span>
           )}
           {saveStatus === 'saved' && (
-            <span className="flex items-center gap-1 text-green-600">
+            <span className="flex items-center gap-1.5 text-xs text-success bg-success/10 px-2.5 py-1 rounded-full">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
               محفوظ
             </span>
           )}
-          {saveStatus === 'error' && <span className="text-red-500">خطأ في الحفظ</span>}
+          {saveStatus === 'error' && (
+            <span className="text-xs text-danger bg-danger/10 px-2.5 py-1 rounded-full">خطأ في الحفظ</span>
+          )}
         </div>
 
         <Button
@@ -318,18 +320,17 @@ export default function NewArticlePage() {
         </Button>
 
         <Button
-          variant="primary"
           size="sm"
           onClick={openPublishModal}
           disabled={publishing || !title.trim()}
-          className="shrink-0"
+          className="shrink-0 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
         >
           {publishing ? 'جاري النشر...' : 'نشر'}
         </Button>
 
         <button
           onClick={() => setPanelOpen(!panelOpen)}
-          className="shrink-0 p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="shrink-0 p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
           title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

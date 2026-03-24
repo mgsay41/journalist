@@ -154,6 +154,53 @@ function saveSectionStates(states: Record<string, boolean>) {
   } catch {}
 }
 
+function ScoreRing({ score, label }: { score: number; label: string }) {
+  const color = score >= 70 ? "#16a34a" : score >= 50 ? "#ca8a04" : "#dc2626";
+  const r = 18;
+  const circ = 2 * Math.PI * r;
+  const pct = (score / 100) * circ;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-muted/30"
+        />
+        <circle
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeDasharray={`${pct} ${circ}`}
+          strokeLinecap="round"
+          transform="rotate(-90 24 24)"
+          style={{ transition: "stroke-dasharray 0.5s ease" }}
+        />
+        <text
+          x="24"
+          y="28"
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="600"
+          fill={color}
+        >
+          {score}
+        </text>
+      </svg>
+      <span className="text-[10px] text-muted-foreground font-medium">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function UnifiedAiPanel({
   editorRef,
   title,
@@ -201,6 +248,7 @@ export function UnifiedAiPanel({
   const [aiChanges, setAiChanges] = useState<AiChange[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [sectionStates, setSectionStates] = useState<Record<string, boolean>>(loadSectionStates);
+  const [dismissedGrammarIndices, setDismissedGrammarIndices] = useState<Set<number>>(new Set());
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const issuesSectionRef = useRef<HTMLDivElement>(null);
@@ -286,7 +334,8 @@ export function UnifiedAiPanel({
       });
 
       if (!response.ok) {
-        throw new Error('فشل في الاتصال بخدمة التحليل');
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'فشل في الاتصال بخدمة التحليل');
       }
 
       const reader = response.body?.getReader();
@@ -304,75 +353,76 @@ export function UnifiedAiPanel({
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === 'step') {
-                setAiStep(data.step);
-                const stepMessages = [
-                  'جاري التحليل...',
-                  'استخراج الكلمات المفتاحية...',
-                  'إنشاء بيانات الميتا...',
-                  'فحص القواعد النحوية...',
-                  'حساب درجة SEO...',
-                ];
-                setAiMessage(stepMessages[data.step] || 'جاري المعالجة...');
-              } else if (data.type === 'complete') {
-                setCompletionResults(data.data);
-                if (data.data.focusKeyword) {
-                  onFocusKeywordChange(data.data.focusKeyword);
-                }
-                if (data.data.slug) {
-                  onSlugChange(data.data.slug);
-                }
-                if (data.data.excerpt) {
-                  onExcerptChange(data.data.excerpt);
-                }
-                if (data.data.metaTitles?.[0]) {
-                  onMetaTitleChange(data.data.metaTitles[0].title);
-                }
-                if (data.data.metaDescriptions?.[0]) {
-                  onMetaDescriptionChange(data.data.metaDescriptions[0].description);
-                }
-                const existingCatIds = data.data.suggestedCategories
-                  .filter((c: SuggestedCategory) => c.isExisting && c.id)
-                  .map((c: SuggestedCategory) => c.id);
-                const newCats = data.data.suggestedCategories
-                  .filter((c: SuggestedCategory) => !c.isExisting)
-                  .map((c: SuggestedCategory) => c.name);
-                onCategoriesChange(existingCatIds, newCats);
-                setNewCategoryNames(newCats);
-
-                const existingTagIds = data.data.suggestedTags
-                  .filter((t: SuggestedTag) => t.isExisting && t.id)
-                  .map((t: SuggestedTag) => t.id);
-                const newTags = data.data.suggestedTags
-                  .filter((t: SuggestedTag) => !t.isExisting)
-                  .map((t: SuggestedTag) => t.name);
-                onTagsChange(existingTagIds, newTags);
-                setNewTagNames(newTags);
-
-                setAiPhase('complete');
-                setAiMessage('اكتمل التحليل');
-
-                if (data.data.grammarIssues?.length > 0 && editorRef.current) {
-                  const marks = convertGrammarIssuesToMarks(data.data.grammarIssues);
-                  const grammarIssues = marks.map(m => ({
-                    id: m.id,
-                    type: m.type,
-                    original: m.original,
-                    correction: m.correction,
-                    explanation: m.explanation,
-                  }));
-                  editorRef.current.applyGrammarMarks(grammarIssues);
-                  setGrammarMarksActive(true);
-                }
-              } else if (data.type === 'error') {
-                throw new Error(data.message);
-              }
-            } catch {
-              // Skip malformed JSON
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch {
+            continue;
+          }
+          if (data.type === 'step') {
+            setAiStep(data.step);
+            const stepMessages = [
+              'جاري التحليل...',
+              'استخراج الكلمات المفتاحية...',
+              'إنشاء بيانات الميتا...',
+              'فحص القواعد النحوية...',
+              'حساب درجة SEO...',
+            ];
+            setAiMessage(stepMessages[data.step] || 'جاري المعالجة...');
+          } else if (data.type === 'complete') {
+            setCompletionResults(data.data);
+            setDismissedGrammarIndices(new Set());
+            if (data.data.focusKeyword) {
+              onFocusKeywordChange(data.data.focusKeyword);
             }
+            if (data.data.slug) {
+              onSlugChange(data.data.slug);
+            }
+            if (data.data.excerpt) {
+              onExcerptChange(data.data.excerpt);
+            }
+            if (data.data.metaTitles?.[0]) {
+              onMetaTitleChange(data.data.metaTitles[0].title);
+            }
+            if (data.data.metaDescriptions?.[0]) {
+              onMetaDescriptionChange(data.data.metaDescriptions[0].description);
+            }
+            const existingCatIds = data.data.suggestedCategories
+              .filter((c: SuggestedCategory) => c.isExisting && c.id)
+              .map((c: SuggestedCategory) => c.id);
+            const newCats = data.data.suggestedCategories
+              .filter((c: SuggestedCategory) => !c.isExisting)
+              .map((c: SuggestedCategory) => c.name);
+            onCategoriesChange(existingCatIds, newCats);
+            setNewCategoryNames(newCats);
+
+            const existingTagIds = data.data.suggestedTags
+              .filter((t: SuggestedTag) => t.isExisting && t.id)
+              .map((t: SuggestedTag) => t.id);
+            const newTags = data.data.suggestedTags
+              .filter((t: SuggestedTag) => !t.isExisting)
+              .map((t: SuggestedTag) => t.name);
+            onTagsChange(existingTagIds, newTags);
+            setNewTagNames(newTags);
+
+            setAiPhase('complete');
+            setAiMessage('اكتمل التحليل');
+
+            if (data.data.grammarIssues?.length > 0 && editorRef.current) {
+              const marks = convertGrammarIssuesToMarks(data.data.grammarIssues);
+              const grammarIssues = marks.map(m => ({
+                id: m.id,
+                type: m.type,
+                original: m.original,
+                correction: m.correction,
+                explanation: m.explanation,
+              }));
+              editorRef.current.applyGrammarMarks(grammarIssues);
+              setGrammarMarksActive(true);
+            }
+          } else if (data.type === 'error') {
+            throw new Error(data.message);
           }
         }
       }
@@ -420,7 +470,8 @@ export function UnifiedAiPanel({
       });
 
       if (!response.ok) {
-        throw new Error('فشل في الاتصال بخدمة إعادة الكتابة');
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'فشل في الاتصال بخدمة إعادة الكتابة');
       }
 
       const reader = response.body?.getReader();
@@ -438,49 +489,53 @@ export function UnifiedAiPanel({
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === 'step') {
-                setAiStep(data.step);
-                const stepMessages = ['تحليل المحتوى...', 'إعادة الكتابة بالذكاء الاصطناعي...', 'اكتمل'];
-                setAiMessage(stepMessages[data.step] || 'جاري المعالجة...');
-              } else if (data.type === 'complete') {
-                const result: RewriteArticleResult = data.data;
-                const diffResults = computeParagraphDiff(content, result.rewrittenContent);
-                const modified = diffResults.filter((d) => d.type === "modified");
-                onContentChange(result.rewrittenContent);
-                if (result.rewrittenTitle) {
-                  onTitleChange(result.rewrittenTitle);
-                }
-                setRewriteChanges(result.changesSummary || []);
-                setAiIteration(prev => prev + 1);
-                setAiPhase('complete');
-                setAiMessage('اكتملت إعادة الكتابة');
-                
-                if (modified.length > 0) {
-                  const marks = buildAiEditMarksFromDiff(diffResults, result.rewrittenContent);
-                  setTimeout(() => editorRef.current?.applyAiEditMarks(marks), 100);
-                  setAiEditCount(modified.length);
-                  
-                  const changes: AiChange[] = modified.map((d, i) => ({
-                    id: `ai-edit-${i}`,
-                    originalText: d.originalText || '',
-                    aiText: d.rewrittenText || '',
-                  }));
-                  setAiChanges(changes);
-                  setShowReviewModal(true);
-                }
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch {
+            continue;
+          }
+          if (data.type === 'step') {
+            setAiStep(data.step);
+            const stepMessages = ['تحليل المحتوى...', 'إعادة الكتابة بالذكاء الاصطناعي...', 'اكتمل'];
+            setAiMessage(stepMessages[data.step] || 'جاري المعالجة...');
+          } else if (data.type === 'complete') {
+            const result: RewriteArticleResult = data.data;
+            const diffResults = computeParagraphDiff(content, result.rewrittenContent);
+            const modified = diffResults.filter((d) => d.type === "modified");
 
-                setTimeout(() => {
-                  handleAnalyze();
-                }, 1000);
-              } else if (data.type === 'error') {
-                throw new Error(data.message);
-              }
-            } catch {
-              // Skip malformed JSON
+            const editorInstance = editorRef.current?.getEditor();
+            if (editorInstance) {
+              editorInstance.commands.setContent(result.rewrittenContent);
+              editorRef.current?.clearAllMarks();
+              setGrammarMarksActive(false);
             }
+
+            if (modified.length > 0) {
+              const marks = buildAiEditMarksFromDiff(diffResults, result.rewrittenContent);
+              editorRef.current?.applyAiEditMarks(marks);
+              setAiEditCount(modified.length);
+
+              const changes: AiChange[] = modified.map((d, i) => ({
+                id: `ai-edit-${i}`,
+                originalText: d.originalText || '',
+                aiText: d.rewrittenText || '',
+              }));
+              setAiChanges(changes);
+              setShowReviewModal(true);
+            }
+
+            if (result.rewrittenTitle) {
+              onTitleChange(result.rewrittenTitle);
+            }
+            setRewriteChanges(result.changesSummary || []);
+            setAiIteration(prev => prev + 1);
+            setAiPhase('complete');
+            setAiMessage('اكتملت إعادة الكتابة');
+            onContentChange(result.rewrittenContent);
+          } else if (data.type === 'error') {
+            throw new Error(data.message);
           }
         }
       }
@@ -493,7 +548,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إعادة الكتابة');
       setAiPhase('error');
     }
-  }, [focusKeyword, articleId, title, content, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, handleAnalyze, completionResults, editorRef]);
+  }, [focusKeyword, articleId, title, content, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, completionResults, editorRef]);
 
   const handleApplyGrammarMarks = useCallback(() => {
     if (!editorRef.current || !completionResults?.grammarIssues) return;
@@ -613,15 +668,29 @@ export function UnifiedAiPanel({
   const renderSectionHeader = (title: string, section: string, count?: number) => (
     <button
       onClick={() => toggleSection(section)}
-      className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors rounded-t-lg"
+      className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
     >
       <div className="flex items-center gap-2">
-        <span className={`transition-transform ${sectionStates[section] ? 'rotate-90' : ''}`}>▸</span>
-        <span className="font-medium text-sm">{title}</span>
+        <span className="font-medium text-sm text-foreground">{title}</span>
         {count !== undefined && count > 0 && (
-          <span className="px-1.5 py-0.5 text-xs bg-warning/20 text-warning rounded-full">{count}</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-danger/10 text-danger rounded-full">
+            {count}
+          </span>
         )}
       </div>
+      <svg
+        className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${sectionStates[section] ? "rotate-180" : ""}`}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M19 9l-7 7-7-7"
+        />
+      </svg>
     </button>
   );
 
@@ -633,43 +702,31 @@ export function UnifiedAiPanel({
         </Alert>
       )}
 
-      <div className="flex items-center justify-center gap-6 p-4">
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${getScoreColor(liveSeoScore.score)}`}>
-            {liveSeoScore.score}
+      <div className="flex items-center justify-center gap-8 p-4">
+        <ScoreRing score={liveSeoScore.score} label="SEO" />
+        <ScoreRing score={liveGeoScore.score} label="GEO" />
+        <div className="flex flex-col items-center gap-1">
+          <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+            <span className="text-lg font-bold text-foreground">{wordCount}</span>
           </div>
-          <div className="text-xs text-muted-foreground">SEO</div>
-        </div>
-        <div className="text-center">
-          <div className={`text-2xl font-bold ${getScoreColor(liveGeoScore.score)}`}>
-            {liveGeoScore.score}
-          </div>
-          <div className="text-xs text-muted-foreground">GEO</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-foreground">
-            {wordCount}
-          </div>
-          <div className="text-xs text-muted-foreground">كلمة</div>
+          <span className="text-[10px] text-muted-foreground font-medium">كلمة</span>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-        <div className="flex items-center gap-1">
-          {[1, 2, 3, 4, 5, 6].map(step => (
+      <div className="space-y-2">
+        <div className="flex gap-0.5">
+          {[1, 2, 3, 4, 5, 6].map((step) => (
             <div
               key={step}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                 aiPhase !== 'idle' && step <= aiStep + 1
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted-foreground/20 text-muted-foreground'
+                  ? 'bg-accent'
+                  : 'bg-muted-foreground/20'
               }`}
-            >
-              {step}
-            </div>
+            />
           ))}
         </div>
-        {aiMessage && <span className="text-sm text-muted-foreground mr-2">{aiMessage}</span>}
+        {aiMessage && <span className="text-xs text-muted-foreground text-center block">{aiMessage}</span>}
       </div>
 
       {aiPhase === 'idle' && (
@@ -766,63 +823,72 @@ export function UnifiedAiPanel({
   );
 
   const renderIssuesSection = () => {
-    const grammarIssues = completionResults?.grammarIssues || [];
+    const allGrammarIssues = completionResults?.grammarIssues || [];
     const seoIssues = completionResults?.seoAnalysis?.topIssues || [];
+    
+    const grammarIssues = allGrammarIssues.filter(
+      (_, i) => !dismissedGrammarIndices.has(i)
+    );
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         {grammarIssues.length === 0 && seoIssues.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">
             لا توجد مشاكل بعد التحليل
           </p>
         )}
 
-        {grammarIssues.slice(0, 5).map((issue, i) => (
-          <div key={`grammar-${i}`} className="p-2 bg-danger/5 border border-danger/20 rounded-lg">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-danger font-medium mb-1">
-                  {issue.type === 'spelling' ? 'إملائي' : issue.type === 'grammar' ? 'نحوي' : issue.type === 'punctuation' ? 'ترقيم' : 'أسلوب'}
-                </div>
-                <div className="text-sm line-through text-muted-foreground">{issue.original}</div>
-                <div className="text-sm text-success">{issue.correction}</div>
+        {allGrammarIssues.map((issue, originalIndex) => {
+          if (dismissedGrammarIndices.has(originalIndex)) return null;
+          
+          const issueTypeLabel = issue.type === 'spelling' ? 'إملائي' : issue.type === 'grammar' ? 'نحوي' : issue.type === 'punctuation' ? 'ترقيم' : 'أسلوب';
+          
+          return (
+            <div 
+              key={`grammar-${originalIndex}`} 
+              className="flex items-start justify-between gap-3 py-2.5 px-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors group"
+            >
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-danger/70">
+                  {issueTypeLabel}
+                </span>
+                <div className="text-xs text-muted-foreground line-through">{issue.original}</div>
+                <div className="text-xs text-success font-medium">{issue.correction}</div>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
+              <button
                 onClick={() => {
                   if (editorRef.current) {
                     const editor = editorRef.current.getEditor();
                     if (editor) {
-                      editor.commands.applyGrammarCorrection(`grammar-${i}`, issue.correction);
+                      editor.commands.applyGrammarCorrection(`grammar-${originalIndex}`, issue.correction);
                     }
                   }
+                  setDismissedGrammarIndices(prev => new Set([...prev, originalIndex]));
                 }}
+                className="shrink-0 text-xs text-accent hover:text-accent-hover font-medium px-2 py-1 rounded-md hover:bg-accent/10 transition-colors"
               >
                 إصلاح
-              </Button>
+              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {seoIssues.slice(0, 3).map((issue, i) => (
-          <div key={`seo-${i}`} className="p-2 bg-warning/5 border border-warning/20 rounded-lg">
-            <div className="flex items-start gap-2">
-              <span className="text-warning">⚠</span>
-              <span className="text-sm text-foreground">{issue}</span>
-            </div>
+          <div key={`seo-${i}`} className="flex items-start gap-2 py-2 px-3 rounded-lg bg-warning/5 text-sm text-foreground/80">
+            <span className="mt-0.5 text-warning text-xs">▲</span>
+            <span>{issue}</span>
           </div>
         ))}
 
-        <div className="flex items-center justify-between p-2 bg-muted rounded">
-          <span className="text-sm">قابلية القراءة</span>
-          <span className={`text-sm font-medium ${getReadabilityColor(readabilityGrade)}`}>
+        <div className="flex items-center justify-between py-2 px-3 text-sm border-t border-border/40">
+          <span className="text-muted-foreground text-xs">قابلية القراءة</span>
+          <span className={`text-xs font-semibold ${getReadabilityColor(readabilityGrade)}`}>
             {getReadabilityLabel(readabilityGrade)}
           </span>
         </div>
-        <div className="flex items-center justify-between p-2 bg-muted rounded">
-          <span className="text-sm">صيغة المبني للمجهول</span>
-          <span className={`text-sm font-medium ${passiveVoiceCount > 3 ? 'text-warning' : 'text-success'}`}>
+        <div className="flex items-center justify-between py-2 px-3 text-sm border-t border-border/40">
+          <span className="text-muted-foreground text-xs">صيغة المبني للمجهول</span>
+          <span className={`text-xs font-semibold ${passiveVoiceCount > 3 ? 'text-warning' : 'text-success'}`}>
             {passiveVoiceCount} حالة
           </span>
         </div>
@@ -1025,64 +1091,78 @@ export function UnifiedAiPanel({
 
   return (
     <>
-      <div className="flex flex-col h-full overflow-y-auto" dir="rtl">
-        <div className="p-4 space-y-4">
-          <div className="border border-border rounded-lg overflow-hidden">
+      <div className="flex flex-col h-full overflow-y-auto bg-background" dir="rtl">
+        <div className="p-3 space-y-3">
+          <div className="border border-border/60 rounded-xl overflow-hidden bg-card shadow-sm">
             <button
               onClick={() => toggleSection('quickStats')}
-              className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <span className={`transition-transform ${sectionStates.quickStats ? 'rotate-90' : ''}`}>▸</span>
-                <span className="font-medium text-sm">التحليل السريع</span>
+                <span className="font-medium text-sm text-foreground">التحليل السريع</span>
               </div>
+              <svg
+                className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${sectionStates.quickStats ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
             {sectionStates.quickStats && (
-              <div className="p-4 border-t border-border">
+              <div className="px-4 pb-4 border-t border-border/60">
                 {renderQuickStatsSection()}
               </div>
             )}
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden">
-            {renderSectionHeader('المشاكل', 'issues', (completionResults?.grammarIssues?.length || 0) + (completionResults?.seoAnalysis?.topIssues?.length || 0))}
+          <div className="border border-border/60 rounded-xl overflow-hidden bg-card shadow-sm">
+            {renderSectionHeader('المشاكل', 'issues', ((completionResults?.grammarIssues?.length || 0) - dismissedGrammarIndices.size) + (completionResults?.seoAnalysis?.topIssues?.length || 0))}
             {sectionStates.issues && (
-              <div ref={issuesSectionRef} className="p-4 border-t border-border">
+              <div ref={issuesSectionRef} className="px-4 pb-4 border-t border-border/60">
                 {renderIssuesSection()}
               </div>
             )}
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border/60 rounded-xl overflow-hidden bg-card shadow-sm">
             {renderSectionHeader('بيانات الميتا', 'meta')}
             {sectionStates.meta && (
-              <div ref={metaSectionRef} className="p-4 border-t border-border">
+              <div ref={metaSectionRef} className="px-4 pb-4 border-t border-border/60">
                 {renderMetaSection()}
               </div>
             )}
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border/60 rounded-xl overflow-hidden bg-card shadow-sm">
             {renderSectionHeader('التصنيف', 'taxonomy')}
             {sectionStates.taxonomy && (
-              <div ref={taxonomySectionRef} className="p-4 border-t border-border">
+              <div ref={taxonomySectionRef} className="px-4 pb-4 border-t border-border/60">
                 {renderTaxonomySection()}
               </div>
             )}
           </div>
 
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border/60 rounded-xl overflow-hidden bg-card shadow-sm">
             <button
               onClick={() => toggleSection('structure')}
-              className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <span className={`transition-transform ${sectionStates.structure ? 'rotate-90' : ''}`}>▸</span>
-                <span className="font-medium text-sm">هيكل المقال</span>
+                <span className="font-medium text-sm text-foreground">هيكل المقال</span>
               </div>
+              <svg
+                className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${sectionStates.structure ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
             {sectionStates.structure && (
-              <div className="p-4 border-t border-border">
+              <div className="px-4 pb-4 border-t border-border/60">
                 <ArticleStructurePanel
                   title={title}
                   content={content}

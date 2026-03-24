@@ -1,282 +1,265 @@
-# Better Article Editor UX Plan
+# Fix: "Rewrite with AI" Feature End-to-End
 
 ## Context
 
-The current UX has a fundamental problem: **the writer must navigate to information instead of information coming to the writer.** Five tabs hide scores, issues, and tools behind clicks. Grammar marks require a manual "Apply" button. AI rewrites scatter 15+ amber highlights across the article requiring individual hover interactions. The publish flow blocks without guiding.
-
-This plan redesigns the experience around three principles:
-
-1. **Always-visible signals** — critical scores never hidden in a tab
-2. **One action, one result** — no multi-step manual chains
-3. **Guided review** — bring changes to the writer, not the other way around
+The "Rewrite with AI" button in the new/edit article pages is broken. Root cause analysis across the full SSE pipeline, editor integration, and mark-application system found 5 bugs. The most critical one (Bug 1) causes the UI to silently get stuck in the 'rewriting' state whenever Gemini returns an error — the error event is thrown inside the very `try/catch` meant for JSON parse errors, so it's caught and silently swallowed. Additional bugs cause generic error messages, a race condition when applying AI edit marks, a stale closure calling re-analyze with old content, and mark application failing for paragraphs with inline formatting (bold, italic, links).
 
 ---
 
-## What's Wrong With the Current UX (Specific Pain Points)
+## Files to Change
 
-| Pain Point                                      | Root Cause         | Impact                                                                         |
-| ----------------------------------------------- | ------------------ | ------------------------------------------------------------------------------ |
-| SEO + GEO scores hidden in SEO tab              | Tab-based sidebar  | Writer doesn't see score degrading as they write                               |
-| Grammar marks require "Apply" button            | Manual trigger     | Errors invisible until writer remembers to click                               |
-| 5-tab panel requires constant context switching | Tab architecture   | Writer loses flow switching between AI→SEO→Meta→Taxonomy→Structure             |
-| AI diff = 15+ scattered amber highlights        | No review mode     | Reviewing 12 changes requires 12 separate hover→click sequences                |
-| Pre-publish modal is a blocker, not a helper    | Warning-only modal | Writer sees "meta title missing" but must close modal and search for the field |
-| Structure checklist hidden in "هيكل" tab        | Buried in tabs     | Writer finishes article without knowing they missed a FAQ section              |
+- `components/admin/UnifiedAiPanel.tsx` — 5 changes (Bugs 1, 2, 4, 5, 6)
+- `components/admin/RichTextEditor.tsx` — 3 changes (Bug 3)
 
 ---
 
-## The Better Approach: 4 Targeted Changes
+## Bug 1 (CRITICAL) — SSE error events silently swallowed
 
-### Change 1 — Always-Visible Bottom Status Bar
+**Location**: Both `handleAnalyze` and `handleRewrite` in `UnifiedAiPanel.tsx`
 
-**New file**: `components/admin/EditorStatusBar.tsx`
-
-A slim fixed bar (40px) sits at the bottom of the editor area — not inside the sidebar. Always visible regardless of sidebar state. Shows live:
-
-```
-[ ● SEO: 72 ]  [ ● GEO: 58 ]  [ هيكل: 7/10 ]  [ 450 كلمة ]  [ ⚠ 3 أخطاء ]  [ ↑ AI ]
-```
-
-- Each metric has a colored dot (green/amber/red) matching score thresholds
-- Clicking a metric focuses the sidebar to that section (instead of requiring tab navigation)
-- Grammar error count shows if grammar marks are active (`⚠ N أخطاء` in red)
-- The `↑ AI` button opens/closes the sidebar from anywhere without looking away from content
-- Updates on the same 500ms debounce as existing live scores
-
-**Integration in `new/page.tsx` and `edit/page.tsx`**:
-
-- Place between the editor scroll area and the bottom of the page
-- Receives: `seoScore`, `geoScore`, `structureScore`, `wordCount`, `grammarCount`, `onFocus(section)`, `onTogglePanel()`
-
----
-
-### Change 2 — Single Scrollable Panel (Replace 5 Tabs)
-
-**Modify**: `components/admin/UnifiedAiPanel.tsx`
-
-Replace 5-tab navigation with a **single vertical scrollable panel** with collapsible sections. No more tab switching.
-
-**Panel structure (top to bottom):**
-
-```
-┌─────────────────────────────┐
-│  QUICK STATS (always open)  │
-│  SEO 72  GEO 58  هيكل 7/10 │
-│  [تحليل] / [إعادة الكتابة]  │
-├─────────────────────────────┤
-│  ▾ المشاكل (5)              │  ← collapsible, open by default if issues exist
-│  Grammar + SEO + GEO issues │
-│  sorted by priority          │
-├─────────────────────────────┤
-│  ▸ بيانات الميتا             │  ← collapsible, closed by default
-│  keyword, meta title, desc,  │
-│  excerpt, slug               │
-├─────────────────────────────┤
-│  ▸ التصنيف                   │  ← collapsible, closed by default
-│  Categories + Tags           │
-└─────────────────────────────┘
-```
-
-**Key decisions:**
-
-- Structure checklist moves INTO the Quick Stats section as a mini progress bar with "See all" expanding it — no separate tab
-- "Issues" section consolidates grammar errors + SEO suggestions + GEO missing items into one prioritized list
-  - Grammar errors shown as text snippets with "Fix" button inline (no need to hover in editor)
-  - One-click fix applies the correction directly: `editor.commands.applyGrammarCorrection(id, correction)`
-  - SEO issues shown as actionable items: "Add keyword to first paragraph" with direct "Fix" action where possible
-- Section open/close state persisted in `sessionStorage` so re-opening panel keeps state
-- `activeSection` state replaces `activeTab` — clicking status bar metric calls `setActiveSection('issues')` etc.
-
-**Remove from panel:**
-
-- The 5-tab `TABS` constant and tab bar
-- The `activeTab` state
-- `renderAiTab`, `renderSeoTab`, `renderMetaTab`, `renderTaxonomyTab`, `renderStructureTab` → replaced by `renderQuickStats`, `renderIssuesSection`, `renderMetaSection`, `renderTaxonomySection`
-
-**Keep from panel:**
-
-- All AI logic (handleAnalyze, handleRewrite, handleApplyGrammarMarks, handleAcceptAllAiEdits)
-- Live score computation (useEffect with analyzeArticle + analyzeGeo)
-- All state (completionResults, grammarIssues, aiEditCount, etc.)
-- The amber AI edit badge with Accept All / Reject All
-
----
-
-### Change 3 — AI Change Review Modal (Replace Scattered Amber Highlights)
-
-**New file**: `components/admin/AiChangeReviewModal.tsx`
-
-When AI rewrites content, instead of dumping all amber highlights into the editor, open a **focused review modal** that walks the writer through changes one at a time.
-
-**Modal layout:**
-
-```
-┌──────────────────────────────────────────────┐
-│  مراجعة تعديلات الذكاء الاصطناعي   3 / 12   │
-│  ████████░░░░░░░░░░░░░░   (progress bar)     │
-├──────────────────────────────────────────────┤
-│  النص الأصلي:                                │
-│  ┌──────────────────────────────────────┐    │
-│  │ مصر تشهد ارتفاعاً في معدلات التضخم   │    │
-│  └──────────────────────────────────────┘    │
-│  التعديل المقترح:                            │
-│  ┌──────────────────────────────────────┐    │
-│  │ ارتفع معدل التضخم في مصر إلى 20%    │    │
-│  └──────────────────────────────────────┘    │
-├──────────────────────────────────────────────┤
-│  [← رفض]  [Skip]  [قبول ←]                  │
-│                                              │
-│  [قبول الكل]         [رفض الكل]             │
-└──────────────────────────────────────────────┘
-```
-
-**Behavior:**
-
-- Opens automatically after AI rewrite completes (replaces the scattered amber highlight approach)
-- Writer uses:
-  - `←` arrow key or "قبول" = accept this change, advance to next
-  - `→` arrow key or "رفض" = reject this change, advance to next
-  - `Skip` = keep amber in editor, skip for now
-  - "قبول الكل" / "رفض الكل" = bulk
-- When modal closes, remaining un-reviewed changes stay as amber highlights in editor (existing behavior preserved as fallback)
-- Progress bar: `N / total` reviewed
-
-**Props:**
+**Root cause**: The SSE loop's inner `try` wraps both JSON parsing AND event handling:
 
 ```typescript
-interface AiChangeReviewModalProps {
-  changes: Array<{ id: string; originalText: string; aiText: string }>;
-  isOpen: boolean;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-  onAcceptAll: () => void;
-  onRejectAll: () => void;
-  onClose: () => void;
+try {
+  const data = JSON.parse(line.slice(6));
+  // ...
+  else if (data.type === 'error') {
+    throw new Error(data.message);  // ← thrown here...
+  }
+} catch {
+  // Skip malformed JSON           // ← ...silently caught here
 }
 ```
 
-**Integration in `UnifiedAiPanel.tsx`:**
+When Gemini returns `{ type: 'error', message: '...' }`, the error is eaten, UI stays stuck in `'rewriting'` forever.
 
-- When `aiEditCount > 0` after rewrite, instead of just showing the amber badge:
-  - Set `showReviewModal = true` to open this modal
-  - Pass the `completionResults.diffChanges` to it
-  - Modal callbacks call existing `editorRef.current.acceptAiEdit(id)` / `rejectAiEdit(id)`
-- The amber badge with "قبول الكل / رفض الكل" stays as secondary option below the modal trigger
-
-**State in UnifiedAiPanel:**
+**Fix**: Separate JSON parse from event handling in both functions:
 
 ```typescript
-const [showReviewModal, setShowReviewModal] = useState(false);
-// After rewrite, auto-open:
-if (modified.length > 0) {
-  setShowReviewModal(true); // opens modal instead of just setting aiEditCount
+for (const line of lines) {
+  if (!line.startsWith('data: ')) continue;
+  let data;
+  try {
+    data = JSON.parse(line.slice(6));
+  } catch {
+    continue;  // Only malformed JSON is skipped
+  }
+  if (data.type === 'step') { ... }
+  else if (data.type === 'complete') { ... }
+  else if (data.type === 'error') {
+    throw new Error(data.message);  // Now properly reaches outer catch
+  }
+}
+```
+
+Apply this same restructure in **both** `handleAnalyze` and `handleRewrite`.
+
+---
+
+## Bug 2 — Generic error message on non-OK HTTP response
+
+**Location**: `handleAnalyze` (~line 288) and `handleRewrite` (~line 422) in `UnifiedAiPanel.tsx`
+
+**Fix**: Read the JSON error body before throwing:
+
+```typescript
+// Before:
+if (!response.ok) {
+  throw new Error("فشل في الاتصال بخدمة إعادة الكتابة");
+}
+
+// After:
+if (!response.ok) {
+  const errorBody = await response.json().catch(() => null);
+  throw new Error(errorBody?.error || "فشل في الاتصال بخدمة إعادة الكتابة");
 }
 ```
 
 ---
 
-### Change 4 — Smart Publish Panel (Fill-While-Publishing)
+## Bug 3 — `applyAiEditMarks` fails for paragraphs with inline formatting
 
-**Modify**: Pre-publish modal in `new/page.tsx` and `edit/page.tsx`
+**Location**: `RichTextEditor.tsx`, `findTextPosition` and `applyAiEditMarks`
 
-Replace the current "warning + scores" modal with an **action-oriented panel** that lets the writer complete missing fields without closing the modal.
+**Root cause**: `findTextPosition` searches within individual text nodes (`node.isText`). When the AI output includes `<strong>`, `<em>`, or `<a>` tags, TipTap splits the content into multiple text nodes. Searching for `"Some bold text"` fails because no single node contains the full string.
 
-**New modal layout:**
+**Fix**: Add a `findBlockPosition` helper using `node.textContent` (which concatenates ALL child text nodes of a block):
 
+```typescript
+const findBlockPosition = useCallback(
+  (searchText: string): { from: number; to: number } | null => {
+    if (!editor) return null;
+    const doc = editor.state.doc;
+    let found: { from: number; to: number } | null = null;
+    const prefix = searchText.substring(0, 40).trim();
+
+    doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.isBlock && !node.isText && node.textContent) {
+        if (node.textContent.trim().startsWith(prefix)) {
+          found = { from: pos + 1, to: pos + node.nodeSize - 1 };
+          return false;
+        }
+      }
+    });
+
+    return found;
+  },
+  [editor],
+);
 ```
-┌──────────────────────────────────────────────┐
-│  نشر المقال                                  │
-├──────────────────────────────────────────────┤
-│  [ SEO 72 ●  ] [ GEO 58 ●  ]                │
-├──────────────────────────────────────────────┤
-│  ✅ العنوان الوصفي  (filled)                  │
-│  ⚠ الوصف الموجز    ← [input here directly]  │
-│  ⚠ الكلمة المفتاحية ← [input here directly]  │
-│  ⚠ الوصف الوصفي    ← [textarea here]        │
-├──────────────────────────────────────────────┤
-│  [نشر الآن]    [تصدير مسودة]                │
-└──────────────────────────────────────────────┘
-```
 
-**Key change**: Missing fields are **directly editable inside the modal** — writer fills them without closing. On change:
-
-- The parent state (excerpt, focusKeyword, metaDescription) updates via the existing callbacks
-- The ✅/⚠ indicator updates live
-
-**Implementation:**
-
-- Modal has its own local copies of missing fields (initialized from current values)
-- On clicking "نشر الآن": call the setter callbacks to sync back to parent, then trigger publish
-- This avoids needing to close-and-find-the-Meta-tab workflow
+Then in `applyAiEditMarks` (line ~270), change `findTextPosition` → `findBlockPosition`. Also add `findBlockPosition` to the `useImperativeHandle` dep array.
 
 ---
 
-### Change 5 — Auto Grammar (No "Apply" Button)
+## Bug 4 — 100ms timing race condition when applying marks
 
-**Modify**: `components/admin/UnifiedAiPanel.tsx` + `app/admin/articles/new/page.tsx`
+**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
 
-Grammar marks should appear automatically after AI analysis completes — not require a separate "Apply Grammar Marks" button click.
+**Root cause**:
 
-**Change in `handleAnalyze`**: After phase 3 (grammar) completes, automatically call `handleApplyGrammarMarks()`. Remove the "تطبيق التدقيق اللغوي" button — replace with "مسح الأخطاء النحوية" (Clear Grammar) only.
-
-**Result**: Writer clicks "تحليل أولي" once → grammar marks, SEO score, GEO score, structure all update automatically. Zero additional clicks needed.
-
----
-
-## Implementation Order
-
-```
-1. EditorStatusBar.tsx (NEW) — pure UI component, no logic
-2. AiChangeReviewModal.tsx (NEW) — pure UI component
-3. UnifiedAiPanel.tsx (MAJOR MODIFY):
-   a. Replace tabs with sections
-   b. Auto-apply grammar after analysis
-   c. Open AiChangeReviewModal after rewrite
-   d. Add onFocusSection prop for status bar integration
-4. new/page.tsx — add EditorStatusBar, wire section focus, enhance publish modal
-5. edit/page.tsx — same as new/page.tsx changes
+```typescript
+onContentChange(result.rewrittenContent); // Triggers React re-render cycle
+// ...
+setTimeout(() => editorRef.current?.applyAiEditMarks(marks), 100); // Race!
 ```
 
-After each file: `npx tsc --noEmit` (fix errors before continuing)
-Final: `npm run lint` → `npm run build`
+`onContentChange` triggers a re-render → the RichTextEditor `useEffect` calls `editor.commands.setContent()` → this wipes existing marks. The 100ms delay may or may not be enough before marks are applied.
+
+**Fix**: Reorder operations — set content directly into the editor first (synchronous), apply marks immediately, THEN call `onContentChange` for state sync. The RichTextEditor's `useEffect` is guarded by `content !== editor.getHTML()`, so when `onContentChange` eventually updates the prop, the editor already has the matching content and `setContent` won't be called again (marks survive):
+
+```typescript
+} else if (data.type === 'complete') {
+  const result: RewriteArticleResult = data.data;
+  const diffResults = computeParagraphDiff(content, result.rewrittenContent);
+  const modified = diffResults.filter((d) => d.type === 'modified');
+
+  // 1. Set content directly into editor (synchronous)
+  const editorInstance = editorRef.current?.getEditor();
+  if (editorInstance) {
+    editorInstance.commands.setContent(result.rewrittenContent);
+  }
+
+  // 2. Apply marks immediately (no setTimeout needed)
+  if (modified.length > 0) {
+    const marks = buildAiEditMarksFromDiff(diffResults, result.rewrittenContent);
+    editorRef.current?.applyAiEditMarks(marks);
+    setAiEditCount(modified.length);
+    const changes: AiChange[] = modified.map((d, i) => ({
+      id: `ai-edit-${i}`,
+      originalText: d.originalText || '',
+      aiText: d.rewrittenText || '',
+    }));
+    setAiChanges(changes);
+    setShowReviewModal(true);
+  }
+
+  // 3. Sync React state (won't re-trigger setContent since content already matches)
+  if (result.rewrittenTitle) {
+    onTitleChange(result.rewrittenTitle);
+  }
+  setRewriteChanges(result.changesSummary || []);
+  setAiIteration(prev => prev + 1);
+  setAiPhase('complete');
+  setAiMessage('اكتملت إعادة الكتابة');
+  onContentChange(result.rewrittenContent);
+}
+```
 
 ---
 
-## Critical Files
+## Bug 6 — Stale grammar marks persist after AI rewrite
 
-| File                                               | Role                                                                                    |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `components/admin/UnifiedAiPanel.tsx`              | Core change — remove tabs, add sections, auto grammar, modal trigger                    |
-| `components/admin/editor/GrammarErrorExtension.ts` | `applyGrammarCorrection` command used in Issues section inline fix                      |
-| `lib/ai/diff-utils.ts`                             | `buildAiEditMarksFromDiff` produces the `changes` array fed to AiChangeReviewModal      |
-| `components/admin/editor/AiEditExtension.ts`       | `acceptAiEdit(id)` / `rejectAiEdit(id)` called from modal callbacks                     |
-| `components/admin/RichTextEditor.tsx`              | `RichTextEditorRef` — `acceptAllAiEdits`, `rejectAllAiEdits` used in modal bulk actions |
-| `app/admin/articles/new/page.tsx`                  | Add EditorStatusBar, enhance publish modal with inline fields                           |
-| `app/admin/articles/[id]/edit/page.tsx`            | Same                                                                                    |
+**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
+
+**Root cause**: When the AI rewrites the article, the content changes completely. Any grammar marks applied from the initial analysis now point to text that no longer exists in the editor. TipTap keeps those marks rendered (yellow/red underlines) on whatever text happens to be at those positions in the new content — which is visually confusing and wrong.
+
+**Fix**: Clear all grammar marks and reset the grammar state when the rewrite completes. Add to step 1 of the reorder block (right after `editorInstance.commands.setContent`):
+
+```typescript
+// Clear stale grammar marks — content has completely changed
+editorRef.current?.clearAllMarks();
+setGrammarMarksActive(false);
+```
+
+This reuses the existing `clearAllMarks()` ref method and `setGrammarMarksActive` state already in the component. The user can re-apply grammar check after reviewing the AI rewrite by clicking "تطبيق التدقيق اللغوي" — but that requires running "إعادة التحليل" first to get fresh grammar results for the new content.
 
 ---
 
-## What Stays The Same
+## Bug 5 — Auto-reanalyze uses stale closure (wrong content)
 
-- All TipTap extensions (GrammarErrorExtension, SeoSuggestionExtension, AiEditExtension) — unchanged
-- All AI API routes — unchanged
-- All scoring logic (analyzeArticle, analyzeGeo) — unchanged
-- All diff utilities — unchanged
-- Auto-save logic — unchanged
-- Pre-existing keyboard shortcuts — unchanged
+**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
+
+**Root cause**:
+
+```typescript
+setTimeout(() => {
+  handleAnalyze(); // stale closure — analyzes OLD content, not the rewritten content
+}, 1000);
+```
+
+`handleAnalyze` is captured in `handleRewrite`'s closure before `onContentChange` triggers a re-render with the new content.
+
+**Fix**: Remove the auto-reanalyze entirely. The user can click "إعادة التحليل" manually after reviewing AI changes. Also remove `handleAnalyze` from `handleRewrite`'s `useCallback` dependency array.
+
+---
+
+## Implementation Steps
+
+### Step 1 — `UnifiedAiPanel.tsx`
+
+**1a. Fix `handleAnalyze` non-OK response** (~line 288):
+
+- Replace `throw new Error('فشل...')` with error body read + throw.
+
+**1b. Fix `handleAnalyze` SSE loop** (~lines 303-374):
+
+- Restructure `for` loop: `try{JSON.parse}catch{continue}` then handle events outside the try.
+
+**1c. Fix `handleRewrite` non-OK response** (~line 422):
+
+- Same as 1a for the rewrite endpoint.
+
+**1d. Fix `handleRewrite` SSE loop + complete block + remove auto-reanalyze** (~lines 440-496):
+
+- Restructure try/catch (Bug 1)
+- Reorder content-set → mark-apply → state-sync (Bug 4)
+- Clear stale grammar marks after `setContent` (Bug 6): call `editorRef.current?.clearAllMarks()` and `setGrammarMarksActive(false)`
+- Remove `setTimeout(() => handleAnalyze(), 1000)` (Bug 5)
+- Remove `handleAnalyze` from dependency array
+
+### Step 2 — `RichTextEditor.tsx`
+
+**2a.** Add `findBlockPosition` useCallback after `findTextPosition` (~line 194).
+
+**2b.** Change `findTextPosition` to `findBlockPosition` inside `applyAiEditMarks` (~line 270).
+
+**2c.** Add `findBlockPosition` to `useImperativeHandle` deps array (~line 301).
 
 ---
 
 ## Verification
 
-- [ ] Writing in editor → bottom bar updates SEO/GEO/word count live without any click
-- [ ] Clicking SEO score in bottom bar → panel opens and scrolls to Issues section
-- [ ] Clicking "تحليل أولي" → grammar marks appear automatically (no extra click)
-- [ ] AI rewrite completes → AiChangeReviewModal opens with first change shown
-- [ ] Arrow key → accept/reject navigates through all changes
-- [ ] "قبول الكل" in modal → all amber highlights resolved, modal closes
-- [ ] Panel has no tabs — scrolling down reveals Meta then Taxonomy sections
-- [ ] Clicking "نشر" → publish modal shows missing fields as inline editable inputs
-- [ ] Filling excerpt in publish modal → excerpt state updates without closing modal
-- [ ] `npx tsc --noEmit` = 0 errors
-- [ ] `npm run build` passes
+After making changes, run in order:
+
+```bash
+npx tsc --noEmit   # 0 type errors
+npm run lint       # 0 lint errors
+npm run build      # successful build
+```
+
+**Manual test**:
+
+1. Open new article, write 50+ words, add a title
+2. Click "تحليل أولي" → wait for completion → focus keyword auto-populated
+3. Apply grammar marks if any exist (click "تطبيق التدقيق اللغوي") — verify underlines appear in editor
+4. Click "إعادة كتابة بالذكاء الاصطناعي"
+5. Verify: spinner shows, then content updates, **grammar underlines are cleared**, diff review modal appears with AI change highlights
+6. Accept/reject individual changes, verify editor updates
+7. Click "قبول الكل" / "رفض الكل" — verify all AI marks cleared
+
+**Error path test**:
+
+- With invalid GEMINI_API_KEY, verify error message appears (not stuck spinner)
+- With rate limit hit (> 5 requests in 60s), verify rate limit message shown

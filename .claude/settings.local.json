@@ -74,7 +74,8 @@
       "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(m[''''ruleId''''], m[''''message''''][:60]\\) for r in data for m in r.get\\(''''messages'''',[]\\) if m.get\\(''''severity''''\\)==2]\")",
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/prisma/**)",
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/components/admin/**)",
-      "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/lib/ai/**)"
+      "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/lib/ai/**)",
+      "Read(//c/Users/mgsay/.claude/plans/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete"

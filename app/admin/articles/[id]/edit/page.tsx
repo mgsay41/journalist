@@ -394,10 +394,10 @@ export default function EditArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-10">
+      <header className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-3 px-5 z-20">
         <Link
           href="/admin/articles"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
           dir="rtl"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,11 +406,11 @@ export default function EditArticlePage() {
           المقالات
         </Link>
 
-        <div className="w-px h-4 bg-border shrink-0" />
+        <div className="w-px h-4 bg-border/60 shrink-0" />
 
-        <div className="text-xs shrink-0" dir="rtl">
+        <div className="shrink-0" dir="rtl">
           {autoSaving && (
-            <span className="flex items-center gap-1 text-muted-foreground">
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -419,10 +419,10 @@ export default function EditArticlePage() {
             </span>
           )}
           {hasUnsavedChanges && !autoSaving && (
-            <span className="text-amber-500">تغييرات غير محفوظة</span>
+            <span className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">تغييرات غير محفوظة</span>
           )}
           {lastSavedAt && !hasUnsavedChanges && !autoSaving && (
-            <span className="text-muted-foreground">
+            <span className="text-xs text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-full">
               محفوظ {lastSavedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
@@ -432,7 +432,7 @@ export default function EditArticlePage() {
 
         <button
           onClick={() => setIsDistractionMode(true)}
-          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
           title="وضع التركيز (Ctrl+Shift+D)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -443,7 +443,7 @@ export default function EditArticlePage() {
         <Link
           href={`/article/${article?.slug}`}
           target="_blank"
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border/60 hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
           dir="rtl"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -457,13 +457,18 @@ export default function EditArticlePage() {
           {isPending ? 'جاري الحفظ...' : 'حفظ'}
         </Button>
 
-        <Button size="sm" onClick={openPublishModal} disabled={isPending}>
+        <Button
+          size="sm"
+          onClick={openPublishModal}
+          disabled={isPending}
+          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
+        >
           {isPending ? 'جاري النشر...' : 'نشر'}
         </Button>
 
         <button
           onClick={() => setPanelOpen(!panelOpen)}
-          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
           title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

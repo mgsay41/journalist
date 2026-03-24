@@ -193,6 +193,28 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     return found;
   }, [editor]);
 
+  const findBlockPosition = useCallback(
+    (searchText: string): { from: number; to: number } | null => {
+      if (!editor) return null;
+      const doc = editor.state.doc;
+      let found: { from: number; to: number } | null = null;
+      const prefix = searchText.substring(0, 40).trim();
+
+      doc.descendants((node, pos) => {
+        if (found) return false;
+        if (node.isBlock && !node.isText && node.textContent) {
+          if (node.textContent.trim().startsWith(prefix)) {
+            found = { from: pos + 1, to: pos + node.nodeSize - 1 };
+            return false;
+          }
+        }
+      });
+
+      return found;
+    },
+    [editor],
+  );
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     getEditor: () => editor,
@@ -267,7 +289,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
       marks.forEach((mark) => {
         const searchText = mark.aiText.substring(0, 80);
-        const position = findTextPosition(searchText);
+        const position = findBlockPosition(searchText);
         if (position) {
           editor
             .chain()
@@ -298,7 +320,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       if (!editor) return;
       editor.commands.clearAllAiEdits();
     },
-  }), [editor, enableInlineSuggestions, findTextPosition]);
+  }), [editor, enableInlineSuggestions, findTextPosition, findBlockPosition]);
 
   // Handle image selection from picker
   const handleImageSelect = useCallback((image: ImageData) => {
