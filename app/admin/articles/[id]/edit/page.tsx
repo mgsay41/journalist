@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
-import { Card } from '@/components/ui/Card';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
 import { AiOutliner } from '@/components/admin/AiOutliner';
@@ -19,21 +18,15 @@ import { Alert } from '@/components/ui/Alert';
 import { Loading } from '@/components/ui/Loading';
 import { generateSlug } from '@/lib/utils/slug';
 
-// Helper function to extract image information from content
 function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
   if (!content) return { imageCount: 0, imagesWithAlt: 0 };
-
-  // Match all img tags
   const imgRegex = /<img[^>]*>/gi;
   const images = content.match(imgRegex) || [];
   const imageCount = images.length;
-
-  // Count images with non-empty alt text
   const imagesWithAlt = images.filter(img => {
     const altMatch = img.match(/alt=["']([^"']+)["']/i);
     return altMatch && altMatch[1].trim().length > 0;
   }).length;
-
   return { imageCount, imagesWithAlt };
 }
 
@@ -54,7 +47,6 @@ interface Article {
   categories: Array<{ id: string; name: string; slug: string }>;
   tags: Array<{ id: string; name: string; slug: string }>;
 }
-
 
 const statusOptions = [
   { value: 'draft', label: 'مسودة' },
@@ -89,6 +81,7 @@ export default function EditArticlePage() {
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
 
   const richTextRef = useRef<RichTextEditorRef>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -98,12 +91,10 @@ export default function EditArticlePage() {
   const [slugError, setSlugError] = useState<string | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
 
-  // AI Tools state
   const [showAiTools, setShowAiTools] = useState(false);
-  // Distraction mode state
   const [isDistractionMode, setIsDistractionMode] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
 
-  // Track if auto-save is enabled (disabled initially until article loads)
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
   const slugCheckRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -120,8 +111,6 @@ export default function EditArticlePage() {
         }
 
         setArticle(data);
-
-        // Populate form fields
         setTitle(data.title || '');
         setSlug(data.slug || '');
         setContent(data.content || '');
@@ -132,7 +121,6 @@ export default function EditArticlePage() {
         setFocusKeyword(data.focusKeyword || '');
         setArticleType(data.articleType || 'article');
 
-        // Format dates for input
         if (data.publishedAt) {
           setPublishedAt(new Date(data.publishedAt).toISOString().slice(0, 16));
         }
@@ -140,10 +128,9 @@ export default function EditArticlePage() {
           setScheduledAt(new Date(data.scheduledAt).toISOString().slice(0, 16));
         }
 
-        // Set categories and tags
         setSelectedCategories(data.categories?.map((c: { id: string }) => c.id) || []);
         setSelectedTags(data.tags?.map((t: { id: string }) => t.id) || []);
-      } catch (err) {
+      } catch {
         setError('حدث خطأ أثناء تحميل المقال');
       } finally {
         setLoading(false);
@@ -152,7 +139,6 @@ export default function EditArticlePage() {
 
     loadArticle();
   }, [articleId]);
-
 
   // Track unsaved changes
   useEffect(() => {
@@ -166,70 +152,51 @@ export default function EditArticlePage() {
         metaTitle !== (article.metaTitle || '') ||
         metaDescription !== (article.metaDescription || '') ||
         focusKeyword !== (article.focusKeyword || '');
-
       setHasUnsavedChanges(changed);
     }
   }, [title, slug, content, excerpt, status, metaTitle, metaDescription, focusKeyword, article]);
 
-  // Auto-generate slug from title
-  const handleTitleChange = useCallback((value: string) => {
-    setTitle(value);
-    if (!slug || slug === generateSlug(article?.title || '')) {
-      const newSlug = generateSlug(value);
-      setSlug(newSlug);
-      // Check slug availability for auto-generated slug
-      checkSlugAvailability(newSlug);
-    }
-  }, [slug, article]);
-
-  // Check slug availability with debounce
   const checkSlugAvailability = useCallback((slugToCheck: string) => {
-    if (slugCheckRef.current) {
-      clearTimeout(slugCheckRef.current);
-    }
-
-    if (!slugToCheck.trim()) {
-      setSlugError(null);
-      return;
-    }
-
-    // If slug is same as original, it's available
-    if (slugToCheck === article?.slug) {
-      setSlugError(null);
-      return;
-    }
+    if (slugCheckRef.current) clearTimeout(slugCheckRef.current);
+    if (!slugToCheck.trim()) { setSlugError(null); return; }
+    if (slugToCheck === article?.slug) { setSlugError(null); return; }
 
     setCheckingSlug(true);
     slugCheckRef.current = setTimeout(async () => {
       try {
         const response = await fetch(`/api/admin/articles/check-slug?slug=${encodeURIComponent(slugToCheck)}&excludeId=${articleId}`);
         const data = await response.json();
-
-        if (!data.available) {
-          setSlugError('هذا الرابط مستخدم بالفعل');
-        } else {
-          setSlugError(null);
-        }
-      } catch (err) {
-        console.error('Failed to check slug:', err);
+        setSlugError(data.available ? null : 'هذا الرابط مستخدم بالفعل');
+      } catch {
+        console.error('Failed to check slug');
       } finally {
         setCheckingSlug(false);
       }
     }, 500);
   }, [article?.slug, articleId]);
 
-  // Handle manual slug changes
+  const handleTitleChange = useCallback((value: string) => {
+    setTitle(value);
+    if (titleRef.current) {
+      titleRef.current.style.height = 'auto';
+      titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+    }
+    if (!slug || slug === generateSlug(article?.title || '')) {
+      const newSlug = generateSlug(value);
+      setSlug(newSlug);
+      checkSlugAvailability(newSlug);
+    }
+  }, [slug, article, checkSlugAvailability]);
+
   const handleSlugChange = useCallback((value: string) => {
     setSlug(value);
     checkSlugAvailability(value);
   }, [checkSlugAvailability]);
 
-  // Save article
   const saveArticle = useCallback(async (saveStatus?: string) => {
     setError(null);
     setSuccess(null);
 
-    // Create any new categories/tags first
     const createdCategoryIds: string[] = [];
     for (const name of newCategoryNames) {
       try {
@@ -295,7 +262,6 @@ export default function EditArticlePage() {
       });
 
       const data = await response.json();
-
       if (!response.ok) {
         setError(data.error || 'فشل حفظ المقال');
         return;
@@ -304,11 +270,10 @@ export default function EditArticlePage() {
       setSuccess('تم حفظ المقال بنجاح');
       setHasUnsavedChanges(false);
 
-      // Reload article data after save
       if (saveStatus && saveStatus !== status) {
         window.location.reload();
       }
-    } catch (err) {
+    } catch {
       setError('حدث خطأ أثناء حفظ المقال');
     }
   }, [articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, newCategoryNames, newTagNames, metaTitle, metaDescription, focusKeyword, articleType]);
@@ -316,73 +281,48 @@ export default function EditArticlePage() {
   // Warn before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
+      if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Auto-save every 30 seconds when there are unsaved changes
+  // Auto-save every 30 seconds
   useEffect(() => {
-    // Only enable auto-save when article is loaded and not already saving
-    if (!article || !hasUnsavedChanges) {
-      return;
-    }
+    if (!article || !hasUnsavedChanges) return;
 
     const performAutoSave = async () => {
       if (!title && !content) return;
-
       setAutoSaving(true);
       try {
-        const payload = {
-          title: title.trim(),
-          slug: slug.trim(),
-          content: content.trim(),
-          excerpt: excerpt.trim() || null,
-          status: status, // Keep current status, don't change it during auto-save
-          publishedAt: publishedAt || null,
-          scheduledAt: scheduledAt || null,
-          categoryIds: selectedCategories,
-          tagIds: selectedTags,
-          metaTitle: metaTitle.trim() || null,
-          metaDescription: metaDescription.trim() || null,
-          focusKeyword: focusKeyword.trim() || null,
-        };
-
         const response = await fetch(`/api/admin/articles/${articleId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            title: title.trim(), slug: slug.trim(), content: content.trim(),
+            excerpt: excerpt.trim() || null, status,
+            publishedAt: publishedAt || null, scheduledAt: scheduledAt || null,
+            categoryIds: selectedCategories, tagIds: selectedTags,
+            metaTitle: metaTitle.trim() || null,
+            metaDescription: metaDescription.trim() || null,
+            focusKeyword: focusKeyword.trim() || null,
+          }),
         });
-
         if (response.ok) {
           setHasUnsavedChanges(false);
           setLastSavedAt(new Date());
         }
-      } catch (err) {
-        console.error('Auto-save failed:', err);
-      } finally {
+      } catch { /* ignore */ } finally {
         setAutoSaving(false);
       }
     };
 
-    autoSaveRef.current = setInterval(performAutoSave, 30000); // 30 seconds
-
-    return () => {
-      if (autoSaveRef.current) {
-        clearInterval(autoSaveRef.current);
-      }
-    };
+    autoSaveRef.current = setInterval(performAutoSave, 30000);
+    return () => { if (autoSaveRef.current) clearInterval(autoSaveRef.current); };
   }, [article, hasUnsavedChanges, articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, metaTitle, metaDescription, focusKeyword]);
 
   const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
   const readingTime = Math.ceil(wordCount / 200);
-
-  // Extract image information from content for SEO analysis
   const imageInfo = useMemo(() => extractImageInfo(content), [content]);
 
   if (loading) {
@@ -396,330 +336,252 @@ export default function EditArticlePage() {
   if (!article && !loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Alert variant="error">
-          المقال غير موجود
-        </Alert>
+        <Alert variant="error">المقال غير موجود</Alert>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-card sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/admin/articles"
-                className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted-foreground/10 transition-colors"
-              >
-                <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                رجوع
-              </Link>
-              <div>
-                <h1 className="text-lg font-semibold">تعديل المقال</h1>
-                {autoSaving && (
-                  <p className="text-sm text-muted-foreground">جاري الحفظ التلقائي...</p>
-                )}
-                {hasUnsavedChanges && !autoSaving && (
-                  <p className="text-sm text-warning">يوجد تغييرات غير محفوظة</p>
-                )}
-                {lastSavedAt && !hasUnsavedChanges && !autoSaving && (
-                  <p className="text-sm text-muted-foreground">
-                    آخر حفظ: {lastSavedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                )}
-              </div>
-            </div>
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      {/* Minimal sticky header */}
+      <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-10">
+        <Link
+          href="/admin/articles"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          dir="rtl"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          المقالات
+        </Link>
 
-            {/* Workflow progress indicator */}
-            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
-              {[{ label: 'كتابة', step: 1 }, { label: 'تحليل AI', step: 2 }, { label: 'تحرير', step: 3 }].map(({ label, step }) => (
-                <span key={step} className="flex items-center gap-1">
-                  {step > 1 && <span>›</span>}
-                  <span className={step === 3 ? 'text-primary font-semibold' : ''}>{label}</span>
-                </span>
-              ))}
-            </div>
+        <div className="w-px h-4 bg-border shrink-0" />
 
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsDistractionMode(true)}
-                title="وضع التركيز (Ctrl+Shift+D)"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5 5m11 5l-5 5m4-4h4m0 0v-4m0 4l-5-5" />
-                </svg>
-              </Button>
-              <Link
-                href={`/article/${article?.slug}`}
-                target="_blank"
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
-              >
-                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                معاينة
-              </Link>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => saveArticle('draft')}
-                disabled={isPending}
-              >
-                {isPending ? 'جاري الحفظ...' : 'حفظ'}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => saveArticle('published')}
-                disabled={isPending}
-              >
-                {isPending ? 'جاري النشر...' : 'نشر'}
-              </Button>
-            </div>
-          </div>
+        {/* Save status */}
+        <div className="text-xs shrink-0" dir="rtl">
+          {autoSaving && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              حفظ تلقائي...
+            </span>
+          )}
+          {hasUnsavedChanges && !autoSaving && (
+            <span className="text-amber-500">تغييرات غير محفوظة</span>
+          )}
+          {lastSavedAt && !hasUnsavedChanges && !autoSaving && (
+            <span className="text-muted-foreground">
+              محفوظ {lastSavedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
         </div>
-      </div>
+
+        <div className="flex-1" />
+
+        {/* Actions */}
+        <button
+          onClick={() => setIsDistractionMode(true)}
+          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title="وضع التركيز (Ctrl+Shift+D)"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m4 0h4m0 0v-4" />
+          </svg>
+        </button>
+
+        <Link
+          href={`/article/${article?.slug}`}
+          target="_blank"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          dir="rtl"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          معاينة
+        </Link>
+
+        <Button variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
+          {isPending ? 'جاري الحفظ...' : 'حفظ'}
+        </Button>
+
+        <Button size="sm" onClick={() => saveArticle('published')} disabled={isPending}>
+          {isPending ? 'جاري النشر...' : 'نشر'}
+        </Button>
+
+        {/* Sidebar toggle */}
+        <button
+          onClick={() => setPanelOpen(!panelOpen)}
+          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+          </svg>
+        </button>
+      </header>
 
       {/* Alerts */}
-      {error && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-          <Alert variant="error" onClose={() => setError(null)}>
-            {error}
-          </Alert>
+      {(error || success) && (
+        <div className="px-4 pt-2 shrink-0 z-10">
+          {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess(null)}>{success}</Alert>}
         </div>
       )}
 
-      {success && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-          <Alert variant="success" onClose={() => setSuccess(null)}>
-            {success}
-          </Alert>
-        </div>
-      )}
+      {/* Main layout */}
+      <div className="flex-1 flex overflow-hidden">
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Center Column - Main Editor (8 cols) */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Title */}
-            <Card>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label htmlFor="title" className="block text-sm font-medium mb-2">
-                    عنوان المقال <span className="text-danger">*</span>
-                  </label>
-                  <Input
-                    id="title"
+        {/* Editor area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-8 py-10">
+
+            {/* Large title textarea */}
+            <textarea
+              ref={titleRef}
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="عنوان المقال..."
+              dir="rtl"
+              rows={1}
+              className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-4 overflow-hidden"
+              style={{ minHeight: '48px' }}
+              maxLength={200}
+            />
+
+            {/* Slug + Status row */}
+            <div className="flex items-start gap-3 mb-6" dir="rtl">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground shrink-0">رابط:</span>
+                  <input
                     type="text"
-                    value={title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="أدخل عنوان المقال..."
-                    className="text-xl font-semibold"
-                    maxLength={200}
-                    required
+                    value={slug}
+                    onChange={(e) => handleSlugChange(e.target.value)}
+                    placeholder="article-url"
+                    dir="ltr"
+                    className={`flex-1 text-xs font-mono bg-transparent outline-none border-b border-transparent hover:border-border focus:border-primary transition-colors py-0.5 text-muted-foreground focus:text-foreground ${slugError ? 'border-red-400 text-red-500' : ''}`}
                   />
-                  <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-                    <span>{title.length} / 200</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAiTools(!showAiTools)}
-                      className="text-primary hover:underline flex items-center gap-1"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      أدوات الذكاء الاصطناعي
-                    </button>
-                  </div>
-                </div>
-
-                {/* Headline Optimizer */}
-                {title && (
-                  <div className="border-t pt-4">
-                    <HeadlineOptimizer
-                      headline={title}
-                      content={content}
-                      category=""
-                      onHeadlineSelect={(newHeadline) => setTitle(newHeadline)}
-                      autoAnalyze={false}
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="slug" className="block text-sm font-medium mb-2">
-                      رابط المقال (Slug)
-                    </label>
-                    <Input
-                      id="slug"
-                      type="text"
-                      value={slug}
-                      onChange={(e) => handleSlugChange(e.target.value)}
-                      placeholder="رابط-المقال"
-                      className={`font-mono text-sm ltr ${slugError ? 'border-danger' : ''}`}
-                      dir="ltr"
-                    />
-                    {checkingSlug && (
-                      <p className="text-sm text-muted-foreground mt-1">جاري التحقق...</p>
-                    )}
-                    {slugError && (
-                      <p className="text-sm text-danger mt-1">{slugError}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="status" className="block text-sm font-medium mb-2">
-                      حالة المقال
-                    </label>
-                    <Select
-                      id="status"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      options={statusOptions}
-                    />
-                  </div>
+                  {checkingSlug && <span className="text-xs text-muted-foreground">...</span>}
+                  {slugError && <span className="text-xs text-red-500 shrink-0">{slugError}</span>}
                 </div>
               </div>
-            </Card>
+              <div className="shrink-0">
+                <Select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  options={statusOptions}
+                />
+              </div>
+            </div>
 
-            {/* AI Tools Panel */}
-            {showAiTools && (
-              <Card className="border-primary/20">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      أدوات الذكاء الاصطناعي
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowAiTools(false)}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
+            {/* Date fields when needed */}
+            {status === 'published' && (
+              <div className="mb-4" dir="rtl">
+                <label className="text-xs text-muted-foreground mb-1 block">تاريخ النشر</label>
+                <Input type="datetime-local" value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} />
+              </div>
+            )}
+            {status === 'scheduled' && (
+              <div className="mb-4" dir="rtl">
+                <label className="text-xs text-muted-foreground mb-1 block">جدولة النشر</label>
+                <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} min={new Date().toISOString().slice(0, 16)} />
+              </div>
+            )}
 
+            {/* Headline Optimizer */}
+            {title && (
+              <div className="mb-6 p-3 rounded-lg bg-muted/40 border border-border/40" dir="rtl">
+                <HeadlineOptimizer
+                  headline={title}
+                  content={content}
+                  category=""
+                  onHeadlineSelect={(newHeadline) => handleTitleChange(newHeadline)}
+                  autoAnalyze={false}
+                />
+              </div>
+            )}
+
+            {/* AI Outliner toggle */}
+            <div className="mb-6" dir="rtl">
+              <button
+                type="button"
+                onClick={() => setShowAiTools(!showAiTools)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                {showAiTools ? 'إخفاء مخطط المقال' : 'إنشاء مخطط بالذكاء الاصطناعي'}
+              </button>
+              {showAiTools && (
+                <div className="mt-3 p-4 rounded-lg border border-border/60 bg-muted/20">
                   <AiOutliner
                     onContentInsert={(insertedContent) => {
                       setContent(content + '\n\n' + insertedContent);
                     }}
                   />
                 </div>
-              </Card>
-            )}
+              )}
+            </div>
 
-            {/* Rich Text Editor */}
-            <Card>
-              <div className="p-6">
-                <label className="block text-sm font-medium mb-2">
-                  محتوى المقال <span className="text-danger">*</span>
-                </label>
-                <RichTextEditor
-                  ref={richTextRef}
-                  content={content}
-                  onChange={setContent}
-                  placeholder="ابدأ الكتابة هنا..."
-                  minHeight="500px"
-                  enableInlineSuggestions={true}
-                />
-              </div>
-            </Card>
+            {/* Subtle separator before editor */}
+            <div className="border-t border-border/40 mb-8" />
 
-            {/* Excerpt */}
-            <Card>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label htmlFor="excerpt" className="block text-sm font-medium mb-2">
-                    مقدمة المقال
-                  </label>
-                  <Textarea
-                    id="excerpt"
-                    value={excerpt}
-                    onChange={(e) => setExcerpt(e.target.value)}
-                    placeholder="ملخص قصير للمقال يظهر في قوائم المقالات..."
-                    rows={3}
-                    maxLength={500}
-                  />
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {excerpt.length} / 500
-                  </div>
-                </div>
+            {/* Rich text editor — open, no card wrapper */}
+            <RichTextEditor
+              ref={richTextRef}
+              content={content}
+              onChange={setContent}
+              placeholder="ابدأ الكتابة هنا..."
+              minHeight="400px"
+              enableInlineSuggestions={true}
+            />
+
+            {/* Excerpt — below editor */}
+            <div className="mt-10 pt-6 border-t border-border/30" dir="rtl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-muted-foreground">مقدمة المقال</label>
+                <span className="text-xs text-muted-foreground/60">{excerpt.length} / 500</span>
               </div>
-            </Card>
+              <Textarea
+                value={excerpt}
+                onChange={(e) => setExcerpt(e.target.value)}
+                placeholder="ملخص قصير للمقال يظهر في قوائم المقالات..."
+                rows={3}
+                maxLength={500}
+              />
+            </div>
+
+            {/* Stats footer */}
+            <div className="mt-6 pb-10 flex items-center gap-4 text-xs text-muted-foreground/50" dir="rtl">
+              <span>{wordCount} كلمة</span>
+              <span>·</span>
+              <span>وقت القراءة: {readingTime} دقيقة</span>
+              {article?.publishedAt && (
+                <>
+                  <span>·</span>
+                  <span>المشاهدات: {article.views || 0}</span>
+                </>
+              )}
+            </div>
           </div>
+        </div>
 
-          {/* Right Column - Metadata (3 cols) */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Publishing */}
-            <Card>
-              <div className="p-6 space-y-4">
-                <h3 className="font-semibold">النشر</h3>
-
-                {status === 'published' && (
-                  <div>
-                    <label htmlFor="publishedAt" className="block text-sm font-medium mb-2">
-                      تاريخ النشر
-                    </label>
-                    <Input
-                      id="publishedAt"
-                      type="datetime-local"
-                      value={publishedAt}
-                      onChange={(e) => setPublishedAt(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                {status === 'scheduled' && (
-                  <div>
-                    <label htmlFor="scheduledAt" className="block text-sm font-medium mb-2">
-                      جدولة النشر
-                    </label>
-                    <Input
-                      id="scheduledAt"
-                      type="datetime-local"
-                      value={scheduledAt}
-                      onChange={(e) => setScheduledAt(e.target.value)}
-                      min={new Date().toISOString().slice(0, 16)}
-                    />
-                  </div>
-                )}
-
-                <div className="pt-4 border-t text-sm text-muted-foreground">
-                  <p>• {wordCount} كلمة</p>
-                  <p>• وقت القراءة: {readingTime} دقيقة</p>
-                  {article?.publishedAt && (
-                    <>
-                      <p>• تاريخ النشر: {new Date(article.publishedAt).toLocaleDateString('ar-SA')}</p>
-                      <p>• المشاهدات: {article.views || 0}</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* AI Panel */}
+        {/* AI Panel sidebar */}
+        {panelOpen && (
+          <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
             <UnifiedAiPanel
               editorRef={richTextRef}
               title={title}
               content={content}
               articleId={articleId}
               articleType={articleType}
-              onTitleChange={setTitle}
+              onTitleChange={(newTitle) => handleTitleChange(newTitle)}
               onContentChange={setContent}
               onArticleTypeChange={setArticleType}
               onSlugChange={setSlug}
@@ -728,14 +590,14 @@ export default function EditArticlePage() {
               onExcerptChange={setExcerpt}
               onFocusKeywordChange={setFocusKeyword}
               selectedCategoryIds={selectedCategories}
-              onCategoriesChange={(ids, newNames) => {
+              onCategoriesChange={(ids, names) => {
                 setSelectedCategories(ids);
-                setNewCategoryNames(newNames);
+                setNewCategoryNames(names);
               }}
               selectedTagIds={selectedTags}
-              onTagsChange={(ids, newNames) => {
+              onTagsChange={(ids, names) => {
                 setSelectedTags(ids);
-                setNewTagNames(newNames);
+                setNewTagNames(names);
               }}
               slug={slug}
               metaTitle={metaTitle}
@@ -746,64 +608,43 @@ export default function EditArticlePage() {
               imageCount={imageInfo.imageCount}
               imagesWithAlt={imageInfo.imagesWithAlt}
             />
-          </div>
-        </div>
+          </aside>
+        )}
       </div>
 
-      {/* Keyboard Shortcuts */}
+      {/* Keyboard shortcuts */}
       <KeyboardShortcuts
         onShortcutTriggered={(shortcut) => {
-          switch (shortcut) {
-            case 'save':
-              saveArticle('draft');
-              break;
-            case 'publish':
-              saveArticle('published');
-              break;
-          }
+          if (shortcut === 'save') saveArticle('draft');
+          if (shortcut === 'publish') saveArticle('published');
         }}
       />
 
-      {/* Distraction Mode */}
+      {/* Distraction mode */}
       <DistractionMode
         isOpen={isDistractionMode}
         onClose={() => setIsDistractionMode(false)}
         title={title}
         actions={
           <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => saveArticle('draft')}
-              disabled={isPending}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
               {isPending ? 'جاري الحفظ...' : 'حفظ'}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => saveArticle('published')}
-              disabled={isPending}
-            >
+            <Button type="button" size="sm" onClick={() => saveArticle('published')} disabled={isPending}>
               {isPending ? 'جاري النشر...' : 'نشر'}
             </Button>
           </>
         }
       >
-        {/* Main Editor in Distraction Mode */}
         <div className="space-y-6">
-          <div>
-            <Input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="عنوان المقال..."
-              className="text-2xl font-semibold border-0 focus:ring-0 px-0"
-              maxLength={200}
-            />
-          </div>
-
+          <Input
+            type="text"
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="عنوان المقال..."
+            className="text-2xl font-semibold border-0 focus:ring-0 px-0"
+            maxLength={200}
+          />
           <RichTextEditor
             content={content}
             onChange={setContent}

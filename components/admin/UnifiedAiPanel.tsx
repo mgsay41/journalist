@@ -120,11 +120,34 @@ const ARTICLE_TYPE_OPTIONS = [
 ];
 
 const TABS = [
-  { id: 'ai', label: 'تحسين AI', icon: '⚡' },
-  { id: 'seo', label: 'SEO', icon: '📊' },
-  { id: 'meta', label: 'ميتا', icon: '📝' },
-  { id: 'taxonomy', label: 'التصنيف', icon: '🏷️' },
+  { id: 'ai', label: 'AI' },
+  { id: 'seo', label: 'SEO' },
+  { id: 'meta', label: 'ميتا' },
+  { id: 'taxonomy', label: 'تصنيف' },
 ] as const;
+
+function TabIcon({ id }: { id: string }) {
+  if (id === 'ai') return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  );
+  if (id === 'seo') return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  );
+  if (id === 'meta') return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  );
+}
 
 type TabId = typeof TABS[number]['id'];
 
@@ -166,7 +189,6 @@ export function UnifiedAiPanel({
   const [rewriteChanges, setRewriteChanges] = useState<string[]>([]);
   const [grammarMarksActive, setGrammarMarksActive] = useState(false);
   const [seoMarksActive, setSeoMarksActive] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [newCategoryNames, setNewCategoryNames] = useState<string[]>([]);
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
   const [liveSeoScore, setLiveSeoScore] = useState<{ score: number; status: string }>({ score: 0, status: 'needs-improvement' });
@@ -900,49 +922,28 @@ export function UnifiedAiPanel({
     );
   };
 
-  if (!isPanelOpen) {
-    return (
-      <button
-        onClick={() => setIsPanelOpen(true)}
-        className="fixed left-4 top-20 z-40 p-3 bg-card border rounded-lg shadow-lg hover:bg-muted transition-colors"
-        title="فتح لوحة AI"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-        </svg>
-      </button>
-    );
-  }
-
   return (
-    <div className="fixed right-0 top-16 bottom-0 w-96 bg-card border-l z-30 flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b">
-        <div className="flex gap-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-2 py-1 text-xs rounded ${
-                activeTab === tab.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted hover:bg-muted/80'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => setIsPanelOpen(false)}
-          className="p-1 hover:bg-muted rounded"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className="flex shrink-0 border-b border-border" dir="rtl">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            }`}
+          >
+            <TabIcon id={tab.id} />
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-4" dir="rtl">
         {activeTab === 'ai' && renderAiTab()}
         {activeTab === 'seo' && renderSeoTab()}
         {activeTab === 'meta' && renderMetaTab()}

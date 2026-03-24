@@ -27,6 +27,7 @@ export default function NewArticlePage() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const articleIdRef = useRef<string | undefined>(undefined);
   const hasReplacedUrlRef = useRef(false);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
 
   // Article state
   const [title, setTitle] = useState('');
@@ -46,15 +47,25 @@ export default function NewArticlePage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
 
-  const handleCategoriesChange = useCallback((ids: string[], newNames: string[]) => {
-    setSelectedCategoryIds(ids);
-    setNewCategoryNames(newNames);
+  // Auto-resize title textarea
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setTitle(e.target.value);
+    if (titleRef.current) {
+      titleRef.current.style.height = 'auto';
+      titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+    }
   }, []);
 
-  const handleTagsChange = useCallback((ids: string[], newNames: string[]) => {
+  const handleCategoriesChange = useCallback((ids: string[], names: string[]) => {
+    setSelectedCategoryIds(ids);
+    setNewCategoryNames(names);
+  }, []);
+
+  const handleTagsChange = useCallback((ids: string[], names: string[]) => {
     setSelectedTagIds(ids);
-    setNewTagNames(newNames);
+    setNewTagNames(names);
   }, []);
 
   // Auto-save logic
@@ -83,7 +94,6 @@ export default function NewArticlePage() {
       const data = await res.json();
       if (data.article?.id) {
         articleIdRef.current = data.article.id;
-        // Silently update the URL to the edit page once we have an ID
         if (!hasReplacedUrlRef.current) {
           hasReplacedUrlRef.current = true;
           router.replace(`/admin/articles/${data.article.id}/edit`, { scroll: false });
@@ -95,7 +105,6 @@ export default function NewArticlePage() {
     }
   }, [title, content, excerpt, metaTitle, metaDescription, router]);
 
-  // Schedule auto-save on content/title change
   useEffect(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     if (!title.trim() && !content.trim()) return;
@@ -109,7 +118,6 @@ export default function NewArticlePage() {
     };
   }, [title, content, performAutoSave]);
 
-  // Publish handler
   const handlePublish = useCallback(async () => {
     if (!title.trim()) {
       setError('العنوان مطلوب للنشر');
@@ -120,7 +128,6 @@ export default function NewArticlePage() {
     setError(null);
 
     try {
-      // Ensure we have an article ID (force-save if needed)
       if (!articleIdRef.current) {
         const saveRes = await fetchWithCsrf('/api/admin/articles/auto-save', {
           method: 'POST',
@@ -133,7 +140,6 @@ export default function NewArticlePage() {
         if (!articleIdRef.current) throw new Error('فشل الحصول على معرّف المقال');
       }
 
-      // Create new categories
       const createdCategoryIds: string[] = [];
       for (const name of newCategoryNames) {
         const res = await fetchWithCsrf('/api/admin/categories', {
@@ -147,7 +153,6 @@ export default function NewArticlePage() {
         }
       }
 
-      // Create new tags
       const createdTagIds: string[] = [];
       for (const name of newTagNames) {
         const res = await fetchWithCsrf('/api/admin/tags', {
@@ -202,36 +207,47 @@ export default function NewArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Top bar */}
-      <div className="h-14 shrink-0 border-b bg-card flex items-center gap-3 px-4 z-20">
+      {/* Minimal top bar */}
+      <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-20">
         <Link
           href="/admin/articles"
-          className="flex items-center gap-1 px-2 py-1.5 text-sm rounded-md border border-border hover:bg-muted transition-colors shrink-0"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          dir="rtl"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="hidden sm:inline">رجوع</span>
+          المقالات
         </Link>
 
-        {/* Title input */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="عنوان المقال..."
-          className="flex-1 bg-transparent text-base font-semibold placeholder:text-muted-foreground outline-none min-w-0"
-          dir="rtl"
-        />
+        <div className="w-px h-4 bg-border shrink-0" />
+
+        <span className="flex-1 text-sm text-muted-foreground/50 truncate text-right" dir="rtl">
+          {title || 'مقال جديد'}
+        </span>
 
         {/* Save status */}
-        <div className="shrink-0 text-xs text-muted-foreground">
-          {saveStatus === 'saving' && <span className="text-amber-500">جاري الحفظ...</span>}
-          {saveStatus === 'saved' && <span className="text-green-600">تم الحفظ</span>}
+        <div className="shrink-0 text-xs">
+          {saveStatus === 'saving' && (
+            <span className="flex items-center gap-1 text-amber-500">
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              حفظ...
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="flex items-center gap-1 text-green-600">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              محفوظ
+            </span>
+          )}
           {saveStatus === 'error' && <span className="text-red-500">خطأ في الحفظ</span>}
         </div>
 
-        {/* Save draft button */}
         <Button
           variant="outline"
           size="sm"
@@ -242,7 +258,6 @@ export default function NewArticlePage() {
           حفظ مسودة
         </Button>
 
-        {/* Publish button */}
         <Button
           variant="primary"
           size="sm"
@@ -252,61 +267,91 @@ export default function NewArticlePage() {
         >
           {publishing ? 'جاري النشر...' : 'نشر'}
         </Button>
-      </div>
+
+        {/* Panel toggle */}
+        <button
+          onClick={() => setPanelOpen(!panelOpen)}
+          className="shrink-0 p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+          </svg>
+        </button>
+      </header>
 
       {/* Error alert */}
       {error && (
-        <div className="px-4 pt-2 shrink-0">
+        <div className="px-4 pt-2 shrink-0 z-10">
           <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>
         </div>
       )}
 
-      {/* Main content area */}
+      {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Editor area */}
+
+        {/* Editor area — flex-1, scrollable */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="max-w-2xl mx-auto px-8 py-10">
+            {/* Large title textarea */}
+            <textarea
+              ref={titleRef}
+              value={title}
+              onChange={handleTitleChange}
+              placeholder="عنوان المقال..."
+              dir="rtl"
+              rows={1}
+              className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-8 overflow-hidden"
+              style={{ minHeight: '48px' }}
+            />
+
+            {/* Subtle separator */}
+            <div className="border-t border-border/40 mb-8" />
+
+            {/* Rich text editor */}
             <RichTextEditor
               ref={editorRef}
               content={content}
               onChange={setContent}
               placeholder="ابدأ الكتابة هنا..."
-              minHeight="calc(100vh - 120px)"
+              minHeight="calc(100vh - 260px)"
               enableInlineSuggestions={true}
             />
           </div>
         </div>
 
-        {/* AI Panel */}
-        <div className="w-95 shrink-0 overflow-y-auto border-r bg-card">
-          <UnifiedAiPanel
-            editorRef={editorRef}
-            title={title}
-            content={content}
-            articleId={articleIdRef.current}
-            articleType={articleType}
-            onTitleChange={setTitle}
-            onContentChange={setContent}
-            onArticleTypeChange={setArticleType}
-            onSlugChange={setSlug}
-            onMetaTitleChange={setMetaTitle}
-            onMetaDescriptionChange={setMetaDescription}
-            onExcerptChange={setExcerpt}
-            onFocusKeywordChange={setFocusKeyword}
-            selectedCategoryIds={selectedCategoryIds}
-            onCategoriesChange={handleCategoriesChange}
-            selectedTagIds={selectedTagIds}
-            onTagsChange={handleTagsChange}
-            slug={slug}
-            metaTitle={metaTitle}
-            metaDescription={metaDescription}
-            excerpt={excerpt}
-            focusKeyword={focusKeyword}
-            hasFeaturedImage={false}
-            imageCount={imageCount}
-            imagesWithAlt={imagesWithAlt}
-          />
-        </div>
+        {/* AI Panel sidebar — fixed width, left side */}
+        {panelOpen && (
+          <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
+            <UnifiedAiPanel
+              editorRef={editorRef}
+              title={title}
+              content={content}
+              articleId={articleIdRef.current}
+              articleType={articleType}
+              onTitleChange={setTitle}
+              onContentChange={setContent}
+              onArticleTypeChange={setArticleType}
+              onSlugChange={setSlug}
+              onMetaTitleChange={setMetaTitle}
+              onMetaDescriptionChange={setMetaDescription}
+              onExcerptChange={setExcerpt}
+              onFocusKeywordChange={setFocusKeyword}
+              selectedCategoryIds={selectedCategoryIds}
+              onCategoriesChange={handleCategoriesChange}
+              selectedTagIds={selectedTagIds}
+              onTagsChange={handleTagsChange}
+              slug={slug}
+              metaTitle={metaTitle}
+              metaDescription={metaDescription}
+              excerpt={excerpt}
+              focusKeyword={focusKeyword}
+              hasFeaturedImage={false}
+              imageCount={imageCount}
+              imagesWithAlt={imagesWithAlt}
+            />
+          </aside>
+        )}
       </div>
     </div>
   );
