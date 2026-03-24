@@ -240,7 +240,8 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
 
   const title = article.metaTitle || article.title;
   const description = article.metaDescription || article.excerpt || '';
-  const url = `${process.env.NEXT_PUBLIC_APP_URL || ''}/article/${slug}`;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
+  const url = `${siteUrl}/article/${slug}`;
   const category = article.categories[0]?.name || '';
 
   return {
@@ -358,7 +359,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     day: 'numeric',
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
   const articleUrl = `${baseUrl}/article/${slug}`;
 
   // JSON-LD structured data — Article + BreadcrumbList

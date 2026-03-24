@@ -16,10 +16,13 @@ import { EditorStyles } from './editor/EditorStyles';
 import {
   GrammarErrorExtension,
   SeoSuggestionExtension,
+  AiEditExtension,
   SuggestionTooltip,
   type GrammarErrorAttributes,
   type SeoSuggestionAttributes,
+  type AiEditAttributes,
 } from './editor';
+import type { AiEditMark } from '@/lib/ai/diff-utils';
 
 interface ImageData {
   id: string;
@@ -67,6 +70,10 @@ export interface RichTextEditorRef {
   applyGrammarMarks: (issues: GrammarIssue[]) => void;
   applySeoMarks: (suggestions: SeoSuggestion[]) => void;
   clearAllMarks: () => void;
+  applyAiEditMarks: (marks: AiEditMark[]) => void;
+  acceptAllAiEdits: () => void;
+  rejectAllAiEdits: () => void;
+  clearAllAiEdits: () => void;
 }
 
 interface RichTextEditorProps {
@@ -83,6 +90,9 @@ interface RichTextEditorProps {
   onIgnoreGrammarError?: (id: string) => void;
   onApplySeoSuggestion?: (id: string, suggestedText: string) => void;
   onIgnoreSeoSuggestion?: (id: string) => void;
+  // AI edit callbacks
+  onAcceptAiEdit?: (id: string) => void;
+  onRejectAiEdit?: (id: string) => void;
 }
 
 export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(function RichTextEditor({
@@ -98,6 +108,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
   onIgnoreGrammarError,
   onApplySeoSuggestion,
   onIgnoreSeoSuggestion,
+  onAcceptAiEdit,
+  onRejectAiEdit,
 }, ref) {
   const [showImagePicker, setShowImagePicker] = useState(false);
   const [showVideoPicker, setShowVideoPicker] = useState(false);
@@ -139,6 +151,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         },
       }),
       YouTubeExtension,
+      AiEditExtension,
       // Inline suggestion extensions (only add if enabled)
       ...(enableInlineSuggestions ? [GrammarErrorExtension, SeoSuggestionExtension] : []),
     ],
@@ -246,6 +259,45 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       editor.commands.clearAllGrammarErrors();
       editor.commands.clearAllSeoSuggestions();
     },
+
+    applyAiEditMarks: (marks: AiEditMark[]) => {
+      if (!editor) return;
+
+      editor.commands.clearAllAiEdits();
+
+      marks.forEach((mark) => {
+        const searchText = mark.aiText.substring(0, 80);
+        const position = findTextPosition(searchText);
+        if (position) {
+          editor
+            .chain()
+            .setTextSelection(position)
+            .setAiEdit({
+              id: mark.id,
+              originalText: mark.originalText,
+              aiText: mark.aiText,
+            })
+            .run();
+        }
+      });
+
+      editor.commands.blur();
+    },
+
+    acceptAllAiEdits: () => {
+      if (!editor) return;
+      editor.commands.acceptAllAiEdits();
+    },
+
+    rejectAllAiEdits: () => {
+      if (!editor) return;
+      editor.commands.rejectAllAiEdits();
+    },
+
+    clearAllAiEdits: () => {
+      if (!editor) return;
+      editor.commands.clearAllAiEdits();
+    },
   }), [editor, enableInlineSuggestions, findTextPosition]);
 
   // Handle image selection from picker
@@ -348,6 +400,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           onIgnoreGrammarError={onIgnoreGrammarError}
           onApplySeoSuggestion={onApplySeoSuggestion}
           onIgnoreSeoSuggestion={onIgnoreSeoSuggestion}
+          onAcceptAiEdit={onAcceptAiEdit}
+          onRejectAiEdit={onRejectAiEdit}
         />
       )}
     </div>

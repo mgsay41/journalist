@@ -14,6 +14,13 @@ export {
   type SeoSuggestionType,
 } from './SeoSuggestionExtension';
 
+export {
+  AiEditExtension,
+  aiEditStyles,
+  type AiEditOptions,
+  type AiEditAttributes,
+} from './AiEditExtension';
+
 export { SuggestionTooltip } from './SuggestionTooltip';
 
 // Writing Assistant

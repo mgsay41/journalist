@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
-import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Alert';
+import { AiChangeReviewModal } from '@/components/admin/AiChangeReviewModal';
 import type { RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import {
   convertGrammarIssuesToMarks,
@@ -15,11 +15,11 @@ import {
   countPassiveVoice,
   getReadabilityLabel,
   getReadabilityColor,
-  type GrammarMark,
-  type SeoMark,
 } from '@/lib/ai/inline-marks';
 import type { CompleteArticleResult, RewriteArticleResult, ArticleGrammarIssue } from '@/lib/ai';
-import { analyzeArticle, type ArticleContent } from '@/lib/seo';
+import { analyzeArticle, analyzeGeo, type ArticleContent } from '@/lib/seo';
+import { computeParagraphDiff, buildAiEditMarksFromDiff } from '@/lib/ai/diff-utils';
+import { ArticleStructurePanel } from './ArticleStructurePanel';
 
 interface SuggestedCategory {
   name: string;
@@ -109,6 +109,15 @@ interface UnifiedAiPanelProps {
   imageCount: number;
   imagesWithAlt: number;
   onComplete?: (data: { articleId: string }) => void;
+  onFocusSection?: (section: string) => void;
+  focusSection?: string;
+  onScoreChange?: (scores: { seo: number; geo: number; structure: number; structureTotal: number; grammar: number }) => void;
+}
+
+interface AiChange {
+  id: string;
+  originalText: string;
+  aiText: string;
 }
 
 const ARTICLE_TYPE_OPTIONS = [
@@ -119,37 +128,31 @@ const ARTICLE_TYPE_OPTIONS = [
   { value: 'opinion', label: 'رأي' },
 ];
 
-const TABS = [
-  { id: 'ai', label: 'AI' },
-  { id: 'seo', label: 'SEO' },
-  { id: 'meta', label: 'ميتا' },
-  { id: 'taxonomy', label: 'تصنيف' },
-] as const;
+const SECTION_STORAGE_KEY = 'unified-panel-sections';
 
-function TabIcon({ id }: { id: string }) {
-  if (id === 'ai') return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-  );
-  if (id === 'seo') return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-  );
-  if (id === 'meta') return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  );
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-    </svg>
-  );
+function getDefaultSectionStates(): Record<string, boolean> {
+  return {
+    quickStats: true,
+    issues: true,
+    meta: false,
+    taxonomy: false,
+  };
 }
 
-type TabId = typeof TABS[number]['id'];
+function loadSectionStates(): Record<string, boolean> {
+  if (typeof window === 'undefined') return getDefaultSectionStates();
+  try {
+    const stored = sessionStorage.getItem(SECTION_STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return getDefaultSectionStates();
+}
+
+function saveSectionStates(states: Record<string, boolean>) {
+  try {
+    sessionStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(states));
+  } catch {}
+}
 
 export function UnifiedAiPanel({
   editorRef,
@@ -178,8 +181,10 @@ export function UnifiedAiPanel({
   imageCount,
   imagesWithAlt,
   onComplete,
+  onFocusSection,
+  focusSection,
+  onScoreChange,
 }: UnifiedAiPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('ai');
   const [aiPhase, setAiPhase] = useState<AiPhase>('idle');
   const [aiStep, setAiStep] = useState(0);
   const [aiMessage, setAiMessage] = useState('');
@@ -188,16 +193,31 @@ export function UnifiedAiPanel({
   const [aiIteration, setAiIteration] = useState(0);
   const [rewriteChanges, setRewriteChanges] = useState<string[]>([]);
   const [grammarMarksActive, setGrammarMarksActive] = useState(false);
-  const [seoMarksActive, setSeoMarksActive] = useState(false);
   const [newCategoryNames, setNewCategoryNames] = useState<string[]>([]);
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
   const [liveSeoScore, setLiveSeoScore] = useState<{ score: number; status: string }>({ score: 0, status: 'needs-improvement' });
+  const [aiEditCount, setAiEditCount] = useState(0);
+  const [liveGeoScore, setLiveGeoScore] = useState<{ score: number; status: string }>({ score: 0, status: 'needs-improvement' });
+  const [aiChanges, setAiChanges] = useState<AiChange[]>([]);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [sectionStates, setSectionStates] = useState<Record<string, boolean>>(loadSectionStates);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const issuesSectionRef = useRef<HTMLDivElement>(null);
+  const metaSectionRef = useRef<HTMLDivElement>(null);
+  const taxonomySectionRef = useRef<HTMLDivElement>(null);
 
   const wordCount = content.replace(/<[^>]*>/g, '').split(/\s+/).filter(w => w.length > 0).length;
   const readabilityGrade = calculateReadabilityGrade(content);
   const passiveVoiceCount = countPassiveVoice(content);
+
+  const toggleSection = useCallback((section: string) => {
+    setSectionStates(prev => {
+      const newStates = { ...prev, [section]: !prev[section] };
+      saveSectionStates(newStates);
+      return newStates;
+    });
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -214,9 +234,35 @@ export function UnifiedAiPanel({
       };
       const result = analyzeArticle(articleContent);
       setLiveSeoScore({ score: result.percentage, status: result.status });
+
+      const geoResult = analyzeGeo(content);
+      setLiveGeoScore({ score: geoResult.percentage, status: geoResult.status });
+
+      onScoreChange?.({
+        seo: result.percentage,
+        geo: geoResult.percentage,
+        structure: 0,
+        structureTotal: 10,
+        grammar: completionResults?.grammarIssues?.length || 0,
+      });
     }, 500);
     return () => clearTimeout(timer);
-  }, [title, content, metaTitle, metaDescription, focusKeyword, slug, hasFeaturedImage, imageCount, imagesWithAlt]);
+  }, [title, content, metaTitle, metaDescription, focusKeyword, slug, hasFeaturedImage, imageCount, imagesWithAlt, onScoreChange, completionResults?.grammarIssues?.length]);
+
+  useEffect(() => {
+    if (focusSection) {
+      setSectionStates(prev => ({ ...prev, [focusSection]: true }));
+      setTimeout(() => {
+        if (focusSection === 'issues' && issuesSectionRef.current) {
+          issuesSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (focusSection === 'meta' && metaSectionRef.current) {
+          metaSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (focusSection === 'taxonomy' && taxonomySectionRef.current) {
+          taxonomySectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+  }, [focusSection]);
 
   const handleAnalyze = useCallback(async () => {
     if (!title.trim() || wordCount < 50) {
@@ -308,6 +354,19 @@ export function UnifiedAiPanel({
 
                 setAiPhase('complete');
                 setAiMessage('اكتمل التحليل');
+
+                if (data.data.grammarIssues?.length > 0 && editorRef.current) {
+                  const marks = convertGrammarIssuesToMarks(data.data.grammarIssues);
+                  const grammarIssues = marks.map(m => ({
+                    id: m.id,
+                    type: m.type,
+                    original: m.original,
+                    correction: m.correction,
+                    explanation: m.explanation,
+                  }));
+                  editorRef.current.applyGrammarMarks(grammarIssues);
+                  setGrammarMarksActive(true);
+                }
               } else if (data.type === 'error') {
                 throw new Error(data.message);
               }
@@ -326,7 +385,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء التحليل');
       setAiPhase('error');
     }
-  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange]);
+  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange, editorRef]);
 
   const handleRewrite = useCallback(async () => {
     if (!focusKeyword.trim()) {
@@ -388,6 +447,8 @@ export function UnifiedAiPanel({
                 setAiMessage(stepMessages[data.step] || 'جاري المعالجة...');
               } else if (data.type === 'complete') {
                 const result: RewriteArticleResult = data.data;
+                const diffResults = computeParagraphDiff(content, result.rewrittenContent);
+                const modified = diffResults.filter((d) => d.type === "modified");
                 onContentChange(result.rewrittenContent);
                 if (result.rewrittenTitle) {
                   onTitleChange(result.rewrittenTitle);
@@ -396,6 +457,20 @@ export function UnifiedAiPanel({
                 setAiIteration(prev => prev + 1);
                 setAiPhase('complete');
                 setAiMessage('اكتملت إعادة الكتابة');
+                
+                if (modified.length > 0) {
+                  const marks = buildAiEditMarksFromDiff(diffResults, result.rewrittenContent);
+                  setTimeout(() => editorRef.current?.applyAiEditMarks(marks), 100);
+                  setAiEditCount(modified.length);
+                  
+                  const changes: AiChange[] = modified.map((d, i) => ({
+                    id: `ai-edit-${i}`,
+                    originalText: d.originalText || '',
+                    aiText: d.rewrittenText || '',
+                  }));
+                  setAiChanges(changes);
+                  setShowReviewModal(true);
+                }
 
                 setTimeout(() => {
                   handleAnalyze();
@@ -418,7 +493,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إعادة الكتابة');
       setAiPhase('error');
     }
-  }, [focusKeyword, articleId, title, content, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, handleAnalyze, completionResults]);
+  }, [focusKeyword, articleId, title, content, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, handleAnalyze, completionResults, editorRef]);
 
   const handleApplyGrammarMarks = useCallback(() => {
     if (!editorRef.current || !completionResults?.grammarIssues) return;
@@ -436,37 +511,82 @@ export function UnifiedAiPanel({
     setGrammarMarksActive(true);
   }, [editorRef, completionResults]);
 
-  const handleApplySeoMarks = useCallback(() => {
-    if (!editorRef.current || !completionResults) return;
-
-    const suggestions = completionResults.seoAnalysis.topIssues.map((issue, i) => ({
-      type: 'improve-readability' as const,
-      issue,
-      suggestion: issue,
-      priority: 'medium' as const,
-      autoFixable: false,
-      fixData: undefined,
-    }));
-
-    const marks = convertSeoSuggestionsToMarks(suggestions, content);
-    const seoSuggestions = marks.map(m => ({
-      id: m.id,
-      type: m.type,
-      original: m.original,
-      suggestedText: m.suggestedText,
-      reason: m.reason,
-      priority: m.priority,
-    }));
-
-    editorRef.current.applySeoMarks(seoSuggestions);
-    setSeoMarksActive(true);
-  }, [editorRef, completionResults, content]);
-
-  const handleClearAllMarks = useCallback(() => {
+  const handleClearGrammarMarks = useCallback(() => {
     if (!editorRef.current) return;
     editorRef.current.clearAllMarks();
     setGrammarMarksActive(false);
-    setSeoMarksActive(false);
+  }, [editorRef]);
+
+  const handleAcceptAiEdit = useCallback((id: string) => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current.getEditor();
+    if (!editor) return;
+    
+    const { state, dispatch } = editor.view;
+    const { tr } = state;
+    
+    state.doc.descendants((node, pos) => {
+      if (node.isText && node.marks) {
+        const aiEditMark = node.marks.find(m => m.type.name === 'aiEdit' && m.attrs.id === id);
+        if (aiEditMark) {
+          tr.removeMark(pos, pos + node.nodeSize, aiEditMark);
+        }
+      }
+    });
+    
+    if (tr.docChanged) {
+      dispatch(tr);
+    }
+    
+    setAiChanges(prev => prev.filter(c => c.id !== id));
+    setAiEditCount(prev => Math.max(0, prev - 1));
+  }, [editorRef]);
+
+  const handleRejectAiEdit = useCallback((id: string) => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current.getEditor();
+    if (!editor) return;
+    
+    const change = aiChanges.find(c => c.id === id);
+    if (!change) return;
+    
+    const { state, dispatch } = editor.view;
+    const { doc, tr } = state;
+    
+    doc.descendants((node, pos) => {
+      if (node.isText && node.marks) {
+        const aiEditMark = node.marks.find(m => m.type.name === 'aiEdit' && m.attrs.id === id);
+        if (aiEditMark && node.text) {
+          const nodeText = node.text;
+          if (nodeText.includes(change.aiText.substring(0, 30))) {
+            tr.insertText(change.originalText, pos, pos + node.nodeSize);
+          }
+        }
+      }
+    });
+    
+    if (tr.docChanged) {
+      dispatch(tr);
+    }
+    
+    setAiChanges(prev => prev.filter(c => c.id !== id));
+    setAiEditCount(prev => Math.max(0, prev - 1));
+  }, [editorRef, aiChanges]);
+
+  const handleAcceptAllAiEdits = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.acceptAllAiEdits();
+    setAiEditCount(0);
+    setAiChanges([]);
+    setShowReviewModal(false);
+  }, [editorRef]);
+
+  const handleRejectAllAiEdits = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.rejectAllAiEdits();
+    setAiEditCount(0);
+    setAiChanges([]);
+    setShowReviewModal(false);
   }, [editorRef]);
 
   const handleCancel = useCallback(() => {
@@ -475,13 +595,64 @@ export function UnifiedAiPanel({
     }
   }, []);
 
-  const renderAiTab = () => (
+  const allCategories = [
+    ...(completionResults?.availableCategories || []),
+    ...newCategoryNames.map(name => ({ id: `new-${name}`, name })),
+  ];
+  const allTags = [
+    ...(completionResults?.availableTags || []),
+    ...newTagNames.map(name => ({ id: `new-${name}`, name })),
+  ];
+
+  const getScoreColor = (score: number) => {
+    if (score >= 70) return 'text-success';
+    if (score >= 50) return 'text-warning';
+    return 'text-danger';
+  };
+
+  const renderSectionHeader = (title: string, section: string, count?: number) => (
+    <button
+      onClick={() => toggleSection(section)}
+      className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors rounded-t-lg"
+    >
+      <div className="flex items-center gap-2">
+        <span className={`transition-transform ${sectionStates[section] ? 'rotate-90' : ''}`}>▸</span>
+        <span className="font-medium text-sm">{title}</span>
+        {count !== undefined && count > 0 && (
+          <span className="px-1.5 py-0.5 text-xs bg-warning/20 text-warning rounded-full">{count}</span>
+        )}
+      </div>
+    </button>
+  );
+
+  const renderQuickStatsSection = () => (
     <div className="space-y-4">
       {error && (
         <Alert variant="error" onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
+
+      <div className="flex items-center justify-center gap-6 p-4">
+        <div className="text-center">
+          <div className={`text-2xl font-bold ${getScoreColor(liveSeoScore.score)}`}>
+            {liveSeoScore.score}
+          </div>
+          <div className="text-xs text-muted-foreground">SEO</div>
+        </div>
+        <div className="text-center">
+          <div className={`text-2xl font-bold ${getScoreColor(liveGeoScore.score)}`}>
+            {liveGeoScore.score}
+          </div>
+          <div className="text-xs text-muted-foreground">GEO</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-foreground">
+            {wordCount}
+          </div>
+          <div className="text-xs text-muted-foreground">كلمة</div>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
         <div className="flex items-center gap-1">
@@ -520,30 +691,16 @@ export function UnifiedAiPanel({
       )}
 
       {aiPhase === 'complete' && completionResults && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${
-                  liveSeoScore.score >= 70 ? 'text-success' :
-                  liveSeoScore.score >= 50 ? 'text-warning' : 'text-danger'
-                }`}>
-                  {liveSeoScore.score}
-                </div>
-                <div className="text-xs text-muted-foreground">SEO</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-foreground">
-                  {completionResults.grammarIssues?.length || 0}
-                </div>
-                <div className="text-xs text-muted-foreground">أخطاء لغوية</div>
-              </div>
-            </div>
-            {aiIteration > 0 && (
-              <div className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                التحسين #{aiIteration}
-              </div>
-            )}
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              onClick={handleRewrite}
+              fullWidth
+              disabled={!focusKeyword.trim()}
+              variant="secondary"
+            >
+              إعادة كتابة بالذكاء الاصطناعي
+            </Button>
           </div>
 
           {aiIteration >= 3 && (
@@ -563,31 +720,33 @@ export function UnifiedAiPanel({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Button
-              onClick={handleRewrite}
-              fullWidth
-              disabled={!focusKeyword.trim()}
-              variant="secondary"
-            >
-              إعادة كتابة بالذكاء الاصطناعي
-            </Button>
+          {aiEditCount > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-amber-800">{aiEditCount} تعديل بالذكاء الاصطناعي</span>
+              </div>
+              <span className="text-xs text-amber-600 block mt-1">اضغط لمراجعة التغييرات</span>
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" onClick={() => setShowReviewModal(true)}>مراجعة</Button>
+                <Button size="sm" variant="outline" onClick={handleAcceptAllAiEdits}>
+                  قبول الكل
+                </Button>
+                <Button size="sm" variant="ghost" onClick={handleRejectAllAiEdits}>
+                  رفض الكل
+                </Button>
+              </div>
+            </div>
+          )}
 
-            <Button
-              onClick={handleApplyGrammarMarks}
-              fullWidth
-              variant="outline"
-              disabled={!completionResults.grammarIssues?.length || grammarMarksActive}
-            >
-              {grammarMarksActive ? 'علامات نحوية مفعّلة' : 'تطبيق التدقيق اللغوي المضمّن'}
+          {grammarMarksActive ? (
+            <Button onClick={handleClearGrammarMarks} fullWidth variant="ghost">
+              مسح علامات التدقيق اللغوي
             </Button>
-
-            {grammarMarksActive && (
-              <Button onClick={handleClearAllMarks} fullWidth variant="ghost">
-                مسح جميع العلامات
-              </Button>
-            )}
-          </div>
+          ) : completionResults.grammarIssues?.length > 0 && (
+            <Button onClick={handleApplyGrammarMarks} fullWidth variant="outline">
+              تطبيق التدقيق اللغوي ({completionResults.grammarIssues.length} خطأ)
+            </Button>
+          )}
 
           <Button onClick={handleAnalyze} fullWidth variant="ghost">
             إعادة التحليل
@@ -606,47 +765,55 @@ export function UnifiedAiPanel({
     </div>
   );
 
-  const renderSeoTab = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-center p-6">
-        <div className="relative w-32 h-32">
-          <svg className="w-full h-full transform -rotate-90">
-            <circle
-              cx="64"
-              cy="64"
-              r="56"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="8"
-              className="text-muted"
-            />
-            <circle
-              cx="64"
-              cy="64"
-              r="56"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="8"
-              strokeDasharray={`${(liveSeoScore.score / 100) * 352} 352`}
-              className={
-                liveSeoScore.score >= 70 ? 'text-success' :
-                liveSeoScore.score >= 50 ? 'text-warning' : 'text-danger'
-              }
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-3xl font-bold ${
-              liveSeoScore.score >= 70 ? 'text-success' :
-              liveSeoScore.score >= 50 ? 'text-warning' : 'text-danger'
-            }`}>
-              {liveSeoScore.score}
-            </span>
-            <span className="text-xs text-muted-foreground">من 100</span>
-          </div>
-        </div>
-      </div>
+  const renderIssuesSection = () => {
+    const grammarIssues = completionResults?.grammarIssues || [];
+    const seoIssues = completionResults?.seoAnalysis?.topIssues || [];
 
-      <div className="space-y-2">
+    return (
+      <div className="space-y-3">
+        {grammarIssues.length === 0 && seoIssues.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            لا توجد مشاكل بعد التحليل
+          </p>
+        )}
+
+        {grammarIssues.slice(0, 5).map((issue, i) => (
+          <div key={`grammar-${i}`} className="p-2 bg-danger/5 border border-danger/20 rounded-lg">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-danger font-medium mb-1">
+                  {issue.type === 'spelling' ? 'إملائي' : issue.type === 'grammar' ? 'نحوي' : issue.type === 'punctuation' ? 'ترقيم' : 'أسلوب'}
+                </div>
+                <div className="text-sm line-through text-muted-foreground">{issue.original}</div>
+                <div className="text-sm text-success">{issue.correction}</div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (editorRef.current) {
+                    const editor = editorRef.current.getEditor();
+                    if (editor) {
+                      editor.commands.applyGrammarCorrection(`grammar-${i}`, issue.correction);
+                    }
+                  }
+                }}
+              >
+                إصلاح
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        {seoIssues.slice(0, 3).map((issue, i) => (
+          <div key={`seo-${i}`} className="p-2 bg-warning/5 border border-warning/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <span className="text-warning">⚠</span>
+              <span className="text-sm text-foreground">{issue}</span>
+            </div>
+          </div>
+        ))}
+
         <div className="flex items-center justify-between p-2 bg-muted rounded">
           <span className="text-sm">قابلية القراءة</span>
           <span className={`text-sm font-medium ${getReadabilityColor(readabilityGrade)}`}>
@@ -659,44 +826,11 @@ export function UnifiedAiPanel({
             {passiveVoiceCount} حالة
           </span>
         </div>
-        <div className="flex items-center justify-between p-2 bg-muted rounded">
-          <span className="text-sm">عدد الكلمات</span>
-          <span className="text-sm font-medium">{wordCount}</span>
-        </div>
       </div>
+    );
+  };
 
-      {completionResults?.seoAnalysis?.topIssues && completionResults.seoAnalysis.topIssues.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="font-medium text-sm">أهم المشاكل:</h4>
-          <ul className="text-xs space-y-1">
-            {completionResults.seoAnalysis.topIssues.slice(0, 3).map((issue, i) => (
-              <li key={i} className="flex items-start gap-2 text-muted-foreground">
-                <span className="text-warning">⚠</span>
-                {issue}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <Button
-        onClick={handleApplySeoMarks}
-        fullWidth
-        variant="outline"
-        disabled={seoMarksActive}
-      >
-        {seoMarksActive ? 'علامات SEO مفعّلة' : 'تطبيق اقتراحات SEO مضمّنة'}
-      </Button>
-
-      {seoMarksActive && (
-        <Button onClick={handleClearAllMarks} fullWidth variant="ghost">
-          مسح جميع العلامات
-        </Button>
-      )}
-    </div>
-  );
-
-  const renderMetaTab = () => (
+  const renderMetaSection = () => (
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-2">نوع المقال</label>
@@ -797,159 +931,179 @@ export function UnifiedAiPanel({
     </div>
   );
 
-  const renderTaxonomyTab = () => {
-    const allCategories = [
-      ...(completionResults?.availableCategories || []),
-      ...newCategoryNames.map(name => ({ id: `new-${name}`, name })),
-    ];
-    const allTags = [
-      ...(completionResults?.availableTags || []),
-      ...newTagNames.map(name => ({ id: `new-${name}`, name })),
-    ];
-
-    return (
-      <div className="space-y-4">
-        <div>
-          <h4 className="font-medium text-sm mb-2">
-            التصنيفات
-            <span className="text-muted-foreground font-normal mr-1">
-              ({selectedCategoryIds.length + newCategoryNames.filter(n => selectedCategoryIds.includes(`new-${n}`)).length})
-            </span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {allCategories.map((cat) => {
-              const isNew = cat.id.startsWith('new-');
-              const isSelected = isNew
-                ? newCategoryNames.includes(cat.name) && selectedCategoryIds.includes(cat.id)
-                : selectedCategoryIds.includes(cat.id);
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    if (isNew) {
-                      if (isSelected) {
-                        onCategoriesChange(
-                          selectedCategoryIds.filter(id => id !== cat.id),
-                          newCategoryNames
-                        );
-                      } else {
-                        onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
-                      }
-                    } else {
-                      if (isSelected) {
-                        onCategoriesChange(
-                          selectedCategoryIds.filter(id => id !== cat.id),
-                          newCategoryNames
-                        );
-                      } else {
-                        onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
-                      }
-                    }
-                  }}
-                  className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
-                    isSelected
-                      ? isNew
-                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                        : 'bg-success/20 text-success border border-success/30'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {cat.name}
-                  {isNew && isSelected && (
-                    <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-medium text-sm mb-2">
-            الوسوم
-            <span className="text-muted-foreground font-normal mr-1">
-              ({selectedTagIds.length + newTagNames.filter(n => selectedTagIds.includes(`new-${n}`)).length})
-            </span>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {allTags.slice(0, 20).map((tag) => {
-              const isNew = tag.id.startsWith('new-');
-              const isSelected = isNew
-                ? newTagNames.includes(tag.name) && selectedTagIds.includes(tag.id)
-                : selectedTagIds.includes(tag.id);
-              return (
-                <button
-                  key={tag.id}
-                  onClick={() => {
-                    if (isNew) {
-                      if (isSelected) {
-                        onTagsChange(
-                          selectedTagIds.filter(id => id !== tag.id),
-                          newTagNames
-                        );
-                      } else {
-                        onTagsChange([...selectedTagIds, tag.id], newTagNames);
-                      }
-                    } else {
-                      if (isSelected) {
-                        onTagsChange(
-                          selectedTagIds.filter(id => id !== tag.id),
-                          newTagNames
-                        );
-                      } else {
-                        onTagsChange([...selectedTagIds, tag.id], newTagNames);
-                      }
-                    }
-                  }}
-                  className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
-                    isSelected
-                      ? isNew
-                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                        : 'bg-success/20 text-success border border-success/30'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {tag.name}
-                  {isNew && isSelected && (
-                    <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+  const renderTaxonomySection = () => (
+    <div className="space-y-4">
+      <div>
+        <h4 className="font-medium text-sm mb-2">
+          التصنيفات
+          <span className="text-muted-foreground font-normal mr-1">
+            ({selectedCategoryIds.length + newCategoryNames.filter(n => selectedCategoryIds.includes(`new-${n}`)).length})
+          </span>
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {allCategories.map((cat) => {
+            const isNew = cat.id.startsWith('new-');
+            const isSelected = isNew
+              ? newCategoryNames.includes(cat.name) && selectedCategoryIds.includes(cat.id)
+              : selectedCategoryIds.includes(cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  if (isSelected) {
+                    onCategoriesChange(
+                      selectedCategoryIds.filter(id => id !== cat.id),
+                      newCategoryNames
+                    );
+                  } else {
+                    onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
+                  }
+                }}
+                className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
+                  isSelected
+                    ? isNew
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-success/20 text-success border border-success/30'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {cat.name}
+                {isNew && isSelected && (
+                  <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
-    );
-  };
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Tab bar */}
-      <div className="flex shrink-0 border-b border-border" dir="rtl">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
-          >
-            <TabIcon id={tab.id} />
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-4" dir="rtl">
-        {activeTab === 'ai' && renderAiTab()}
-        {activeTab === 'seo' && renderSeoTab()}
-        {activeTab === 'meta' && renderMetaTab()}
-        {activeTab === 'taxonomy' && renderTaxonomyTab()}
+      <div>
+        <h4 className="font-medium text-sm mb-2">
+          الوسوم
+          <span className="text-muted-foreground font-normal mr-1">
+            ({selectedTagIds.length + newTagNames.filter(n => selectedTagIds.includes(`new-${n}`)).length})
+          </span>
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {allTags.slice(0, 20).map((tag) => {
+            const isNew = tag.id.startsWith('new-');
+            const isSelected = isNew
+              ? newTagNames.includes(tag.name) && selectedTagIds.includes(tag.id)
+              : selectedTagIds.includes(tag.id);
+            return (
+              <button
+                key={tag.id}
+                onClick={() => {
+                  if (isSelected) {
+                    onTagsChange(
+                      selectedTagIds.filter(id => id !== tag.id),
+                      newTagNames
+                    );
+                  } else {
+                    onTagsChange([...selectedTagIds, tag.id], newTagNames);
+                  }
+                }}
+                className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
+                  isSelected
+                    ? isNew
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-success/20 text-success border border-success/30'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {tag.name}
+                {isNew && isSelected && (
+                  <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      <div className="flex flex-col h-full overflow-y-auto" dir="rtl">
+        <div className="p-4 space-y-4">
+          <div className="border border-border rounded-lg overflow-hidden">
+            <button
+              onClick={() => toggleSection('quickStats')}
+              className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`transition-transform ${sectionStates.quickStats ? 'rotate-90' : ''}`}>▸</span>
+                <span className="font-medium text-sm">التحليل السريع</span>
+              </div>
+            </button>
+            {sectionStates.quickStats && (
+              <div className="p-4 border-t border-border">
+                {renderQuickStatsSection()}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-border rounded-lg overflow-hidden">
+            {renderSectionHeader('المشاكل', 'issues', (completionResults?.grammarIssues?.length || 0) + (completionResults?.seoAnalysis?.topIssues?.length || 0))}
+            {sectionStates.issues && (
+              <div ref={issuesSectionRef} className="p-4 border-t border-border">
+                {renderIssuesSection()}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-border rounded-lg overflow-hidden">
+            {renderSectionHeader('بيانات الميتا', 'meta')}
+            {sectionStates.meta && (
+              <div ref={metaSectionRef} className="p-4 border-t border-border">
+                {renderMetaSection()}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-border rounded-lg overflow-hidden">
+            {renderSectionHeader('التصنيف', 'taxonomy')}
+            {sectionStates.taxonomy && (
+              <div ref={taxonomySectionRef} className="p-4 border-t border-border">
+                {renderTaxonomySection()}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-border rounded-lg overflow-hidden">
+            <button
+              onClick={() => toggleSection('structure')}
+              className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`transition-transform ${sectionStates.structure ? 'rotate-90' : ''}`}>▸</span>
+                <span className="font-medium text-sm">هيكل المقال</span>
+              </div>
+            </button>
+            {sectionStates.structure && (
+              <div className="p-4 border-t border-border">
+                <ArticleStructurePanel
+                  title={title}
+                  content={content}
+                  focusKeyword={focusKeyword}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <AiChangeReviewModal
+        changes={aiChanges}
+        isOpen={showReviewModal}
+        onAccept={handleAcceptAiEdit}
+        onReject={handleRejectAiEdit}
+        onAcceptAll={handleAcceptAllAiEdits}
+        onRejectAll={handleRejectAllAiEdits}
+        onClose={() => setShowReviewModal(false)}
+      />
+    </>
   );
 }
 

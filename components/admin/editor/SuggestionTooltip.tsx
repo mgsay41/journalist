@@ -5,7 +5,7 @@ import { Editor } from '@tiptap/react';
 import { Button } from '@/components/ui/Button';
 
 interface TooltipData {
-  type: 'grammar' | 'seo';
+  type: 'grammar' | 'seo' | 'ai';
   id: string;
   errorType?: 'spelling' | 'grammar' | 'punctuation' | 'style';
   suggestionType?: string;
@@ -15,6 +15,8 @@ interface TooltipData {
   explanation?: string;
   reason?: string;
   priority?: 'high' | 'medium' | 'low';
+  originalText?: string;
+  aiText?: string;
   rect: DOMRect;
 }
 
@@ -24,6 +26,8 @@ interface SuggestionTooltipProps {
   onIgnoreGrammarError?: (id: string) => void;
   onApplySeoSuggestion?: (id: string, suggestedText: string) => void;
   onIgnoreSeoSuggestion?: (id: string) => void;
+  onAcceptAiEdit?: (id: string) => void;
+  onRejectAiEdit?: (id: string) => void;
 }
 
 export function SuggestionTooltip({
@@ -32,6 +36,8 @@ export function SuggestionTooltip({
   onIgnoreGrammarError,
   onApplySeoSuggestion,
   onIgnoreSeoSuggestion,
+  onAcceptAiEdit,
+  onRejectAiEdit,
 }: SuggestionTooltipProps) {
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -59,10 +65,16 @@ export function SuggestionTooltip({
       } else if (editor) {
         editor.commands.applySeoSuggestion(tooltipData.id, tooltipData.suggestedText);
       }
+    } else if (tooltipData.type === 'ai') {
+      if (onAcceptAiEdit) {
+        onAcceptAiEdit(tooltipData.id);
+      } else if (editor) {
+        editor.commands.acceptAiEdit(tooltipData.id);
+      }
     }
 
     setTooltipData(null);
-  }, [tooltipData, editor, onApplyGrammarCorrection, onApplySeoSuggestion]);
+  }, [tooltipData, editor, onApplyGrammarCorrection, onApplySeoSuggestion, onAcceptAiEdit]);
 
   // Handle click outside to close tooltip
   useEffect(() => {
@@ -137,6 +149,21 @@ export function SuggestionTooltip({
         calculatePosition(rect);
         return;
       }
+
+      // Check for AI edit
+      const aiEdit = target.closest('[data-ai-edit]') as HTMLElement;
+      if (aiEdit) {
+        const rect = aiEdit.getBoundingClientRect();
+        setTooltipData({
+          type: 'ai',
+          id: aiEdit.getAttribute('data-ai-edit-id') || '',
+          original: aiEdit.getAttribute('data-original-text') || '',
+          aiText: aiEdit.getAttribute('data-ai-text') || '',
+          rect,
+        });
+        calculatePosition(rect);
+        return;
+      }
     };
 
     editorElement.addEventListener('mouseover', handleMouseOver);
@@ -158,10 +185,16 @@ export function SuggestionTooltip({
       } else if (editor) {
         editor.commands.removeSeoSuggestion(tooltipData.id);
       }
+    } else if (tooltipData.type === 'ai') {
+      if (onRejectAiEdit) {
+        onRejectAiEdit(tooltipData.id);
+      } else if (editor) {
+        editor.commands.rejectAiEdit(tooltipData.id);
+      }
     }
 
     setTooltipData(null);
-  }, [tooltipData, editor, onIgnoreGrammarError, onIgnoreSeoSuggestion]);
+  }, [tooltipData, editor, onIgnoreGrammarError, onIgnoreSeoSuggestion, onRejectAiEdit]);
 
   const getErrorTypeLabel = (type?: string) => {
     switch (type) {
@@ -303,7 +336,7 @@ export function SuggestionTooltip({
                 <p className="text-xs text-muted-foreground mb-3">{tooltipData.explanation}</p>
               )}
             </>
-          ) : (
+          ) : tooltipData.type === 'seo' ? (
             <>
               {/* SEO Suggestion Header */}
               <div className="flex items-center gap-2 mb-2">
@@ -336,6 +369,27 @@ export function SuggestionTooltip({
                 <p className="text-xs text-muted-foreground mb-3">{tooltipData.reason}</p>
               )}
             </>
+          ) : (
+            <>
+              {/* AI Edit Header */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                  تعديل AI
+                </span>
+              </div>
+
+              {/* Original Text */}
+              <div className="mb-2">
+                <span className="text-xs text-muted-foreground">النص الأصلي:</span>
+                <p className="text-sm line-through text-amber-600">{tooltipData.original}</p>
+              </div>
+
+              {/* AI Text */}
+              <div className="mb-2">
+                <span className="text-xs text-muted-foreground">التعديل المقترح:</span>
+                <p className="text-sm font-medium text-green-600">{tooltipData.aiText}</p>
+              </div>
+            </>
           )}
 
           {/* Actions */}
@@ -343,9 +397,9 @@ export function SuggestionTooltip({
             <Button
               size="sm"
               onClick={handleApply}
-              className="flex-1"
+              className={tooltipData.type === 'ai' ? 'flex-1 bg-amber-500 hover:bg-amber-600' : 'flex-1'}
             >
-              {tooltipData.type === 'grammar' ? 'تصحيح' : 'قبول'}
+              {tooltipData.type === 'grammar' ? 'تصحيح' : tooltipData.type === 'ai' ? 'قبول' : 'قبول'}
               <span className="mr-2 text-xs opacity-70">(Tab)</span>
             </Button>
             <Button
@@ -353,7 +407,7 @@ export function SuggestionTooltip({
               variant="ghost"
               onClick={handleIgnore}
             >
-              تجاهل
+              {tooltipData.type === 'ai' ? 'رفض' : 'تجاهل'}
               <span className="mr-2 text-xs opacity-70">(Esc)</span>
             </Button>
           </div>

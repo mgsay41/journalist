@@ -9,9 +9,11 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
+import { EditorStatusBar } from '@/components/admin/EditorStatusBar';
 import { AiOutliner } from '@/components/admin/AiOutliner';
 import { HeadlineOptimizer } from '@/components/admin/HeadlineOptimizer';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
+import { analyzeArticle, analyzeGeo } from '@/lib/seo';
 import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
 import { DistractionMode } from '@/components/admin/DistractionMode';
 import { Alert } from '@/components/ui/Alert';
@@ -94,11 +96,18 @@ export default function EditArticlePage() {
   const [showAiTools, setShowAiTools] = useState(false);
   const [isDistractionMode, setIsDistractionMode] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [showReadinessModal, setShowReadinessModal] = useState(false);
+  const [focusSection, setFocusSection] = useState<string | undefined>(undefined);
+  const [scores, setScores] = useState({ seo: 0, geo: 0, structure: 0, structureTotal: 10, grammar: 0 });
+
+  const [modalExcerpt, setModalExcerpt] = useState('');
+  const [modalMetaTitle, setModalMetaTitle] = useState('');
+  const [modalMetaDescription, setModalMetaDescription] = useState('');
+  const [modalFocusKeyword, setModalFocusKeyword] = useState('');
 
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
   const slugCheckRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load article data
   useEffect(() => {
     async function loadArticle() {
       try {
@@ -140,7 +149,6 @@ export default function EditArticlePage() {
     loadArticle();
   }, [articleId]);
 
-  // Track unsaved changes
   useEffect(() => {
     if (article) {
       const changed =
@@ -278,7 +286,6 @@ export default function EditArticlePage() {
     }
   }, [articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, newCategoryNames, newTagNames, metaTitle, metaDescription, focusKeyword, articleType]);
 
-  // Warn before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
@@ -287,7 +294,6 @@ export default function EditArticlePage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Auto-save every 30 seconds
   useEffect(() => {
     if (!article || !hasUnsavedChanges) return;
 
@@ -325,6 +331,51 @@ export default function EditArticlePage() {
   const readingTime = Math.ceil(wordCount / 200);
   const imageInfo = useMemo(() => extractImageInfo(content), [content]);
 
+  const handleScoreChange = useCallback((newScores: { seo: number; geo: number; structure: number; structureTotal: number; grammar: number }) => {
+    setScores(newScores);
+  }, []);
+
+  const handleFocusSection = useCallback((section: string) => {
+    setFocusSection(section);
+    if (!panelOpen) {
+      setPanelOpen(true);
+    }
+  }, [panelOpen]);
+
+  const readinessScores = useMemo(() => {
+    const seoResult = analyzeArticle({
+      title, content, excerpt, metaTitle, metaDescription, focusKeyword,
+      slug, hasFeaturedImage: false, imageCount: imageInfo.imageCount, imagesWithAlt: imageInfo.imagesWithAlt,
+    });
+    const geoResult = analyzeGeo(content);
+    const missing: string[] = [];
+    if (!excerpt.trim() && !modalExcerpt.trim()) missing.push('الوصف الموجز');
+    if (!metaTitle.trim() && !modalMetaTitle.trim()) missing.push('العنوان الوصفي (Meta Title)');
+    if (!metaDescription.trim() && !modalMetaDescription.trim()) missing.push('الوصف الوصفي (Meta Description)');
+    if (!focusKeyword.trim() && !modalFocusKeyword.trim()) missing.push('الكلمة المفتاحية الرئيسية');
+    return { seo: seoResult.percentage, seoStatus: seoResult.status, geo: geoResult.percentage, geoStatus: geoResult.status, missing };
+  }, [title, content, excerpt, metaTitle, metaDescription, focusKeyword, slug, imageInfo, modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword]);
+
+  const openPublishModal = useCallback(() => {
+    setModalExcerpt(excerpt);
+    setModalMetaTitle(metaTitle);
+    setModalMetaDescription(metaDescription);
+    setModalFocusKeyword(focusKeyword);
+    setShowReadinessModal(true);
+  }, [excerpt, metaTitle, metaDescription, focusKeyword]);
+
+  const handlePublishFromModal = useCallback(() => {
+    if (modalExcerpt) setExcerpt(modalExcerpt);
+    if (modalMetaTitle) setMetaTitle(modalMetaTitle);
+    if (modalMetaDescription) setMetaDescription(modalMetaDescription);
+    if (modalFocusKeyword) setFocusKeyword(modalFocusKeyword);
+    
+    setShowReadinessModal(false);
+    startTransition(() => {
+      saveArticle('published');
+    });
+  }, [modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword, saveArticle]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -343,7 +394,6 @@ export default function EditArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Minimal sticky header */}
       <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-10">
         <Link
           href="/admin/articles"
@@ -358,7 +408,6 @@ export default function EditArticlePage() {
 
         <div className="w-px h-4 bg-border shrink-0" />
 
-        {/* Save status */}
         <div className="text-xs shrink-0" dir="rtl">
           {autoSaving && (
             <span className="flex items-center gap-1 text-muted-foreground">
@@ -381,7 +430,6 @@ export default function EditArticlePage() {
 
         <div className="flex-1" />
 
-        {/* Actions */}
         <button
           onClick={() => setIsDistractionMode(true)}
           className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -409,11 +457,10 @@ export default function EditArticlePage() {
           {isPending ? 'جاري الحفظ...' : 'حفظ'}
         </Button>
 
-        <Button size="sm" onClick={() => saveArticle('published')} disabled={isPending}>
+        <Button size="sm" onClick={openPublishModal} disabled={isPending}>
           {isPending ? 'جاري النشر...' : 'نشر'}
         </Button>
 
-        {/* Sidebar toggle */}
         <button
           onClick={() => setPanelOpen(!panelOpen)}
           className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -425,7 +472,6 @@ export default function EditArticlePage() {
         </button>
       </header>
 
-      {/* Alerts */}
       {(error || success) && (
         <div className="px-4 pt-2 shrink-0 z-10">
           {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -433,146 +479,147 @@ export default function EditArticlePage() {
         </div>
       )}
 
-      {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-8 py-10">
 
-        {/* Editor area */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-8 py-10">
-
-            {/* Large title textarea */}
-            <textarea
-              ref={titleRef}
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="عنوان المقال..."
-              dir="rtl"
-              rows={1}
-              className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-4 overflow-hidden"
-              style={{ minHeight: '48px' }}
-              maxLength={200}
-            />
-
-            {/* Slug + Status row */}
-            <div className="flex items-start gap-3 mb-6" dir="rtl">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground shrink-0">رابط:</span>
-                  <input
-                    type="text"
-                    value={slug}
-                    onChange={(e) => handleSlugChange(e.target.value)}
-                    placeholder="article-url"
-                    dir="ltr"
-                    className={`flex-1 text-xs font-mono bg-transparent outline-none border-b border-transparent hover:border-border focus:border-primary transition-colors py-0.5 text-muted-foreground focus:text-foreground ${slugError ? 'border-red-400 text-red-500' : ''}`}
-                  />
-                  {checkingSlug && <span className="text-xs text-muted-foreground">...</span>}
-                  {slugError && <span className="text-xs text-red-500 shrink-0">{slugError}</span>}
-                </div>
-              </div>
-              <div className="shrink-0">
-                <Select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  options={statusOptions}
-                />
-              </div>
-            </div>
-
-            {/* Date fields when needed */}
-            {status === 'published' && (
-              <div className="mb-4" dir="rtl">
-                <label className="text-xs text-muted-foreground mb-1 block">تاريخ النشر</label>
-                <Input type="datetime-local" value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} />
-              </div>
-            )}
-            {status === 'scheduled' && (
-              <div className="mb-4" dir="rtl">
-                <label className="text-xs text-muted-foreground mb-1 block">جدولة النشر</label>
-                <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} min={new Date().toISOString().slice(0, 16)} />
-              </div>
-            )}
-
-            {/* Headline Optimizer */}
-            {title && (
-              <div className="mb-6 p-3 rounded-lg bg-muted/40 border border-border/40" dir="rtl">
-                <HeadlineOptimizer
-                  headline={title}
-                  content={content}
-                  category=""
-                  onHeadlineSelect={(newHeadline) => handleTitleChange(newHeadline)}
-                  autoAnalyze={false}
-                />
-              </div>
-            )}
-
-            {/* AI Outliner toggle */}
-            <div className="mb-6" dir="rtl">
-              <button
-                type="button"
-                onClick={() => setShowAiTools(!showAiTools)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                {showAiTools ? 'إخفاء مخطط المقال' : 'إنشاء مخطط بالذكاء الاصطناعي'}
-              </button>
-              {showAiTools && (
-                <div className="mt-3 p-4 rounded-lg border border-border/60 bg-muted/20">
-                  <AiOutliner
-                    onContentInsert={(insertedContent) => {
-                      setContent(content + '\n\n' + insertedContent);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Subtle separator before editor */}
-            <div className="border-t border-border/40 mb-8" />
-
-            {/* Rich text editor — open, no card wrapper */}
-            <RichTextEditor
-              ref={richTextRef}
-              content={content}
-              onChange={setContent}
-              placeholder="ابدأ الكتابة هنا..."
-              minHeight="400px"
-              enableInlineSuggestions={true}
-            />
-
-            {/* Excerpt — below editor */}
-            <div className="mt-10 pt-6 border-t border-border/30" dir="rtl">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-muted-foreground">مقدمة المقال</label>
-                <span className="text-xs text-muted-foreground/60">{excerpt.length} / 500</span>
-              </div>
-              <Textarea
-                value={excerpt}
-                onChange={(e) => setExcerpt(e.target.value)}
-                placeholder="ملخص قصير للمقال يظهر في قوائم المقالات..."
-                rows={3}
-                maxLength={500}
+              <textarea
+                ref={titleRef}
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="عنوان المقال..."
+                dir="rtl"
+                rows={1}
+                className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-4 overflow-hidden"
+                style={{ minHeight: '48px' }}
+                maxLength={200}
               />
-            </div>
 
-            {/* Stats footer */}
-            <div className="mt-6 pb-10 flex items-center gap-4 text-xs text-muted-foreground/50" dir="rtl">
-              <span>{wordCount} كلمة</span>
-              <span>·</span>
-              <span>وقت القراءة: {readingTime} دقيقة</span>
-              {article?.publishedAt && (
-                <>
-                  <span>·</span>
-                  <span>المشاهدات: {article.views || 0}</span>
-                </>
+              <div className="flex items-start gap-3 mb-6" dir="rtl">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground shrink-0">رابط:</span>
+                    <input
+                      type="text"
+                      value={slug}
+                      onChange={(e) => handleSlugChange(e.target.value)}
+                      placeholder="article-url"
+                      dir="ltr"
+                      className={`flex-1 text-xs font-mono bg-transparent outline-none border-b border-transparent hover:border-border focus:border-primary transition-colors py-0.5 text-muted-foreground focus:text-foreground ${slugError ? 'border-red-400 text-red-500' : ''}`}
+                    />
+                    {checkingSlug && <span className="text-xs text-muted-foreground">...</span>}
+                    {slugError && <span className="text-xs text-red-500 shrink-0">{slugError}</span>}
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <Select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    options={statusOptions}
+                  />
+                </div>
+              </div>
+
+              {status === 'published' && (
+                <div className="mb-4" dir="rtl">
+                  <label className="text-xs text-muted-foreground mb-1 block">تاريخ النشر</label>
+                  <Input type="datetime-local" value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} />
+                </div>
               )}
+              {status === 'scheduled' && (
+                <div className="mb-4" dir="rtl">
+                  <label className="text-xs text-muted-foreground mb-1 block">جدولة النشر</label>
+                  <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} min={new Date().toISOString().slice(0, 16)} />
+                </div>
+              )}
+
+              {title && (
+                <div className="mb-6 p-3 rounded-lg bg-muted/40 border border-border/40" dir="rtl">
+                  <HeadlineOptimizer
+                    headline={title}
+                    content={content}
+                    category=""
+                    onHeadlineSelect={(newHeadline) => handleTitleChange(newHeadline)}
+                    autoAnalyze={false}
+                  />
+                </div>
+              )}
+
+              <div className="mb-6" dir="rtl">
+                <button
+                  type="button"
+                  onClick={() => setShowAiTools(!showAiTools)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {showAiTools ? 'إخفاء مخطط المقال' : 'إنشاء مخطط بالذكاء الاصطناعي'}
+                </button>
+                {showAiTools && (
+                  <div className="mt-3 p-4 rounded-lg border border-border/60 bg-muted/20">
+                    <AiOutliner
+                      onContentInsert={(insertedContent) => {
+                        setContent(content + '\n\n' + insertedContent);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-border/40 mb-8" />
+
+              <RichTextEditor
+                ref={richTextRef}
+                content={content}
+                onChange={setContent}
+                placeholder="ابدأ الكتابة هنا..."
+                minHeight="400px"
+                enableInlineSuggestions={true}
+              />
+
+              <div className="mt-10 pt-6 border-t border-border/30" dir="rtl">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-muted-foreground">مقدمة المقال</label>
+                  <span className="text-xs text-muted-foreground/60">{excerpt.length} / 500</span>
+                </div>
+                <Textarea
+                  value={excerpt}
+                  onChange={(e) => setExcerpt(e.target.value)}
+                  placeholder="ملخص قصير للمقال يظهر في قوائم المقالات..."
+                  rows={3}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="mt-6 pb-10 flex items-center gap-4 text-xs text-muted-foreground/50" dir="rtl">
+                <span>{wordCount} كلمة</span>
+                <span>·</span>
+                <span>وقت القراءة: {readingTime} دقيقة</span>
+                {article?.publishedAt && (
+                  <>
+                    <span>·</span>
+                    <span>المشاهدات: {article.views || 0}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
+
+          <EditorStatusBar
+            seoScore={scores.seo}
+            geoScore={scores.geo}
+            structureScore={scores.structure}
+            structureTotal={scores.structureTotal}
+            wordCount={wordCount}
+            grammarCount={scores.grammar}
+            onFocusSection={handleFocusSection}
+            onTogglePanel={() => setPanelOpen(!panelOpen)}
+            panelOpen={panelOpen}
+          />
         </div>
 
-        {/* AI Panel sidebar */}
         {panelOpen && (
           <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
             <UnifiedAiPanel
@@ -607,12 +654,14 @@ export default function EditArticlePage() {
               hasFeaturedImage={imageInfo.imageCount > 0}
               imageCount={imageInfo.imageCount}
               imagesWithAlt={imageInfo.imagesWithAlt}
+              onFocusSection={handleFocusSection}
+              focusSection={focusSection}
+              onScoreChange={handleScoreChange}
             />
           </aside>
         )}
       </div>
 
-      {/* Keyboard shortcuts */}
       <KeyboardShortcuts
         onShortcutTriggered={(shortcut) => {
           if (shortcut === 'save') saveArticle('draft');
@@ -620,7 +669,6 @@ export default function EditArticlePage() {
         }}
       />
 
-      {/* Distraction mode */}
       <DistractionMode
         isOpen={isDistractionMode}
         onClose={() => setIsDistractionMode(false)}
@@ -630,7 +678,7 @@ export default function EditArticlePage() {
             <Button type="button" variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
               {isPending ? 'جاري الحفظ...' : 'حفظ'}
             </Button>
-            <Button type="button" size="sm" onClick={() => saveArticle('published')} disabled={isPending}>
+            <Button type="button" size="sm" onClick={openPublishModal} disabled={isPending}>
               {isPending ? 'جاري النشر...' : 'نشر'}
             </Button>
           </>
@@ -653,6 +701,98 @@ export default function EditArticlePage() {
           />
         </div>
       </DistractionMode>
+
+      {showReadinessModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowReadinessModal(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()} dir="rtl">
+            <h2 className="text-lg font-bold mb-4">نشر المقال</h2>
+
+            <div className="flex gap-4 mb-5">
+              <div className="flex-1 rounded-lg border border-border p-3 text-center">
+                <div className={`text-2xl font-bold ${readinessScores.seoStatus === 'good' ? 'text-green-600' : readinessScores.seoStatus === 'needs-improvement' ? 'text-amber-500' : 'text-red-500'}`}>
+                  {readinessScores.seo}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">SEO / 100</div>
+              </div>
+              <div className="flex-1 rounded-lg border border-border p-3 text-center">
+                <div className={`text-2xl font-bold ${readinessScores.geoStatus === 'good' ? 'text-green-600' : readinessScores.geoStatus === 'needs-improvement' ? 'text-amber-500' : 'text-red-500'}`}>
+                  {readinessScores.geo}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">GEO / 100</div>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-5">
+              <div className={`p-3 rounded-lg border ${modalMetaTitle.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalMetaTitle.trim() ? '✅' : '⚠'} العنوان الوصفي (Meta Title)</span>
+                  <span className={`text-xs ${modalMetaTitle.length >= 50 && modalMetaTitle.length <= 60 ? 'text-success' : 'text-muted-foreground'}`}>
+                    {modalMetaTitle.length}/60
+                  </span>
+                </div>
+                <Input
+                  value={modalMetaTitle}
+                  onChange={(e) => setModalMetaTitle(e.target.value)}
+                  placeholder="عنوان الميتا..."
+                  maxLength={70}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalExcerpt.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalExcerpt.trim() ? '✅' : '⚠'} الوصف الموجز</span>
+                  <span className="text-xs text-muted-foreground">
+                    {modalExcerpt.length}/500
+                  </span>
+                </div>
+                <Textarea
+                  value={modalExcerpt}
+                  onChange={(e) => setModalExcerpt(e.target.value)}
+                  placeholder="ملخص قصير للمقال..."
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalMetaDescription.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalMetaDescription.trim() ? '✅' : '⚠'} الوصف الوصفي (Meta Description)</span>
+                  <span className={`text-xs ${modalMetaDescription.length >= 140 && modalMetaDescription.length <= 160 ? 'text-success' : 'text-muted-foreground'}`}>
+                    {modalMetaDescription.length}/160
+                  </span>
+                </div>
+                <Textarea
+                  value={modalMetaDescription}
+                  onChange={(e) => setModalMetaDescription(e.target.value)}
+                  placeholder="وصف الميتا..."
+                  rows={2}
+                  maxLength={170}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalFocusKeyword.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium">{modalFocusKeyword.trim() ? '✅' : '⚠'} الكلمة المفتاحية</span>
+                </div>
+                <Input
+                  value={modalFocusKeyword}
+                  onChange={(e) => setModalFocusKeyword(e.target.value)}
+                  placeholder="الكلمة المفتاحية الرئيسية..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="primary" className="flex-1" onClick={handlePublishFromModal} disabled={isPending}>
+                {isPending ? 'جاري النشر...' : 'نشر الآن'}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowReadinessModal(false)}>
+                العودة للمراجعة
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

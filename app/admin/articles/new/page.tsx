@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
+import { EditorStatusBar } from '@/components/admin/EditorStatusBar';
 import { Alert } from '@/components/ui/Alert';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
+import { analyzeArticle, analyzeGeo } from '@/lib/seo';
 
 function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
   if (!content) return { imageCount: 0, imagesWithAlt: 0 };
@@ -29,7 +33,6 @@ export default function NewArticlePage() {
   const hasReplacedUrlRef = useRef(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
-  // Article state
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [slug, setSlug] = useState('');
@@ -43,13 +46,19 @@ export default function NewArticlePage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
 
-  // UI state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [showReadinessModal, setShowReadinessModal] = useState(false);
+  const [focusSection, setFocusSection] = useState<string | undefined>(undefined);
+  const [scores, setScores] = useState({ seo: 0, geo: 0, structure: 0, structureTotal: 10, grammar: 0 });
 
-  // Auto-resize title textarea
+  const [modalExcerpt, setModalExcerpt] = useState('');
+  const [modalMetaTitle, setModalMetaTitle] = useState('');
+  const [modalMetaDescription, setModalMetaDescription] = useState('');
+  const [modalFocusKeyword, setModalFocusKeyword] = useState('');
+
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTitle(e.target.value);
     if (titleRef.current) {
@@ -68,7 +77,17 @@ export default function NewArticlePage() {
     setNewTagNames(names);
   }, []);
 
-  // Auto-save logic
+  const handleScoreChange = useCallback((newScores: { seo: number; geo: number; structure: number; structureTotal: number; grammar: number }) => {
+    setScores(newScores);
+  }, []);
+
+  const handleFocusSection = useCallback((section: string) => {
+    setFocusSection(section);
+    if (!panelOpen) {
+      setPanelOpen(true);
+    }
+  }, [panelOpen]);
+
   const performAutoSave = useCallback(async () => {
     if (!title.trim() || !content.trim()) return;
     const wordCount = content.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length;
@@ -127,6 +146,11 @@ export default function NewArticlePage() {
     setPublishing(true);
     setError(null);
 
+    const finalExcerpt = modalExcerpt || excerpt;
+    const finalMetaTitle = modalMetaTitle || metaTitle;
+    const finalMetaDescription = modalMetaDescription || metaDescription;
+    const finalFocusKeyword = modalFocusKeyword || focusKeyword;
+
     try {
       if (!articleIdRef.current) {
         const saveRes = await fetchWithCsrf('/api/admin/articles/auto-save', {
@@ -176,10 +200,10 @@ export default function NewArticlePage() {
           title,
           content,
           slug: slug || undefined,
-          excerpt: excerpt || undefined,
-          metaTitle: metaTitle || undefined,
-          metaDescription: metaDescription || undefined,
-          focusKeyword: focusKeyword || undefined,
+          excerpt: finalExcerpt || undefined,
+          metaTitle: finalMetaTitle || undefined,
+          metaDescription: finalMetaDescription || undefined,
+          focusKeyword: finalFocusKeyword || undefined,
           articleType,
           categoryIds: allCategoryIds,
           tagIds: allTagIds,
@@ -201,13 +225,49 @@ export default function NewArticlePage() {
   }, [
     title, content, slug, excerpt, metaTitle, metaDescription, focusKeyword,
     articleType, selectedCategoryIds, newCategoryNames, selectedTagIds, newTagNames, router,
+    modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword,
   ]);
 
   const { imageCount, imagesWithAlt } = extractImageInfo(content);
 
+  const readinessScores = useMemo(() => {
+    const seoResult = analyzeArticle({
+      title, content, excerpt, metaTitle, metaDescription, focusKeyword,
+      slug, hasFeaturedImage: false, imageCount, imagesWithAlt,
+    });
+    const geoResult = analyzeGeo(content);
+    const missing: string[] = [];
+    if (!excerpt.trim() && !modalExcerpt.trim()) missing.push('الوصف الموجز');
+    if (!metaTitle.trim() && !modalMetaTitle.trim()) missing.push('العنوان الوصفي (Meta Title)');
+    if (!metaDescription.trim() && !modalMetaDescription.trim()) missing.push('الوصف الوصفي (Meta Description)');
+    if (!focusKeyword.trim() && !modalFocusKeyword.trim()) missing.push('الكلمة المفتاحية الرئيسية');
+    return { seo: seoResult.percentage, seoStatus: seoResult.status, geo: geoResult.percentage, geoStatus: geoResult.status, missing };
+  }, [title, content, excerpt, metaTitle, metaDescription, focusKeyword, slug, imageCount, imagesWithAlt, modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword]);
+
+  const openPublishModal = useCallback(() => {
+    setModalExcerpt(excerpt);
+    setModalMetaTitle(metaTitle);
+    setModalMetaDescription(metaDescription);
+    setModalFocusKeyword(focusKeyword);
+    setShowReadinessModal(true);
+  }, [excerpt, metaTitle, metaDescription, focusKeyword]);
+
+  const handlePublishFromModal = useCallback(() => {
+    if (modalExcerpt) setExcerpt(modalExcerpt);
+    if (modalMetaTitle) setMetaTitle(modalMetaTitle);
+    if (modalMetaDescription) setMetaDescription(modalMetaDescription);
+    if (modalFocusKeyword) setFocusKeyword(modalFocusKeyword);
+    
+    setShowReadinessModal(false);
+    setTimeout(() => {
+      handlePublish();
+    }, 0);
+  }, [modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword, handlePublish]);
+
+  const wordCount = content.replace(/<[^>]*>/g, '').split(/\s+/).filter(w => w.length > 0).length;
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Minimal top bar */}
       <header className="h-12 shrink-0 border-b border-border bg-card flex items-center gap-2 px-4 z-20">
         <Link
           href="/admin/articles"
@@ -226,7 +286,6 @@ export default function NewArticlePage() {
           {title || 'مقال جديد'}
         </span>
 
-        {/* Save status */}
         <div className="shrink-0 text-xs">
           {saveStatus === 'saving' && (
             <span className="flex items-center gap-1 text-amber-500">
@@ -261,14 +320,13 @@ export default function NewArticlePage() {
         <Button
           variant="primary"
           size="sm"
-          onClick={handlePublish}
+          onClick={openPublishModal}
           disabled={publishing || !title.trim()}
           className="shrink-0"
         >
           {publishing ? 'جاري النشر...' : 'نشر'}
         </Button>
 
-        {/* Panel toggle */}
         <button
           onClick={() => setPanelOpen(!panelOpen)}
           className="shrink-0 p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -280,47 +338,53 @@ export default function NewArticlePage() {
         </button>
       </header>
 
-      {/* Error alert */}
       {error && (
         <div className="px-4 pt-2 shrink-0 z-10">
           <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>
         </div>
       )}
 
-      {/* Main layout */}
       <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-8 py-10">
+              <textarea
+                ref={titleRef}
+                value={title}
+                onChange={handleTitleChange}
+                placeholder="عنوان المقال..."
+                dir="rtl"
+                rows={1}
+                className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-8 overflow-hidden"
+                style={{ minHeight: '48px' }}
+              />
 
-        {/* Editor area — flex-1, scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-8 py-10">
-            {/* Large title textarea */}
-            <textarea
-              ref={titleRef}
-              value={title}
-              onChange={handleTitleChange}
-              placeholder="عنوان المقال..."
-              dir="rtl"
-              rows={1}
-              className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-8 overflow-hidden"
-              style={{ minHeight: '48px' }}
-            />
+              <div className="border-t border-border/40 mb-8" />
 
-            {/* Subtle separator */}
-            <div className="border-t border-border/40 mb-8" />
-
-            {/* Rich text editor */}
-            <RichTextEditor
-              ref={editorRef}
-              content={content}
-              onChange={setContent}
-              placeholder="ابدأ الكتابة هنا..."
-              minHeight="calc(100vh - 260px)"
-              enableInlineSuggestions={true}
-            />
+              <RichTextEditor
+                ref={editorRef}
+                content={content}
+                onChange={setContent}
+                placeholder="ابدأ الكتابة هنا..."
+                minHeight="calc(100vh - 320px)"
+                enableInlineSuggestions={true}
+              />
+            </div>
           </div>
+
+          <EditorStatusBar
+            seoScore={scores.seo}
+            geoScore={scores.geo}
+            structureScore={scores.structure}
+            structureTotal={scores.structureTotal}
+            wordCount={wordCount}
+            grammarCount={scores.grammar}
+            onFocusSection={handleFocusSection}
+            onTogglePanel={() => setPanelOpen(!panelOpen)}
+            panelOpen={panelOpen}
+          />
         </div>
 
-        {/* AI Panel sidebar — fixed width, left side */}
         {panelOpen && (
           <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
             <UnifiedAiPanel
@@ -349,10 +413,105 @@ export default function NewArticlePage() {
               hasFeaturedImage={false}
               imageCount={imageCount}
               imagesWithAlt={imagesWithAlt}
+              onFocusSection={handleFocusSection}
+              focusSection={focusSection}
+              onScoreChange={handleScoreChange}
             />
           </aside>
         )}
       </div>
+
+      {showReadinessModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowReadinessModal(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()} dir="rtl">
+            <h2 className="text-lg font-bold mb-4">نشر المقال</h2>
+
+            <div className="flex gap-4 mb-5">
+              <div className="flex-1 rounded-lg border border-border p-3 text-center">
+                <div className={`text-2xl font-bold ${readinessScores.seoStatus === 'good' ? 'text-green-600' : readinessScores.seoStatus === 'needs-improvement' ? 'text-amber-500' : 'text-red-500'}`}>
+                  {readinessScores.seo}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">SEO / 100</div>
+              </div>
+              <div className="flex-1 rounded-lg border border-border p-3 text-center">
+                <div className={`text-2xl font-bold ${readinessScores.geoStatus === 'good' ? 'text-green-600' : readinessScores.geoStatus === 'needs-improvement' ? 'text-amber-500' : 'text-red-500'}`}>
+                  {readinessScores.geo}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">GEO / 100</div>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-5">
+              <div className={`p-3 rounded-lg border ${modalMetaTitle.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalMetaTitle.trim() ? '✅' : '⚠'} العنوان الوصفي (Meta Title)</span>
+                  <span className={`text-xs ${modalMetaTitle.length >= 50 && modalMetaTitle.length <= 60 ? 'text-success' : 'text-muted-foreground'}`}>
+                    {modalMetaTitle.length}/60
+                  </span>
+                </div>
+                <Input
+                  value={modalMetaTitle}
+                  onChange={(e) => setModalMetaTitle(e.target.value)}
+                  placeholder="عنوان الميتا..."
+                  maxLength={70}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalExcerpt.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalExcerpt.trim() ? '✅' : '⚠'} الوصف الموجز</span>
+                  <span className="text-xs text-muted-foreground">
+                    {modalExcerpt.length}/500
+                  </span>
+                </div>
+                <Textarea
+                  value={modalExcerpt}
+                  onChange={(e) => setModalExcerpt(e.target.value)}
+                  placeholder="ملخص قصير للمقال..."
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalMetaDescription.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{modalMetaDescription.trim() ? '✅' : '⚠'} الوصف الوصفي (Meta Description)</span>
+                  <span className={`text-xs ${modalMetaDescription.length >= 140 && modalMetaDescription.length <= 160 ? 'text-success' : 'text-muted-foreground'}`}>
+                    {modalMetaDescription.length}/160
+                  </span>
+                </div>
+                <Textarea
+                  value={modalMetaDescription}
+                  onChange={(e) => setModalMetaDescription(e.target.value)}
+                  placeholder="وصف الميتا..."
+                  rows={2}
+                  maxLength={170}
+                />
+              </div>
+
+              <div className={`p-3 rounded-lg border ${modalFocusKeyword.trim() ? 'bg-success/5 border-success/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium">{modalFocusKeyword.trim() ? '✅' : '⚠'} الكلمة المفتاحية</span>
+                </div>
+                <Input
+                  value={modalFocusKeyword}
+                  onChange={(e) => setModalFocusKeyword(e.target.value)}
+                  placeholder="الكلمة المفتاحية الرئيسية..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="primary" className="flex-1" onClick={handlePublishFromModal} disabled={publishing}>
+                {publishing ? 'جاري النشر...' : 'نشر الآن'}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowReadinessModal(false)}>
+                العودة للمراجعة
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

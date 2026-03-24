@@ -191,6 +191,19 @@ export const editorStyles = `
   .seo-suggestion-low:hover {
     background-color: rgba(34, 197, 94, 0.15);
   }
+
+  /* AI Edit Styles */
+  .ai-edit {
+    cursor: pointer;
+    position: relative;
+    background-color: rgba(245, 158, 11, 0.15);
+    border-bottom: 2px solid #f59e0b;
+    transition: background-color 0.15s ease;
+  }
+
+  .ai-edit:hover {
+    background-color: rgba(245, 158, 11, 0.25);
+  }
 `;
 
 /**
