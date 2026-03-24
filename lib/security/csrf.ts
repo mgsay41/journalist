@@ -216,8 +216,10 @@ async function getSessionId(request: NextRequest): Promise<string | null> {
 
   const cookies: Record<string, string> = {};
   cookieHeader.split(';').forEach(cookie => {
-    const [name, value] = cookie.trim().split('=');
-    if (name && value) {
+    const eqIdx = cookie.trim().indexOf('=');
+    if (eqIdx > 0) {
+      const name = cookie.trim().substring(0, eqIdx);
+      const value = cookie.trim().substring(eqIdx + 1);
       cookies[name] = value;
     }
   });

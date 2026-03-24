@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth';
 import { createCsrfToken } from '@/lib/security/csrf';
-import { prisma } from '@/lib/prisma';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Verify authentication
     const session = await getServerSession();
@@ -21,49 +20,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get session ID from database
-    const cookieHeader = request.headers.get('cookie');
-    if (!cookieHeader) {
-      return NextResponse.json(
-        { error: 'جلسة غير صالحة' },
-        { status: 401 }
-      );
-    }
-
-    const cookies: Record<string, string> = {};
-    cookieHeader.split(';').forEach(cookie => {
-      const [name, value] = cookie.trim().split('=');
-      if (name && value) {
-        cookies[name] = value;
-      }
-    });
-
-    const sessionToken =
-      cookies['better_auth_session'] ||
-      cookies['better-auth.session_token'] ||
-      cookies['better_auth_session_token'];
-
-    if (!sessionToken) {
-      return NextResponse.json(
-        { error: 'جلسة غير صالحة' },
-        { status: 401 }
-      );
-    }
-
-    const dbSession = await prisma.session.findUnique({
-      where: { token: sessionToken },
-      select: { id: true },
-    });
-
-    if (!dbSession) {
-      return NextResponse.json(
-        { error: 'جلسة غير صالحة' },
-        { status: 401 }
-      );
-    }
-
-    // Generate CSRF token
-    const csrfToken = await createCsrfToken(dbSession.id);
+    // Generate CSRF token bound to the session ID
+    const csrfToken = await createCsrfToken(session.session.id);
 
     return NextResponse.json({ csrfToken });
   } catch (error) {
