@@ -68,3 +68,22 @@ export async function generateUniqueSlug(
 
   return slug;
 }
+
+/**
+ * Generate a unique English name by appending a numeric suffix when there is a conflict.
+ * e.g. "Egypt" → "Egypt 2" → "Egypt 3"
+ */
+export async function generateUniqueNameEn(
+  nameEn: string,
+  checkExists: (name: string) => Promise<boolean>,
+  suffix = 0
+): Promise<string> {
+  const candidate = suffix === 0 ? nameEn : `${nameEn} ${suffix + 1}`;
+
+  const exists = await checkExists(candidate);
+  if (exists) {
+    return generateUniqueNameEn(nameEn, checkExists, suffix + 1);
+  }
+
+  return candidate;
+}

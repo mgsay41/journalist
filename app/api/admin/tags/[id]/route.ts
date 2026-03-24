@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
 import { updateTagSchema } from '@/lib/validations/tag';
-import { generateUniqueSlug } from '@/lib/utils/slug';
+import { generateUniqueSlug, generateUniqueNameEn } from '@/lib/utils/slug';
+import { translateToSlugWithEn } from '@/lib/ai/translate';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -53,10 +54,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       tag: {
         id: tag.id,
         name: tag.name,
+        nameEn: tag.nameEn,
         slug: tag.slug,
+        description: tag.description,
         articleCount: tag._count.articles,
         articles: tag.articles,
         createdAt: tag.createdAt,
+        updatedAt: tag.updatedAt,
       },
     });
   } catch (error) {
@@ -102,8 +106,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { name, slug } = validation.data;
+    const { name, slug, nameEn, description } = validation.data;
     const updateData: Record<string, unknown> = {};
+
+    // Handle nameEn update
+    if (nameEn !== undefined) {
+      if (nameEn !== null) {
+        const existingByNameEn = await prisma.tag.findFirst({
+          where: { nameEn, id: { not: id } },
+        });
+        if (existingByNameEn) {
+          return NextResponse.json(
+            { error: 'يوجد وسم بهذا الاسم بالإنجليزية بالفعل' },
+            { status: 400 }
+          );
+        }
+      }
+      updateData.nameEn = nameEn;
+    }
+
+    // Handle description update
+    if (description !== undefined) {
+      updateData.description = description;
+    }
 
     // Check for duplicate name if changing
     if (name && name !== existingTag.name) {
@@ -120,12 +145,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
       // Generate new slug if name changes and no custom slug provided
       if (!slug) {
-        updateData.slug = await generateUniqueSlug(name, async (newSlug) => {
+        const { slugBase, nameEn: newNameEn } = await translateToSlugWithEn(name);
+        updateData.slug = await generateUniqueSlug(slugBase, async (newSlug) => {
           const exists = await prisma.tag.findFirst({
             where: { slug: newSlug, id: { not: id } },
           });
           return !!exists;
         });
+
+        // Auto-update nameEn to match the new name, unless the admin explicitly set it
+        if (nameEn === undefined && newNameEn) {
+          updateData.nameEn = await generateUniqueNameEn(newNameEn, async (candidate) => {
+            const exists = await prisma.tag.findFirst({
+              where: { nameEn: candidate, id: { not: id } },
+            });
+            return !!exists;
+          });
+        }
       }
     }
 

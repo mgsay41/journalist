@@ -98,6 +98,7 @@ export {
   completeArticlePhase1,
   completeArticlePhase2,
   completeArticlePhase3,
+  rewriteArticle,
 } from "./article-completion";
 
 export type {
@@ -112,4 +113,6 @@ export type {
   SeoAnalysis as ArticleSeoAnalysis,
   KeywordsPhaseResult,
   MetaPhaseResult,
+  RewriteArticleInput,
+  RewriteArticleResult,
 } from "./article-completion";

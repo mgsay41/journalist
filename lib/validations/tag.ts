@@ -9,6 +9,14 @@ export const createTagSchema = z.object({
     .string()
     .min(1, { message: 'اسم الوسم مطلوب' })
     .max(50, { message: 'اسم الوسم يجب أن لا يتجاوز 50 حرف' }),
+  nameEn: z
+    .string()
+    .max(100, { message: 'الاسم بالإنجليزية يجب أن لا يتجاوز 100 حرف' })
+    .optional(),
+  description: z
+    .string()
+    .max(300, { message: 'الوصف يجب أن لا يتجاوز 300 حرف' })
+    .optional(),
   slug: z
     .string()
     .max(50, { message: 'الرابط يجب أن لا يتجاوز 50 حرف' })
@@ -20,6 +28,16 @@ export const updateTagSchema = z.object({
     .string()
     .min(1, { message: 'اسم الوسم مطلوب' })
     .max(50, { message: 'اسم الوسم يجب أن لا يتجاوز 50 حرف' })
+    .optional(),
+  nameEn: z
+    .string()
+    .max(100, { message: 'الاسم بالإنجليزية يجب أن لا يتجاوز 100 حرف' })
+    .nullable()
+    .optional(),
+  description: z
+    .string()
+    .max(300, { message: 'الوصف يجب أن لا يتجاوز 300 حرف' })
+    .nullable()
     .optional(),
   slug: z
     .string()

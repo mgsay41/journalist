@@ -23,8 +23,8 @@ model User {
   authorTitle       String?   // e.g. "محرر أول", "مراسل صحفي"
   twitterUrl        String?
   linkedinUrl       String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt
   // Phase 1 Backend Audit - Security: Account lockout fields
   failedLoginAttempts Int     @default(0)
   lockedUntil        DateTime?
@@ -66,6 +66,7 @@ model Article {
   isFeatured      Boolean   @default(false) // For homepage featured article
   readingTime     Int?      // Estimated reading time in minutes
   wordCount       Int?      // Computed word count for analytics
+  articleType     String?   @default("article") // news, report, investigation, opinion, article
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -145,15 +146,19 @@ model Category {
 
 // Tag Model
 model Tag {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  slug      String    @unique
-  articles  Article[] @relation("ArticleTags")
-  createdAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  name        String    @unique
+  nameEn      String?   @unique
+  slug        String    @unique
+  description String?
+  articles    Article[] @relation("ArticleTags")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime? @updatedAt
 
   // Phase 2 Backend Audit - Performance: Index for tag queries
   @@index([slug])
   @@index([name]) // For tag search
+  @@index([nameEn]) // For English name search
 }
 
 // Image Model

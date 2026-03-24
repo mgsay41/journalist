@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
 import { createTagSchema } from '@/lib/validations/tag';
-import { generateUniqueSlug } from '@/lib/utils/slug';
+import { generateUniqueSlug, generateUniqueNameEn } from '@/lib/utils/slug';
+import { translateToSlugWithEn } from '@/lib/ai/translate';
 
 /**
  * GET /api/admin/tags
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { name: { contains: search, mode: 'insensitive' as const } },
             { slug: { contains: search, mode: 'insensitive' as const } },
+            { nameEn: { contains: search, mode: 'insensitive' as const } },
           ],
         }
       : {};
@@ -48,9 +50,12 @@ export async function GET(request: NextRequest) {
       tags: tags.map(tag => ({
         id: tag.id,
         name: tag.name,
+        nameEn: tag.nameEn,
         slug: tag.slug,
+        description: tag.description,
         articleCount: includeCount ? (tag as typeof tag & { _count: { articles: number } })._count?.articles || 0 : undefined,
         createdAt: tag.createdAt,
+        updatedAt: tag.updatedAt,
       })),
     });
   } catch (error) {
@@ -97,16 +102,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique slug
-    const slug = await generateUniqueSlug(name, async (slug) => {
+    // Translate Arabic name to English before generating slug
+    const { slugBase, nameEn: translatedNameEn } = await translateToSlugWithEn(name);
+    const slug = await generateUniqueSlug(slugBase, async (slug) => {
       const exists = await prisma.tag.findUnique({ where: { slug } });
       return !!exists;
     });
+
+    // Determine nameEn: prefer explicit value from request, fall back to AI translation
+    const rawNameEn = (validation.data.nameEn || undefined) ?? translatedNameEn ?? undefined;
+
+    // Ensure nameEn is unique — append a numeric suffix if needed (e.g. "Egypt 2")
+    let finalNameEn: string | undefined;
+    if (rawNameEn) {
+      finalNameEn = await generateUniqueNameEn(rawNameEn, async (candidate) => {
+        const exists = await prisma.tag.findFirst({ where: { nameEn: candidate } });
+        return !!exists;
+      });
+    }
 
     const tag = await prisma.tag.create({
       data: {
         name,
         slug,
+        ...(finalNameEn !== undefined && { nameEn: finalNameEn }),
+        ...(validation.data.description && { description: validation.data.description }),
       },
     });
 

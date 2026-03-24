@@ -8,17 +8,16 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
-import { RichTextEditor } from '@/components/admin/RichTextEditor';
-import { TagAutoSuggest } from '@/components/admin/TagAutoSuggest';
-import { SeoScorePanel } from '@/components/admin/SeoScorePanel';
+import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
+import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
 import { AiOutliner } from '@/components/admin/AiOutliner';
 import { HeadlineOptimizer } from '@/components/admin/HeadlineOptimizer';
+import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
 import { DistractionMode } from '@/components/admin/DistractionMode';
 import { Alert } from '@/components/ui/Alert';
 import { Loading } from '@/components/ui/Loading';
 import { generateSlug } from '@/lib/utils/slug';
-import { MAX_TAGS_PER_ARTICLE } from '@/lib/validations/article';
 
 // Helper function to extract image information from content
 function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
@@ -50,22 +49,12 @@ interface Article {
   metaTitle: string | null;
   metaDescription: string | null;
   focusKeyword: string | null;
+  articleType: string | null;
   views?: number;
   categories: Array<{ id: string; name: string; slug: string }>;
   tags: Array<{ id: string; name: string; slug: string }>;
 }
 
-interface CategoryOption {
-  id: string;
-  name: string;
-  slug: string;
-}
-
-interface TagOption {
-  id: string;
-  name: string;
-  slug: string;
-}
 
 const statusOptions = [
   { value: 'draft', label: 'مسودة' },
@@ -93,8 +82,13 @@ export default function EditArticlePage() {
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [focusKeyword, setFocusKeyword] = useState('');
+  const [articleType, setArticleType] = useState('article');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newCategoryNames, setNewCategoryNames] = useState<string[]>([]);
+  const [newTagNames, setNewTagNames] = useState<string[]>([]);
+
+  const richTextRef = useRef<RichTextEditorRef>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -106,14 +100,8 @@ export default function EditArticlePage() {
 
   // AI Tools state
   const [showAiTools, setShowAiTools] = useState(false);
-  const [selectedCategoryName, setSelectedCategoryName] = useState('');
-
   // Distraction mode state
   const [isDistractionMode, setIsDistractionMode] = useState(false);
-
-  // Dynamic options from database
-  const [categoriesOptions, setCategoriesOptions] = useState<CategoryOption[]>([]);
-  const [tagsOptions, setTagsOptions] = useState<TagOption[]>([]);
 
   // Track if auto-save is enabled (disabled initially until article loads)
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
@@ -142,6 +130,7 @@ export default function EditArticlePage() {
         setMetaTitle(data.metaTitle || '');
         setMetaDescription(data.metaDescription || '');
         setFocusKeyword(data.focusKeyword || '');
+        setArticleType(data.articleType || 'article');
 
         // Format dates for input
         if (data.publishedAt) {
@@ -164,33 +153,6 @@ export default function EditArticlePage() {
     loadArticle();
   }, [articleId]);
 
-  // Fetch categories and tags from database
-  useEffect(() => {
-    async function fetchOptions() {
-      try {
-        const [categoriesRes, tagsRes] = await Promise.all([
-          fetch('/api/admin/categories'),
-          fetch('/api/admin/tags'),
-        ]);
-
-        if (categoriesRes.ok) {
-          const data = await categoriesRes.json();
-          // API returns { categories: [...] }
-          setCategoriesOptions(Array.isArray(data) ? data : data.categories || []);
-        }
-
-        if (tagsRes.ok) {
-          const data = await tagsRes.json();
-          // API returns { tags: [...] }
-          setTagsOptions(Array.isArray(data) ? data : data.tags || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch options:', err);
-      }
-    }
-
-    fetchOptions();
-  }, []);
 
   // Track unsaved changes
   useEffect(() => {
@@ -267,6 +229,48 @@ export default function EditArticlePage() {
     setError(null);
     setSuccess(null);
 
+    // Create any new categories/tags first
+    const createdCategoryIds: string[] = [];
+    for (const name of newCategoryNames) {
+      try {
+        const res = await fetchWithCsrf('/api/admin/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.id) createdCategoryIds.push(data.id);
+        }
+      } catch { /* ignore */ }
+    }
+    if (createdCategoryIds.length > 0) {
+      setNewCategoryNames([]);
+      setSelectedCategories(prev => [...prev, ...createdCategoryIds]);
+    }
+
+    const createdTagIds: string[] = [];
+    for (const name of newTagNames) {
+      try {
+        const res = await fetchWithCsrf('/api/admin/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.id) createdTagIds.push(data.id);
+        }
+      } catch { /* ignore */ }
+    }
+    if (createdTagIds.length > 0) {
+      setNewTagNames([]);
+      setSelectedTags(prev => [...prev, ...createdTagIds]);
+    }
+
+    const allCategoryIds = [...selectedCategories, ...createdCategoryIds];
+    const allTagIds = [...selectedTags, ...createdTagIds];
+
     const payload = {
       title: title.trim(),
       slug: slug.trim(),
@@ -275,11 +279,12 @@ export default function EditArticlePage() {
       status: saveStatus || status,
       publishedAt: publishedAt || null,
       scheduledAt: scheduledAt || null,
-      categoryIds: selectedCategories,
-      tagIds: selectedTags,
+      categoryIds: allCategoryIds,
+      tagIds: allTagIds,
       metaTitle: metaTitle.trim() || null,
       metaDescription: metaDescription.trim() || null,
       focusKeyword: focusKeyword.trim() || null,
+      articleType,
     };
 
     try {
@@ -306,7 +311,7 @@ export default function EditArticlePage() {
     } catch (err) {
       setError('حدث خطأ أثناء حفظ المقال');
     }
-  }, [articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, metaTitle, metaDescription, focusKeyword]);
+  }, [articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, newCategoryNames, newTagNames, metaTitle, metaDescription, focusKeyword, articleType]);
 
   // Warn before leaving with unsaved changes
   useEffect(() => {
@@ -543,7 +548,7 @@ export default function EditArticlePage() {
                     <HeadlineOptimizer
                       headline={title}
                       content={content}
-                      category={selectedCategoryName}
+                      category=""
                       onHeadlineSelect={(newHeadline) => setTitle(newHeadline)}
                       autoAnalyze={false}
                     />
@@ -625,10 +630,12 @@ export default function EditArticlePage() {
                   محتوى المقال <span className="text-danger">*</span>
                 </label>
                 <RichTextEditor
+                  ref={richTextRef}
                   content={content}
                   onChange={setContent}
                   placeholder="ابدأ الكتابة هنا..."
                   minHeight="500px"
+                  enableInlineSuggestions={true}
                 />
               </div>
             </Card>
@@ -705,78 +712,39 @@ export default function EditArticlePage() {
               </div>
             </Card>
 
-            {/* Categories */}
-            <Card>
-              <div className="p-6 space-y-4">
-                <h3 className="font-semibold">التصنيفات</h3>
-                <Select
-                  value=""
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value && !selectedCategories.includes(value)) {
-                      setSelectedCategories([...selectedCategories, value]);
-                    }
-                  }}
-                  options={[
-                    { value: '', label: 'اختر التصنيفات...' },
-                    ...categoriesOptions.map(cat => ({ value: cat.id, label: cat.name }))
-                  ]}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {selectedCategories.map((catId) => {
-                    const category = categoriesOptions.find(c => c.id === catId);
-                    return (
-                      <span
-                        key={catId}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-muted text-sm rounded"
-                      >
-                        {category?.name || catId}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCategories(selectedCategories.filter(c => c !== catId))}
-                          className="hover:text-danger"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            </Card>
-
-            {/* Tags */}
-            <Card>
-              <div className="p-6 space-y-4">
-                <h3 className="font-semibold">الوسوم</h3>
-                <TagAutoSuggest
-                  selectedTags={selectedTags}
-                  onTagsChange={setSelectedTags}
-                  tagsData={tagsOptions}
-                  onTagsDataChange={setTagsOptions}
-                  maxTags={MAX_TAGS_PER_ARTICLE}
-                  articleTitle={title}
-                  articleContent={content}
-                  enableAiSuggestions={true}
-                />
-              </div>
-            </Card>
-
-            {/* SEO Score Panel */}
-            <SeoScorePanel
+            {/* AI Panel */}
+            <UnifiedAiPanel
+              editorRef={richTextRef}
               title={title}
               content={content}
-              excerpt={excerpt}
+              articleId={articleId}
+              articleType={articleType}
+              onTitleChange={setTitle}
+              onContentChange={setContent}
+              onArticleTypeChange={setArticleType}
+              onSlugChange={setSlug}
+              onMetaTitleChange={setMetaTitle}
+              onMetaDescriptionChange={setMetaDescription}
+              onExcerptChange={setExcerpt}
+              onFocusKeywordChange={setFocusKeyword}
+              selectedCategoryIds={selectedCategories}
+              onCategoriesChange={(ids, newNames) => {
+                setSelectedCategories(ids);
+                setNewCategoryNames(newNames);
+              }}
+              selectedTagIds={selectedTags}
+              onTagsChange={(ids, newNames) => {
+                setSelectedTags(ids);
+                setNewTagNames(newNames);
+              }}
+              slug={slug}
               metaTitle={metaTitle}
               metaDescription={metaDescription}
+              excerpt={excerpt}
               focusKeyword={focusKeyword}
-              slug={slug}
               hasFeaturedImage={imageInfo.imageCount > 0}
               imageCount={imageInfo.imageCount}
               imagesWithAlt={imageInfo.imagesWithAlt}
-              onFocusKeywordChange={setFocusKeyword}
-              onMetaTitleChange={setMetaTitle}
-              onMetaDescriptionChange={setMetaDescription}
             />
           </div>
         </div>

@@ -22,22 +22,21 @@ export type AiFeature =
   | "grammar-check"
   | "alt-text"
   | "related-topics"
-  | "complete-article" // Complete Article AI analysis
-  // UX Enhancement Features
-  | "outline-generation"
+  | "complete-article"
+  | "rewrite-article"
+  | "auto-fix-internal-links"
+  | "auto-fix-external-links"
+  | "auto-fix-long-paragraphs"
+  | "auto-fix-seo-issues"
   | "auto-tagging"
   | "headline-optimization"
+  | "outline-generation"
   | "writing-assistant-autocomplete"
   | "writing-assistant-improve-word"
   | "writing-assistant-fix-passive"
   | "writing-assistant-suggest-transitions"
   | "writing-assistant-expand-text"
-  | "writing-assistant-summarize-text"
-  // SEO Auto-Fix Features
-  | "auto-fix-internal-links"
-  | "auto-fix-external-links"
-  | "auto-fix-long-paragraphs"
-  | "auto-fix-seo-issues";
+  | "writing-assistant-summarize-text";
 
 // Usage record interface
 export interface UsageRecord {

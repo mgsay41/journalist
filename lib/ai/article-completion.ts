@@ -18,6 +18,7 @@ import {
   buildKeywordsPhasePrompt,
   buildMetaPhasePrompt,
   buildGrammarPhasePrompt,
+  buildRewriteArticlePrompt,
 } from "./prompts";
 
 import type { TokenUsage, AiResultWithUsage } from "./service";
@@ -556,5 +557,61 @@ export function validateArticleForCompletion(title: string, content: string): {
   return {
     valid: errors.length === 0,
     errors,
+  };
+}
+
+// ============================================
+// Article Rewrite (Unified Workflow)
+// ============================================
+
+export interface RewriteArticleInput {
+  title: string;
+  content: string;
+  focusKeyword: string;
+  seoScore: number;
+  seoTopIssues: string[];
+  iteration: number;
+  articleType: string;
+}
+
+export interface RewriteArticleResult {
+  rewrittenContent: string;
+  rewrittenTitle: string | null;
+  changesSummary: string[];
+}
+
+export async function rewriteArticle(
+  input: RewriteArticleInput
+): Promise<AiResultWithUsage<RewriteArticleResult>> {
+  const prompt = buildRewriteArticlePrompt({
+    title: input.title,
+    content: input.content,
+    focusKeyword: input.focusKeyword,
+    seoScore: input.seoScore,
+    seoTopIssues: input.seoTopIssues,
+    iteration: input.iteration,
+    articleType: input.articleType,
+  });
+
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    temperature: 0.8,
+    maxTokens: 16384,
+  });
+
+  const parsed = parseJsonResponse<RewriteArticleResult>(result.text);
+
+  if (!parsed.rewrittenContent) {
+    throw new GeminiError(
+      "لم يتم إرجاع محتوى معاد كتابته",
+      "INVALID_RESPONSE"
+    );
+  }
+
+  parsed.changesSummary = parsed.changesSummary || [];
+
+  return {
+    data: parsed,
+    usage: extractUsage(result, DEFAULT_MODEL),
   };
 }

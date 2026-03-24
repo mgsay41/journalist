@@ -10,6 +10,8 @@ import { gooeyToast } from 'goey-toast';
 interface Tag {
   id: string;
   name: string;
+  nameEn?: string | null;
+  description?: string | null;
   slug: string;
   articleCount?: number;
   createdAt: string;
@@ -32,6 +34,8 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
   const [mergeTargetId, setMergeTargetId] = useState<string>('');
   const [formData, setFormData] = useState({
     name: '',
+    nameEn: '',
+    description: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -52,14 +56,18 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
 
   const openAddModal = () => {
     setEditingTag(null);
-    setFormData({ name: '' });
+    setFormData({ name: '', nameEn: '', description: '' });
     setErrors({});
     setIsModalOpen(true);
   };
 
   const openEditModal = (tag: Tag) => {
     setEditingTag(tag);
-    setFormData({ name: tag.name });
+    setFormData({ 
+      name: tag.name, 
+      nameEn: tag.nameEn || '', 
+      description: tag.description || '' 
+    });
     setErrors({});
     setIsModalOpen(true);
   };
@@ -81,7 +89,7 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingTag(null);
-    setFormData({ name: '' });
+    setFormData({ name: '', nameEn: '', description: '' });
     setErrors({});
   };
 
@@ -127,7 +135,11 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name }),
+        body: JSON.stringify({ 
+          name: formData.name,
+          nameEn: formData.nameEn || null,
+          description: formData.description || null,
+        }),
       });
 
       const data = await response.json();
@@ -345,6 +357,9 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
                       {tag.name}
+                      {tag.nameEn && (
+                        <span className="text-muted-foreground mr-1">· {tag.nameEn}</span>
+                      )}
                     </span>
                     <span className="text-sm text-muted-foreground">{tag.slug}</span>
                   </div>
@@ -408,6 +423,32 @@ export function TagsListClient({ initialTags }: TagsListClientProps) {
             autoFocus
             placeholder="مثال: تكنولوجيا"
           />
+
+          <Input
+            label="الاسم بالإنجليزية (اختياري)"
+            value={formData.nameEn}
+            onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+            error={errors.nameEn}
+            placeholder="مثال: Technology"
+            helperText="يُستخدم في عنوان الصفحة والـ SEO"
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground">
+              الوصف (اختياري)
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="وصف مختصر للوسم..."
+              rows={3}
+              maxLength={300}
+              className="w-full px-4 py-2.5 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent resize-none text-right"
+            />
+            <p className="text-xs text-muted-foreground text-left">
+              {formData.description.length}/300
+            </p>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={isLoading} className="flex-1">

@@ -5,6 +5,9 @@ import { PublicLayout, ArticleCard } from '@/components/public';
 import { ScrollReveal } from '@/components/public/ScrollReveal';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { generateBreadcrumbJsonLd } from '@/lib/seo/metadata';
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000';
 
 // ISR — revalidate every 5 minutes; served from CDN edge between revalidations
 export const revalidate = 300;
@@ -29,7 +32,7 @@ async function getTagData(slug: string, page: number) {
 
   const skip = (page - 1) * ARTICLES_PER_PAGE;
 
-  const [articles, totalCount, categories, popularTags] = await Promise.all([
+  const [articles, totalCount, categories, popularTags, relatedTags] = await Promise.all([
     prisma.article.findMany({
       where: {
         status: 'published',
@@ -62,6 +65,11 @@ async function getTagData(slug: string, page: number) {
           select: {
             id: true,
             name: true,
+          },
+        },
+        tags: {
+          select: {
+            id: true,
           },
         },
       },
@@ -112,6 +120,32 @@ async function getTagData(slug: string, page: number) {
         slug: true,
       },
     }),
+    prisma.tag.findMany({
+      where: {
+        id: { not: tag.id },
+        articles: {
+          some: {
+            status: 'published',
+            publishedAt: { lte: new Date() },
+            tags: {
+              some: {
+                id: tag.id,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        articles: { _count: 'desc' },
+      },
+      take: 6,
+      select: {
+        id: true,
+        name: true,
+        nameEn: true,
+        slug: true,
+      },
+    }),
   ]);
 
   return {
@@ -120,6 +154,7 @@ async function getTagData(slug: string, page: number) {
     totalCount,
     categories,
     popularTags,
+    relatedTags,
     pagination: {
       page,
       pageSize: ARTICLES_PER_PAGE,
@@ -145,12 +180,34 @@ export async function generateMetadata({ params }: TagPageProps): Promise<Metada
     return {};
   }
 
+  const title = tag.nameEn 
+    ? `#${tag.name} (${tag.nameEn}) - الموقع الصحفي`
+    : `#${tag.name} - الموقع الصحفي`;
+  const description = tag.description || `جميع المقالات الموسومة بـ ${tag.name}`;
+  const url = `${SITE_URL}/tag/${tag.slug}`;
+
   return {
-    title: `#${tag.name} - الموقع الصحفي`,
-    description: `جميع المقالات الموسومة بـ ${tag.name}`,
+    title,
+    description,
+    alternates: {
+      canonical: url,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
-      title: `#${tag.name} - الموقع الصحفي`,
-      description: `جميع المقالات الموسومة بـ ${tag.name}`,
+      title,
+      description,
+      url,
+      locale: 'ar_AR',
+      type: 'website',
+      siteName: 'الموقع الصحفي',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
     },
   };
 }
@@ -166,8 +223,42 @@ export default async function TagPage({ params, searchParams }: TagPageProps & {
     notFound();
   }
 
+  const tagUrl = `${SITE_URL}/tag/${data.tag.slug}`;
+  const tagDescription = data.tag.description || `جميع المقالات الموسومة بـ ${data.tag.name}`;
+
+  const collectionPageJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': tagUrl,
+    name: data.tag.name,
+    ...(data.tag.nameEn && { alternateName: data.tag.nameEn }),
+    description: tagDescription,
+    url: tagUrl,
+    inLanguage: 'ar',
+    numberOfItems: data.totalCount,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'الموقع الصحفي',
+      url: SITE_URL,
+    },
+  };
+
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd([
+    { name: 'الرئيسية', url: '/' },
+    { name: data.tag.name, url: `/tag/${data.tag.slug}` },
+  ]);
+
   return (
     <PublicLayout categories={data.categories} popularTags={data.popularTags}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionPageJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: breadcrumbJsonLd }}
+      />
+
       {/* Editorial Tag Header */}
       <div className="border-b border-border" style={{ backgroundColor: 'var(--muted)' }}>
         <div className="container mx-auto px-4 py-10 md:py-14">
@@ -202,7 +293,19 @@ export default async function TagPage({ params, searchParams }: TagPageProps & {
             >
               {data.tag.name}
             </h1>
+            {data.tag.nameEn && (
+              <span className="text-lg text-muted-foreground font-normal">
+                · {data.tag.nameEn}
+              </span>
+            )}
           </div>
+
+          {/* Tag description */}
+          {data.tag.description && (
+            <p className="text-muted-foreground text-lg max-w-2xl mb-4 leading-relaxed">
+              {data.tag.description}
+            </p>
+          )}
 
           {/* Gold rule with article count */}
           <div className="flex items-center gap-4">
@@ -284,6 +387,30 @@ export default async function TagPage({ params, searchParams }: TagPageProps & {
         ) : (
           <div className="text-center py-12">
             <p className="text-muted-foreground">لا توجد مقالات بهذا الوسم بعد</p>
+          </div>
+        )}
+
+        {/* Related Tags Section */}
+        {data.relatedTags.length > 0 && (
+          <div className="mt-16 pt-8 border-t border-border">
+            <h2 className="text-lg font-bold text-foreground mb-4">وسوم ذات صلة</h2>
+            <div className="flex flex-wrap gap-2">
+              {data.relatedTags.map((relatedTag) => (
+                <Link
+                  key={relatedTag.id}
+                  href={`/tag/${relatedTag.slug}`}
+                  className="inline-flex items-center px-4 py-2 rounded-full text-sm bg-muted text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <svg className="w-3 h-3 ml-1.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  {relatedTag.name}
+                  {relatedTag.nameEn && (
+                    <span className="text-muted-foreground mr-1">· {relatedTag.nameEn}</span>
+                  )}
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>

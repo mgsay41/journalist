@@ -88,13 +88,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const tags = await prisma.tag.findMany({
       select: {
         slug: true,
+        updatedAt: true,
       },
     });
 
     // Generate tag routes
     const tagRoutes: MetadataRoute.Sitemap = tags.map((tag) => ({
       url: `${baseUrl}/tag/${tag.slug}`,
-      lastModified: new Date(),
+      lastModified: tag.updatedAt || new Date(),
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     }));
