@@ -112,6 +112,9 @@ interface UnifiedAiPanelProps {
   onFocusSection?: (section: string) => void;
   focusSection?: string;
   onScoreChange?: (scores: { seo: number; geo: number; structure: number; structureTotal: number; grammar: number }) => void;
+  onTitleSuggestionsReady?: (titles: string[]) => void;
+  onIntroGenerated?: (intro: string) => void;
+  onConclusionGenerated?: (conclusion: string) => void;
 }
 
 interface AiChange {
@@ -231,6 +234,9 @@ export function UnifiedAiPanel({
   onFocusSection,
   focusSection,
   onScoreChange,
+  onTitleSuggestionsReady,
+  onIntroGenerated,
+  onConclusionGenerated,
 }: UnifiedAiPanelProps) {
   const [aiPhase, setAiPhase] = useState<AiPhase>('idle');
   const [aiStep, setAiStep] = useState(0);
@@ -409,6 +415,35 @@ export function UnifiedAiPanel({
             setAiPhase('complete');
             setAiMessage('اكتمل التحليل');
 
+            if (data.data.titleSuggestions?.length > 0) {
+              onTitleSuggestionsReady?.(
+                data.data.titleSuggestions.map((s: TitleSuggestion) => s.title)
+              );
+            }
+
+            if (onIntroGenerated || onConclusionGenerated) {
+              const [introRes, conclusionRes] = await Promise.allSettled([
+                fetch('/api/admin/ai/content', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'introduction', title, content }),
+                }).then(r => r.json()),
+                fetch('/api/admin/ai/content', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'conclusion', title, content }),
+                }).then(r => r.json()),
+              ]);
+              if (introRes.status === 'fulfilled' && introRes.value?.introductions?.length > 0) {
+                const rec = introRes.value.recommended ?? 0;
+                onIntroGenerated?.(introRes.value.introductions[rec]?.text ?? introRes.value.introductions[0].text);
+              }
+              if (conclusionRes.status === 'fulfilled' && conclusionRes.value?.conclusions?.length > 0) {
+                const rec = conclusionRes.value.recommended ?? 0;
+                onConclusionGenerated?.(conclusionRes.value.conclusions[rec]?.text ?? conclusionRes.value.conclusions[0].text);
+              }
+            }
+
             if (data.data.grammarIssues?.length > 0 && editorRef.current) {
               const marks = convertGrammarIssuesToMarks(data.data.grammarIssues);
               const grammarIssues = marks.map(m => ({
@@ -435,7 +470,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء التحليل');
       setAiPhase('error');
     }
-  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange, editorRef]);
+  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange, editorRef, onTitleSuggestionsReady, onIntroGenerated, onConclusionGenerated]);
 
   const handleRewrite = useCallback(async () => {
     if (!focusKeyword.trim()) {

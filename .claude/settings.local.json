@@ -75,7 +75,8 @@
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/prisma/**)",
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/components/admin/**)",
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/lib/ai/**)",
-      "Read(//c/Users/mgsay/.claude/plans/**)"
+      "Read(//c/Users/mgsay/.claude/plans/**)",
+      "Bash(grep -E '\"\"@google/genai\"\"' package.json)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete"

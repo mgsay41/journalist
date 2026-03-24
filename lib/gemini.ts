@@ -297,6 +297,8 @@ export async function generateContent(
         maxOutputTokens: maxTokens,
         temperature,
         ...(systemInstruction && { systemInstruction }),
+        // Disable thinking for gemini-2.5-flash to ensure clean JSON output
+        ...(model === "gemini-2.5-flash" && { thinkingConfig: { thinkingBudget: 0 } }),
       },
     });
 

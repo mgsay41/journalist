@@ -10,8 +10,6 @@ import { Select } from '@/components/ui/Select';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
 import { EditorStatusBar } from '@/components/admin/EditorStatusBar';
-import { AiOutliner } from '@/components/admin/AiOutliner';
-import { HeadlineOptimizer } from '@/components/admin/HeadlineOptimizer';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { analyzeArticle, analyzeGeo } from '@/lib/seo';
 import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
@@ -93,9 +91,11 @@ export default function EditArticlePage() {
   const [slugError, setSlugError] = useState<string | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
 
-  const [showAiTools, setShowAiTools] = useState(false);
   const [isDistractionMode, setIsDistractionMode] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
+  const [generatedIntro, setGeneratedIntro] = useState<string | null>(null);
+  const [generatedConclusion, setGeneratedConclusion] = useState<string | null>(null);
   const [showReadinessModal, setShowReadinessModal] = useState(false);
   const [focusSection, setFocusSection] = useState<string | undefined>(undefined);
   const [scores, setScores] = useState({ seo: 0, geo: 0, structure: 0, structureTotal: 10, grammar: 0 });
@@ -492,14 +492,31 @@ export default function EditArticlePage() {
               <textarea
                 ref={titleRef}
                 value={title}
-                onChange={(e) => handleTitleChange(e.target.value)}
+                onChange={(e) => { handleTitleChange(e.target.value); setTitleSuggestions([]); }}
                 placeholder="عنوان المقال..."
                 dir="rtl"
                 rows={1}
-                className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-4 overflow-hidden"
+                className="w-full resize-none bg-transparent text-3xl font-bold placeholder:text-muted-foreground/30 outline-none border-none leading-tight mb-2 overflow-hidden"
                 style={{ minHeight: '48px' }}
                 maxLength={200}
               />
+
+              {titleSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4" dir="rtl">
+                  <span className="text-xs text-muted-foreground self-center">اقتراحات:</span>
+                  {titleSuggestions.map((suggestion, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { handleTitleChange(suggestion); setTitleSuggestions([]); }}
+                      className="text-xs px-3 py-1 rounded-full bg-muted hover:bg-accent hover:text-accent-foreground border border-border/60 transition-colors text-right truncate max-w-xs"
+                      title={suggestion}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-start gap-3 mb-6" dir="rtl">
                 <div className="flex-1 min-w-0">
@@ -539,41 +556,25 @@ export default function EditArticlePage() {
                 </div>
               )}
 
-              {title && (
-                <div className="mb-6 p-3 rounded-lg bg-muted/40 border border-border/40" dir="rtl">
-                  <HeadlineOptimizer
-                    headline={title}
-                    content={content}
-                    category=""
-                    onHeadlineSelect={(newHeadline) => handleTitleChange(newHeadline)}
-                    autoAnalyze={false}
-                  />
-                </div>
-              )}
-
-              <div className="mb-6" dir="rtl">
-                <button
-                  type="button"
-                  onClick={() => setShowAiTools(!showAiTools)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  {showAiTools ? 'إخفاء مخطط المقال' : 'إنشاء مخطط بالذكاء الاصطناعي'}
-                </button>
-                {showAiTools && (
-                  <div className="mt-3 p-4 rounded-lg border border-border/60 bg-muted/20">
-                    <AiOutliner
-                      onContentInsert={(insertedContent) => {
-                        setContent(content + '\n\n' + insertedContent);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
 
               <div className="border-t border-border/40 mb-8" />
+
+              {generatedIntro && (
+                <div className="mb-4 p-4 rounded-xl border border-accent/40 bg-accent/5" dir="rtl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-accent">✨ مقدمة مقترحة</span>
+                    <button type="button" onClick={() => setGeneratedIntro(null)} className="text-xs text-muted-foreground hover:text-foreground">تجاهل</button>
+                  </div>
+                  <p className="text-sm text-foreground/80 leading-relaxed mb-3">{generatedIntro}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setContent(generatedIntro + '\n\n' + content); setGeneratedIntro(null); }}
+                    className="text-xs font-medium text-accent hover:underline"
+                  >
+                    إضافة في البداية
+                  </button>
+                </div>
+              )}
 
               <RichTextEditor
                 ref={richTextRef}
@@ -583,6 +584,23 @@ export default function EditArticlePage() {
                 minHeight="400px"
                 enableInlineSuggestions={true}
               />
+
+              {generatedConclusion && (
+                <div className="mt-4 p-4 rounded-xl border border-accent/40 bg-accent/5" dir="rtl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-accent">✨ خاتمة مقترحة</span>
+                    <button type="button" onClick={() => setGeneratedConclusion(null)} className="text-xs text-muted-foreground hover:text-foreground">تجاهل</button>
+                  </div>
+                  <p className="text-sm text-foreground/80 leading-relaxed mb-3">{generatedConclusion}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setContent(content + '\n\n' + generatedConclusion); setGeneratedConclusion(null); }}
+                    className="text-xs font-medium text-accent hover:underline"
+                  >
+                    إضافة في النهاية
+                  </button>
+                </div>
+              )}
 
               <div className="mt-10 pt-6 border-t border-border/30" dir="rtl">
                 <div className="flex items-center justify-between mb-2">
@@ -662,6 +680,9 @@ export default function EditArticlePage() {
               onFocusSection={handleFocusSection}
               focusSection={focusSection}
               onScoreChange={handleScoreChange}
+              onTitleSuggestionsReady={setTitleSuggestions}
+              onIntroGenerated={setGeneratedIntro}
+              onConclusionGenerated={setGeneratedConclusion}
             />
           </aside>
         )}
