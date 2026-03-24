@@ -608,6 +608,104 @@ ${tagList}
 - الرابط (slug) يجب أن يكون باللغة الإنجليزية وقصير ومعبر`;
 }
 
+// ============================================================
+// Phased completion prompts (used for step-by-step SSE streaming)
+// ============================================================
+
+/**
+ * Phase 1: Keywords + categories + tags + slug + excerpt + content analysis
+ */
+export function buildKeywordsPhasePrompt(data: {
+  title: string;
+  content: string;
+  availableCategories: Array<{ id: string; name: string }>;
+  availableTags: Array<{ id: string; name: string }>;
+}): string {
+  const categoryList = data.availableCategories.length > 0
+    ? data.availableCategories.map((c, i) => `${i + 1}. "${c.name}"`).join("\n")
+    : "لا توجد تصنيفات";
+  const tagList = data.availableTags.length > 0
+    ? data.availableTags.slice(0, 50).map(t => `"${t.name}"`).join("، ")
+    : "لا توجد وسوم";
+
+  return `حلل المقال التالي واستخرج الكلمات المفتاحية والتصنيفات:
+
+العنوان: ${data.title}
+
+المحتوى:
+${data.content.substring(0, 5000)}${data.content.length > 5000 ? "..." : ""}
+
+=== التصنيفات المتاحة (انسخ الاسم بالضبط) ===
+${categoryList}
+
+=== الوسوم المتاحة (انسخ الاسم بالضبط) ===
+${tagList}
+
+أعد JSON فقط:
+{
+  "focusKeyword": "الكلمة المفتاحية الرئيسية",
+  "secondaryKeywords": ["كلمة 1", "كلمة 2"],
+  "suggestedCategories": [{ "name": "اسم التصنيف", "isExisting": true, "confidence": 0.9, "reason": "سبب" }],
+  "suggestedTags": [{ "name": "اسم الوسم", "isExisting": true, "relevance": "high" }],
+  "slug": "english-slug",
+  "excerpt": "مقتطف المقال (150-250 حرف)",
+  "contentAnalysis": { "hasStrongIntro": true, "hasConclusion": true, "suggestedIntro": null, "suggestedConclusion": null, "tone": "professional", "targetAudience": "الجمهور المستهدف" }
+}
+
+مهم: أعد JSON صالح فقط. انسخ أسماء التصنيفات والوسوم بالضبط من القوائم أعلاه.`;
+}
+
+/**
+ * Phase 2: Title suggestions + meta titles + meta descriptions
+ */
+export function buildMetaPhasePrompt(data: {
+  title: string;
+  content: string;
+  focusKeyword: string;
+}): string {
+  return `حسّن العنوان وأنشئ بيانات الميتا للمقال:
+
+العنوان: ${data.title}
+الكلمة المفتاحية: ${data.focusKeyword}
+
+المحتوى (أول 2000 حرف):
+${data.content.substring(0, 2000)}
+
+أعد JSON فقط:
+{
+  "titleSuggestions": [
+    { "title": "العنوان المحسّن", "improvements": ["تحسين 1"], "score": 85, "hasPowerWords": true, "hasNumber": false, "hasKeywordAtStart": true }
+  ],
+  "metaTitles": [
+    { "title": "عنوان الميتا (50-60 حرف)", "length": 55, "score": 90, "hasKeyword": true }
+  ],
+  "metaDescriptions": [
+    { "description": "وصف الميتا (140-160 حرف)", "length": 150, "score": 85, "hasKeyword": true, "hasCTA": true }
+  ]
+}
+
+مهم: اقترح 3 خيارات لكل حقل. أعد JSON صالح فقط.`;
+}
+
+/**
+ * Phase 3: Grammar and spelling check
+ */
+export function buildGrammarPhasePrompt(content: string): string {
+  const plainText = content.replace(/<[^>]*>/g, '').substring(0, 5000);
+  return `افحص النص التالي للأخطاء النحوية والإملائية:
+
+${plainText}
+
+أعد JSON فقط:
+{
+  "grammarIssues": [
+    { "type": "spelling|grammar|punctuation|style", "original": "النص الخاطئ", "correction": "التصحيح", "explanation": "شرح الخطأ" }
+  ]
+}
+
+مهم: أعد JSON صالح فقط. إذا لم توجد أخطاء، أعد { "grammarIssues": [] }`;
+}
+
 /**
  * Generate English Slug from Arabic Title/Content
  */

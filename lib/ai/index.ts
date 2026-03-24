@@ -95,6 +95,9 @@ export type {
 export {
   completeArticle,
   validateArticleForCompletion,
+  completeArticlePhase1,
+  completeArticlePhase2,
+  completeArticlePhase3,
 } from "./article-completion";
 
 export type {
@@ -107,4 +110,6 @@ export type {
   ContentAnalysis,
   GrammarIssue as ArticleGrammarIssue,
   SeoAnalysis as ArticleSeoAnalysis,
+  KeywordsPhaseResult,
+  MetaPhaseResult,
 } from "./article-completion";

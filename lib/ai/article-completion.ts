@@ -15,6 +15,9 @@ import {
 import {
   ARABIC_SYSTEM_INSTRUCTION,
   buildCompleteArticlePrompt,
+  buildKeywordsPhasePrompt,
+  buildMetaPhasePrompt,
+  buildGrammarPhasePrompt,
 } from "./prompts";
 
 import type { TokenUsage, AiResultWithUsage } from "./service";
@@ -442,6 +445,85 @@ export async function completeArticle(
     data: parsed,
     usage: extractUsage(result, DEFAULT_MODEL),
   };
+}
+
+// ============================================
+// Phased completion (for SSE step-by-step progress)
+// ============================================
+
+export interface KeywordsPhaseResult {
+  focusKeyword: string;
+  secondaryKeywords: string[];
+  suggestedCategories: SuggestedCategory[];
+  suggestedTags: SuggestedTag[];
+  slug: string;
+  excerpt: string;
+  contentAnalysis: ContentAnalysis;
+}
+
+export interface MetaPhaseResult {
+  titleSuggestions: TitleSuggestion[];
+  metaTitles: MetaTitleOption[];
+  metaDescriptions: MetaDescriptionOption[];
+}
+
+/** Phase 1: Extract keywords, classify article, generate slug + excerpt */
+export async function completeArticlePhase1(
+  input: CompleteArticleInput
+): Promise<AiResultWithUsage<KeywordsPhaseResult>> {
+  const prompt = buildKeywordsPhasePrompt(input);
+  const result = await generateContent(prompt, { ...DEFAULT_OPTIONS, maxTokens: 8192 });
+  const parsed = parseJsonResponse<KeywordsPhaseResult>(result.text);
+
+  if (parsed.suggestedCategories) {
+    parsed.suggestedCategories = matchCategories(parsed.suggestedCategories, input.availableCategories);
+  }
+  if (parsed.suggestedTags) {
+    parsed.suggestedTags = matchTags(parsed.suggestedTags, input.availableTags);
+  }
+
+  parsed.secondaryKeywords = parsed.secondaryKeywords || [];
+  parsed.suggestedCategories = parsed.suggestedCategories || [];
+  parsed.suggestedTags = parsed.suggestedTags || [];
+  if (!parsed.contentAnalysis) {
+    parsed.contentAnalysis = {
+      hasStrongIntro: true, hasConclusion: true,
+      suggestedIntro: null, suggestedConclusion: null,
+      tone: "professional", targetAudience: "",
+    };
+  }
+
+  return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
+}
+
+/** Phase 2: Generate title suggestions, meta titles, meta descriptions */
+export async function completeArticlePhase2(input: {
+  title: string;
+  content: string;
+  focusKeyword: string;
+}): Promise<AiResultWithUsage<MetaPhaseResult>> {
+  const prompt = buildMetaPhasePrompt(input);
+  const result = await generateContent(prompt, { ...DEFAULT_OPTIONS, maxTokens: 8192 });
+  const parsed = parseJsonResponse<MetaPhaseResult>(result.text);
+
+  parsed.titleSuggestions = parsed.titleSuggestions || [];
+  parsed.metaTitles = parsed.metaTitles || [];
+  parsed.metaDescriptions = parsed.metaDescriptions || [];
+
+  return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
+}
+
+/** Phase 3: Grammar and spelling check */
+export async function completeArticlePhase3(input: {
+  content: string;
+}): Promise<AiResultWithUsage<{ grammarIssues: GrammarIssue[] }>> {
+  const prompt = buildGrammarPhasePrompt(input.content);
+  const result = await generateContent(prompt, { ...DEFAULT_OPTIONS, maxTokens: 4096 });
+  const parsed = parseJsonResponse<{ grammarIssues: GrammarIssue[] }>(result.text);
+
+  parsed.grammarIssues = parsed.grammarIssues || [];
+
+  return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
 }
 
 // ============================================

@@ -9,6 +9,8 @@ import { Spinner } from '@/components/ui/Loading';
 import { ArticleCompletionResults, CompletionResults } from '@/components/admin/ArticleCompletionResults';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 
+type StepStatus = 'pending' | 'active' | 'done';
+
 // Progress steps for the AI completion process
 const COMPLETION_STEPS = [
   { id: 'analyzing', label: 'تحليل المحتوى...' },
@@ -45,7 +47,9 @@ export default function AiCompletePage() {
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCompleting, setIsCompleting] = useState(false);
-  const [completionStep, setCompletionStep] = useState(0);
+  const [stepStatuses, setStepStatuses] = useState<StepStatus[]>(() =>
+    Array(COMPLETION_STEPS.length).fill('pending') as StepStatus[]
+  );
   const [completionResults, setCompletionResults] = useState<CompletionResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -88,11 +92,11 @@ export default function AiCompletePage() {
     fetchArticle();
   }, [articleId]);
 
-  // Run AI completion
+  // Run AI completion — reads SSE stream for real step-by-step progress
   const runAiCompletion = useCallback(async () => {
     if (!article) return;
 
-    // Guard: require minimum 50 words before running analysis
+    // Guard: require minimum 50 words
     const wordCount = content.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length;
     if (wordCount < 50) {
       setError('المقال قصير جداً للتحليل. يرجى إضافة ما لا يقل عن 50 كلمة.');
@@ -103,50 +107,78 @@ export default function AiCompletePage() {
     setError(null);
     setIsTimeout(false);
     setIsCompleting(true);
-    setCompletionStep(0);
-
-    let stepCount = 0;
-    const stepInterval = setInterval(() => {
-      stepCount += 1;
-      setCompletionStep(stepCount % (COMPLETION_STEPS.length - 1));
-    }, 1000);
+    setStepStatuses(Array(COMPLETION_STEPS.length).fill('pending') as StepStatus[]);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min for 3 Gemini calls
 
     try {
-      // Call the API
       const response = await fetch('/api/admin/ai/complete-article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title,
-          content: content,
-        }),
+        body: JSON.stringify({ title, content }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      clearInterval(stepInterval);
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'فشل في تحليل المقال');
       }
 
-      const results = await response.json();
-      setCompletionStep(COMPLETION_STEPS.length);
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setCompletionResults(results);
-      await saveAiCompletionData(results);
+      // Read SSE stream
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let results: CompletionResults | null = null;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? ''; // keep incomplete last line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === 'step') {
+              const stepIndex: number = event.step;
+              setStepStatuses(prev => {
+                const next = [...prev] as StepStatus[];
+                for (let i = 0; i < stepIndex; i++) next[i] = 'done';
+                if (stepIndex < next.length) next[stepIndex] = 'active';
+                return next;
+              });
+            } else if (event.type === 'complete') {
+              setStepStatuses(Array(COMPLETION_STEPS.length).fill('done') as StepStatus[]);
+              results = event.data as CompletionResults;
+              break outer;
+            } else if (event.type === 'error') {
+              throw new Error(event.message || 'فشل في تحليل المقال');
+            }
+          } catch (parseErr) {
+            // Ignore malformed SSE lines
+          }
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      if (results) {
+        setCompletionResults(results);
+        await saveAiCompletionData(results);
+      }
       setIsCompleting(false);
     } catch (err) {
       clearTimeout(timeoutId);
-      clearInterval(stepInterval);
       console.error('Completion error:', err);
       if (err instanceof Error && err.name === 'AbortError') {
         setIsTimeout(true);
-        setError('انتهت مهلة التحليل (45 ثانية). يرجى المحاولة مجدداً.');
+        setError('انتهت مهلة التحليل. يرجى المحاولة مجدداً.');
       } else {
         setError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحليل المقال');
       }
@@ -417,38 +449,41 @@ export default function AiCompletePage() {
                 </p>
               </div>
 
-              {/* Progress Steps */}
+              {/* Progress Steps — driven by real SSE events */}
               <div className="space-y-3">
-                {COMPLETION_STEPS.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className={`flex items-center gap-3 ${
-                      index <= completionStep ? 'text-foreground' : 'text-muted-foreground/50'
-                    }`}
-                  >
-                    <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                      index < completionStep
-                        ? 'bg-success text-white'
-                        : index === completionStep
-                          ? 'bg-primary text-white'
-                          : 'bg-muted'
-                    }`}>
-                      {index < completionStep ? (
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : index === completionStep ? (
-                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                      ) : (
-                        <span className="text-xs">{index + 1}</span>
-                      )}
+                {COMPLETION_STEPS.map((step, index) => {
+                  const status = stepStatuses[index] ?? 'pending';
+                  return (
+                    <div
+                      key={step.id}
+                      className={`flex items-center gap-3 transition-opacity ${
+                        status !== 'pending' ? 'text-foreground' : 'text-muted-foreground/50'
+                      }`}
+                    >
+                      <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                        status === 'done'
+                          ? 'bg-success text-white'
+                          : status === 'active'
+                            ? 'bg-primary text-white'
+                            : 'bg-muted'
+                      }`}>
+                        {status === 'done' ? (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        ) : status === 'active' ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        ) : (
+                          <span className="text-xs">{index + 1}</span>
+                        )}
+                      </div>
+                      <span className="text-sm">{step.label}</span>
                     </div>
-                    <span className="text-sm">{step.label}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Retry button shown after timeout */}
