@@ -19,7 +19,7 @@ import {
 import type { CompleteArticleResult, RewriteArticleResult, ArticleGrammarIssue } from '@/lib/ai';
 import { analyzeArticle, analyzeGeo, type ArticleContent } from '@/lib/seo';
 import { computeParagraphDiff, buildAiEditMarksFromDiff } from '@/lib/ai/diff-utils';
-import { ArticleStructurePanel } from './ArticleStructurePanel';
+import { ArticleStructurePanel, analyzeStructure } from './ArticleStructurePanel';
 
 interface SuggestedCategory {
   name: string;
@@ -292,11 +292,14 @@ export function UnifiedAiPanel({
       const geoResult = analyzeGeo(content);
       setLiveGeoScore({ score: geoResult.percentage, status: geoResult.status });
 
+      const structureChecklist = analyzeStructure(title, content, focusKeyword || undefined);
+      const structurePassed = structureChecklist.filter(item => item.passed).length;
+
       onScoreChange?.({
         seo: result.percentage,
         geo: geoResult.percentage,
-        structure: 0,
-        structureTotal: 10,
+        structure: structurePassed,
+        structureTotal: structureChecklist.length,
         grammar: completionResults?.grammarIssues?.length || 0,
       });
     }, 500);
@@ -585,10 +588,12 @@ export function UnifiedAiPanel({
             if (result.rewrittenTitle) {
               onTitleChange(result.rewrittenTitle);
             }
-            setRewriteChanges(result.changesSummary || []);
             setAiIteration(prev => prev + 1);
-            setAiPhase('complete');
-            setAiMessage('اكتملت إعادة الكتابة');
+            setAiPhase('idle');
+            setAiMessage('');
+            setCompletionResults(null);
+            setDismissedGrammarIndices(new Set());
+            setRewriteChanges([]);
             onContentChange(result.rewrittenContent);
           } else if (data.type === 'error') {
             throw new Error(data.message);
@@ -1059,24 +1064,25 @@ export function UnifiedAiPanel({
         <h4 className="font-medium text-sm mb-2">
           التصنيفات
           <span className="text-muted-foreground font-normal mr-1">
-            ({selectedCategoryIds.length + newCategoryNames.filter(n => selectedCategoryIds.includes(`new-${n}`)).length})
+            ({selectedCategoryIds.length + newCategoryNames.length})
           </span>
         </h4>
         <div className="flex flex-wrap gap-2">
           {allCategories.map((cat) => {
             const isNew = cat.id.startsWith('new-');
             const isSelected = isNew
-              ? newCategoryNames.includes(cat.name) && selectedCategoryIds.includes(cat.id)
+              ? newCategoryNames.includes(cat.name)
               : selectedCategoryIds.includes(cat.id);
             return (
               <button
                 key={cat.id}
                 onClick={() => {
                   if (isSelected) {
-                    onCategoriesChange(
-                      selectedCategoryIds.filter(id => id !== cat.id),
-                      newCategoryNames
-                    );
+                    if (isNew) {
+                      onCategoriesChange(selectedCategoryIds, newCategoryNames.filter(n => n !== cat.name));
+                    } else {
+                      onCategoriesChange(selectedCategoryIds.filter(id => id !== cat.id), newCategoryNames);
+                    }
                   } else {
                     onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
                   }
@@ -1103,24 +1109,25 @@ export function UnifiedAiPanel({
         <h4 className="font-medium text-sm mb-2">
           الوسوم
           <span className="text-muted-foreground font-normal mr-1">
-            ({selectedTagIds.length + newTagNames.filter(n => selectedTagIds.includes(`new-${n}`)).length})
+            ({selectedTagIds.length + newTagNames.length})
           </span>
         </h4>
         <div className="flex flex-wrap gap-2">
           {allTags.slice(0, 20).map((tag) => {
             const isNew = tag.id.startsWith('new-');
             const isSelected = isNew
-              ? newTagNames.includes(tag.name) && selectedTagIds.includes(tag.id)
+              ? newTagNames.includes(tag.name)
               : selectedTagIds.includes(tag.id);
             return (
               <button
                 key={tag.id}
                 onClick={() => {
                   if (isSelected) {
-                    onTagsChange(
-                      selectedTagIds.filter(id => id !== tag.id),
-                      newTagNames
-                    );
+                    if (isNew) {
+                      onTagsChange(selectedTagIds, newTagNames.filter(n => n !== tag.name));
+                    } else {
+                      onTagsChange(selectedTagIds.filter(id => id !== tag.id), newTagNames);
+                    }
                   } else {
                     onTagsChange([...selectedTagIds, tag.id], newTagNames);
                   }

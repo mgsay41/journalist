@@ -248,6 +248,7 @@ export const POST = withAuthCsrf(async (request: NextRequest) => {
       metaTitle,
       metaDescription,
       focusKeyword,
+      conclusion,
     } = validatedData.data;
 
     // Sanitize HTML content to prevent XSS attacks
@@ -314,6 +315,7 @@ export const POST = withAuthCsrf(async (request: NextRequest) => {
         metaTitle,
         metaDescription,
         focusKeyword,
+        conclusion: conclusion ?? null,
         wordCount: calculateWordCount(sanitizedContent),
         readingTime: Math.ceil(calculateWordCount(sanitizedContent) / 200), // ~200 words per minute
         categories: categoryIds && categoryIds.length > 0

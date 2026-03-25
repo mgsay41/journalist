@@ -67,6 +67,7 @@ model Article {
   readingTime     Int?      // Estimated reading time in minutes
   wordCount       Int?      // Computed word count for analytics
   articleType     String?   @default("article") // news, report, investigation, opinion, article
+  conclusion      String?   @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

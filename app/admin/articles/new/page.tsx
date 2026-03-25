@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
-import { EditorStatusBar } from '@/components/admin/EditorStatusBar';
+import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import { Alert } from '@/components/ui/Alert';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { analyzeArticle, analyzeGeo } from '@/lib/seo';
@@ -45,6 +45,10 @@ export default function NewArticlePage() {
   const [newCategoryNames, setNewCategoryNames] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newTagNames, setNewTagNames] = useState<string[]>([]);
+
+  const [featuredImageId, setFeaturedImageId] = useState<string | null>(null);
+  const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -204,6 +208,7 @@ export default function NewArticlePage() {
           metaTitle: finalMetaTitle || undefined,
           metaDescription: finalMetaDescription || undefined,
           focusKeyword: finalFocusKeyword || undefined,
+          featuredImageId: featuredImageId || undefined,
           articleType,
           categoryIds: allCategoryIds,
           tagIds: allTagIds,
@@ -224,7 +229,7 @@ export default function NewArticlePage() {
     }
   }, [
     title, content, slug, excerpt, metaTitle, metaDescription, focusKeyword,
-    articleType, selectedCategoryIds, newCategoryNames, selectedTagIds, newTagNames, router,
+    featuredImageId, articleType, selectedCategoryIds, newCategoryNames, selectedTagIds, newTagNames, router,
     modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword,
   ]);
 
@@ -323,6 +328,12 @@ export default function NewArticlePage() {
           </span>
           <span className="text-border/60">|</span>
           <span className="text-muted-foreground">{wordCount} كلمة</span>
+          {scores.grammar > 0 && (
+            <>
+              <span className="text-border/60">|</span>
+              <span className="text-danger font-semibold">⚠ {scores.grammar} أخطاء</span>
+            </>
+          )}
         </div>
 
         <Button
@@ -365,6 +376,41 @@ export default function NewArticlePage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-2xl mx-auto px-8 py-10">
+              <div className="mb-6" dir="rtl">
+                {featuredImageUrl ? (
+                  <div className="relative group rounded-xl overflow-hidden border border-border/40">
+                    <img src={featuredImageUrl} alt="الصورة الرئيسية" className="w-full h-48 object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowImagePicker(true)}
+                        className="px-3 py-1.5 text-xs font-medium bg-white text-gray-900 rounded-lg hover:bg-gray-100"
+                      >
+                        تغيير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setFeaturedImageId(null); setFeaturedImageUrl(null); }}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowImagePicker(true)}
+                    className="w-full h-32 rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-muted/30 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm">إضافة صورة رئيسية</span>
+                  </button>
+                )}
+              </div>
+
               <textarea
                 ref={titleRef}
                 value={title}
@@ -389,17 +435,6 @@ export default function NewArticlePage() {
             </div>
           </div>
 
-          <EditorStatusBar
-            seoScore={scores.seo}
-            geoScore={scores.geo}
-            structureScore={scores.structure}
-            structureTotal={scores.structureTotal}
-            wordCount={wordCount}
-            grammarCount={scores.grammar}
-            onFocusSection={handleFocusSection}
-            onTogglePanel={() => setPanelOpen(!panelOpen)}
-            panelOpen={panelOpen}
-          />
         </div>
 
         {panelOpen && (
@@ -427,7 +462,7 @@ export default function NewArticlePage() {
               metaDescription={metaDescription}
               excerpt={excerpt}
               focusKeyword={focusKeyword}
-              hasFeaturedImage={false}
+              hasFeaturedImage={!!featuredImageId}
               imageCount={imageCount}
               imagesWithAlt={imagesWithAlt}
               onFocusSection={handleFocusSection}
@@ -529,6 +564,17 @@ export default function NewArticlePage() {
           </div>
         </div>
       )}
+
+      <ImagePickerModal
+        isOpen={showImagePicker}
+        onClose={() => setShowImagePicker(false)}
+        onSelect={(image) => {
+          setFeaturedImageId(image.id);
+          setFeaturedImageUrl(image.url);
+          setShowImagePicker(false);
+        }}
+        title="اختر الصورة الرئيسية"
+      />
     </div>
   );
 }

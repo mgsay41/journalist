@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
 import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
-import { EditorStatusBar } from '@/components/admin/EditorStatusBar';
+import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { analyzeArticle, analyzeGeo } from '@/lib/seo';
 import { KeyboardShortcuts } from '@/components/admin/KeyboardShortcuts';
@@ -36,6 +36,9 @@ interface Article {
   slug: string;
   content: string;
   excerpt: string | null;
+  conclusion: string | null;
+  featuredImageId: string | null;
+  featuredImage: { id: string; url: string; altText: string | null } | null;
   status: string;
   publishedAt: string | null;
   scheduledAt: string | null;
@@ -93,6 +96,10 @@ export default function EditArticlePage() {
 
   const [isDistractionMode, setIsDistractionMode] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [conclusion, setConclusion] = useState('');
+  const [featuredImageId, setFeaturedImageId] = useState<string | null>(null);
+  const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [generatedIntro, setGeneratedIntro] = useState<string | null>(null);
   const [generatedConclusion, setGeneratedConclusion] = useState<string | null>(null);
@@ -129,6 +136,9 @@ export default function EditArticlePage() {
         setMetaDescription(data.metaDescription || '');
         setFocusKeyword(data.focusKeyword || '');
         setArticleType(data.articleType || 'article');
+        setConclusion(data.conclusion || '');
+        setFeaturedImageId(data.featuredImageId || null);
+        setFeaturedImageUrl(data.featuredImage?.url || null);
 
         if (data.publishedAt) {
           setPublishedAt(new Date(data.publishedAt).toISOString().slice(0, 16));
@@ -251,6 +261,8 @@ export default function EditArticlePage() {
       slug: slug.trim(),
       content: content.trim(),
       excerpt: excerpt.trim() || null,
+      conclusion: conclusion.trim() || null,
+      featuredImageId: featuredImageId || null,
       status: saveStatus || status,
       publishedAt: publishedAt || null,
       scheduledAt: scheduledAt || null,
@@ -263,7 +275,7 @@ export default function EditArticlePage() {
     };
 
     try {
-      const response = await fetch(`/api/admin/articles/${articleId}`, {
+      const response = await fetchWithCsrf(`/api/admin/articles/${articleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -284,7 +296,7 @@ export default function EditArticlePage() {
     } catch {
       setError('حدث خطأ أثناء حفظ المقال');
     }
-  }, [articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, newCategoryNames, newTagNames, metaTitle, metaDescription, focusKeyword, articleType]);
+  }, [articleId, title, slug, content, excerpt, conclusion, featuredImageId, status, publishedAt, scheduledAt, selectedCategories, selectedTags, newCategoryNames, newTagNames, metaTitle, metaDescription, focusKeyword, articleType]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -301,7 +313,7 @@ export default function EditArticlePage() {
       if (!title && !content) return;
       setAutoSaving(true);
       try {
-        const response = await fetch(`/api/admin/articles/${articleId}`, {
+        const response = await fetchWithCsrf(`/api/admin/articles/${articleId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -345,7 +357,7 @@ export default function EditArticlePage() {
   const readinessScores = useMemo(() => {
     const seoResult = analyzeArticle({
       title, content, excerpt, metaTitle, metaDescription, focusKeyword,
-      slug, hasFeaturedImage: false, imageCount: imageInfo.imageCount, imagesWithAlt: imageInfo.imagesWithAlt,
+      slug, hasFeaturedImage: !!featuredImageId, imageCount: imageInfo.imageCount, imagesWithAlt: imageInfo.imagesWithAlt,
     });
     const geoResult = analyzeGeo(content);
     const missing: string[] = [];
@@ -354,7 +366,7 @@ export default function EditArticlePage() {
     if (!metaDescription.trim() && !modalMetaDescription.trim()) missing.push('الوصف الوصفي (Meta Description)');
     if (!focusKeyword.trim() && !modalFocusKeyword.trim()) missing.push('الكلمة المفتاحية الرئيسية');
     return { seo: seoResult.percentage, seoStatus: seoResult.status, geo: geoResult.percentage, geoStatus: geoResult.status, missing };
-  }, [title, content, excerpt, metaTitle, metaDescription, focusKeyword, slug, imageInfo, modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword]);
+  }, [title, content, excerpt, metaTitle, metaDescription, focusKeyword, slug, featuredImageId, imageInfo, modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword]);
 
   const openPublishModal = useCallback(() => {
     setModalExcerpt(excerpt);
@@ -428,6 +440,28 @@ export default function EditArticlePage() {
           )}
         </div>
 
+        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs" dir="rtl">
+          <span className={`font-semibold ${scores.seo >= 70 ? 'text-green-600' : scores.seo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+            SEO: {scores.seo}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className={`font-semibold ${scores.geo >= 70 ? 'text-green-600' : scores.geo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+            GEO: {scores.geo}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className={`font-semibold ${scores.structure >= 7 ? 'text-green-600' : scores.structure >= 5 ? 'text-amber-500' : 'text-red-500'}`}>
+            هيكل: {scores.structure}/{scores.structureTotal}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className="text-muted-foreground">{wordCount} كلمة</span>
+          {scores.grammar > 0 && (
+            <>
+              <span className="text-border/60">|</span>
+              <span className="text-danger font-semibold">⚠ {scores.grammar} أخطاء</span>
+            </>
+          )}
+        </div>
+
         <div className="flex-1" />
 
         <button
@@ -452,22 +486,6 @@ export default function EditArticlePage() {
           </svg>
           معاينة
         </Link>
-
-        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs" dir="rtl">
-          <span className={`font-semibold ${scores.seo >= 70 ? 'text-green-600' : scores.seo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            SEO: {scores.seo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.geo >= 70 ? 'text-green-600' : scores.geo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            GEO: {scores.geo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.structure >= 7 ? 'text-green-600' : scores.structure >= 5 ? 'text-amber-500' : 'text-red-500'}`}>
-            هيكل: {scores.structure}/{scores.structureTotal}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className="text-muted-foreground">{wordCount} كلمة</span>
-        </div>
 
         <Button variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
           {isPending ? 'جاري الحفظ...' : 'حفظ'}
@@ -504,6 +522,41 @@ export default function EditArticlePage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-2xl mx-auto px-8 py-10">
+
+              <div className="mb-6" dir="rtl">
+                {featuredImageUrl ? (
+                  <div className="relative group rounded-xl overflow-hidden border border-border/40">
+                    <img src={featuredImageUrl} alt="الصورة الرئيسية" className="w-full h-48 object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowImagePicker(true)}
+                        className="px-3 py-1.5 text-xs font-medium bg-white text-gray-900 rounded-lg hover:bg-gray-100"
+                      >
+                        تغيير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setFeaturedImageId(null); setFeaturedImageUrl(null); }}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowImagePicker(true)}
+                    className="w-full h-32 rounded-xl border-2 border-dashed border-border/60 hover:border-primary/50 hover:bg-muted/30 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm">إضافة صورة رئيسية</span>
+                  </button>
+                )}
+              </div>
 
               <textarea
                 ref={titleRef}
@@ -584,10 +637,10 @@ export default function EditArticlePage() {
                   <p className="text-sm text-foreground/80 leading-relaxed mb-3">{generatedIntro}</p>
                   <button
                     type="button"
-                    onClick={() => { setContent(generatedIntro + '\n\n' + content); setGeneratedIntro(null); }}
+                    onClick={() => { setExcerpt(generatedIntro); setGeneratedIntro(null); }}
                     className="text-xs font-medium text-accent hover:underline"
                   >
-                    إضافة في البداية
+                    استخدام كمقدمة
                   </button>
                 </div>
               )}
@@ -610,27 +663,28 @@ export default function EditArticlePage() {
                   <p className="text-sm text-foreground/80 leading-relaxed mb-3">{generatedConclusion}</p>
                   <button
                     type="button"
-                    onClick={() => { setContent(content + '\n\n' + generatedConclusion); setGeneratedConclusion(null); }}
+                    onClick={() => { setConclusion(generatedConclusion); setGeneratedConclusion(null); }}
                     className="text-xs font-medium text-accent hover:underline"
                   >
-                    إضافة في النهاية
+                    استخدام كخاتمة
                   </button>
                 </div>
               )}
 
-              <div className="mt-10 pt-6 border-t border-border/30" dir="rtl">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-muted-foreground">مقدمة المقال</label>
-                  <span className="text-xs text-muted-foreground/60">{excerpt.length} / 500</span>
+              {conclusion && (
+                <div className="mt-6 p-4 rounded-xl border border-border/40 bg-muted/20" dir="rtl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-muted-foreground">الخاتمة</span>
+                    <button type="button" onClick={() => setConclusion('')} className="text-xs text-muted-foreground hover:text-foreground">حذف</button>
+                  </div>
+                  <Textarea
+                    value={conclusion}
+                    onChange={(e) => setConclusion(e.target.value)}
+                    placeholder="خاتمة المقال..."
+                    rows={3}
+                  />
                 </div>
-                <Textarea
-                  value={excerpt}
-                  onChange={(e) => setExcerpt(e.target.value)}
-                  placeholder="ملخص قصير للمقال يظهر في قوائم المقالات..."
-                  rows={3}
-                  maxLength={500}
-                />
-              </div>
+              )}
 
               <div className="mt-6 pb-10 flex items-center gap-4 text-xs text-muted-foreground/50" dir="rtl">
                 <span>{wordCount} كلمة</span>
@@ -646,17 +700,6 @@ export default function EditArticlePage() {
             </div>
           </div>
 
-          <EditorStatusBar
-            seoScore={scores.seo}
-            geoScore={scores.geo}
-            structureScore={scores.structure}
-            structureTotal={scores.structureTotal}
-            wordCount={wordCount}
-            grammarCount={scores.grammar}
-            onFocusSection={handleFocusSection}
-            onTogglePanel={() => setPanelOpen(!panelOpen)}
-            panelOpen={panelOpen}
-          />
         </div>
 
         {panelOpen && (
@@ -690,7 +733,7 @@ export default function EditArticlePage() {
               metaDescription={metaDescription}
               excerpt={excerpt}
               focusKeyword={focusKeyword}
-              hasFeaturedImage={imageInfo.imageCount > 0}
+              hasFeaturedImage={!!featuredImageId}
               imageCount={imageInfo.imageCount}
               imagesWithAlt={imageInfo.imagesWithAlt}
               onFocusSection={handleFocusSection}
@@ -835,6 +878,17 @@ export default function EditArticlePage() {
           </div>
         </div>
       )}
+
+      <ImagePickerModal
+        isOpen={showImagePicker}
+        onClose={() => setShowImagePicker(false)}
+        onSelect={(image) => {
+          setFeaturedImageId(image.id);
+          setFeaturedImageUrl(image.url);
+          setShowImagePicker(false);
+        }}
+        title="اختر الصورة الرئيسية"
+      />
     </div>
   );
 }

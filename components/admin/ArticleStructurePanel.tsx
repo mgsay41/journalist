@@ -316,7 +316,7 @@ function checkKeywordInFirstParagraph(content: string, focusKeyword?: string): {
   };
 }
 
-function analyzeStructure(title: string, content: string, focusKeyword?: string): ChecklistItem[] {
+export function analyzeStructure(title: string, content: string, focusKeyword?: string): ChecklistItem[] {
   return [
     {
       id: 'headline-keyword',

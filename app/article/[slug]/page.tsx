@@ -604,6 +604,20 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 />
               </div>
 
+              {/* Conclusion */}
+              {article.conclusion && (
+                <div
+                  className="mt-8 p-5 rounded-xl"
+                  style={{
+                    background: 'var(--muted)',
+                    borderInlineStart: '3px solid var(--accent)',
+                    paddingInlineStart: '1.25rem',
+                  }}
+                >
+                  <p className="text-base text-muted-foreground leading-relaxed">{article.conclusion}</p>
+                </div>
+              )}
+
               {/* Tags */}
               {article.tags.length > 0 && (
                 <div className="mt-10 pt-6 border-t border-border">

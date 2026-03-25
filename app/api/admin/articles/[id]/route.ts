@@ -222,6 +222,7 @@ export const PUT = withAuthCsrf(async (
       metaTitle,
       metaDescription,
       focusKeyword,
+      conclusion,
     } = validatedData.data;
 
     // Sanitize HTML content if provided
@@ -323,6 +324,7 @@ export const PUT = withAuthCsrf(async (
       ...(metaTitle !== undefined && { metaTitle }),
       ...(metaDescription !== undefined && { metaDescription }),
       ...(focusKeyword !== undefined && { focusKeyword }),
+      ...(conclusion !== undefined && { conclusion: conclusion === null ? null : conclusion }),
       ...(aiCompletionData !== undefined && { aiCompletionData: aiCompletionData === null ? null : JSON.parse(JSON.stringify(aiCompletionData)) }),
     };
 

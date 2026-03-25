@@ -76,7 +76,8 @@
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/components/admin/**)",
       "Read(//c/Users/mgsay/OneDrive/Desktop/Software/ development/journalist-website/lib/ai/**)",
       "Read(//c/Users/mgsay/.claude/plans/**)",
-      "Bash(grep -E '\"\"@google/genai\"\"' package.json)"
+      "Bash(grep -E '\"\"@google/genai\"\"' package.json)",
+      "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website' -type f \\\\\\(-name *auto-save* -o -name *publish* -o -name *featured* \\\\\\) -path */api/*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete"

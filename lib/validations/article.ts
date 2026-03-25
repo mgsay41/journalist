@@ -60,6 +60,7 @@ export const createArticleSchema = z.object({
     z.undefined(),
   ]).optional(),
   focusKeyword: z.union([z.string(), z.null(), z.undefined()]).optional(),
+  conclusion: z.union([z.string(), z.null(), z.undefined()]).optional(),
 });
 
 export const updateArticleSchema = createArticleSchema.partial().extend({
