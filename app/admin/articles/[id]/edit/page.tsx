@@ -83,6 +83,7 @@ export default function EditArticlePage() {
   const [autoSaving, setAutoSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [actionLoading, setActionLoading] = useState<'schedule' | 'unschedule' | 'unpublish' | 'restore' | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [checkingSlug, setCheckingSlug] = useState(false);
 
@@ -106,7 +107,9 @@ export default function EditArticlePage() {
 
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
   const slugCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const lsSaveRef = useRef<NodeJS.Timeout | null>(null);
 
+  const LS_KEY = `article-draft-${articleId}`;
 
   useEffect(() => {
     async function loadArticle() {
@@ -159,6 +162,21 @@ export default function EditArticlePage() {
       titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
     }
   }, [loading]);
+
+  useEffect(() => {
+    if (lsSaveRef.current) clearTimeout(lsSaveRef.current);
+    if (!title.trim() && !content.trim()) return;
+
+    lsSaveRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ title, content }));
+      } catch {}
+    }, 3000);
+
+    return () => {
+      if (lsSaveRef.current) clearTimeout(lsSaveRef.current);
+    };
+  }, [title, content, LS_KEY]);
 
   useEffect(() => {
     if (article) {
@@ -265,8 +283,8 @@ export default function EditArticlePage() {
       conclusion: conclusion.trim() || null,
       featuredImageId: featuredImageId || null,
       status: saveStatus || status,
-      publishedAt: publishedAt || null,
-      scheduledAt: scheduledAt || null,
+      publishedAt: publishedAt ? new Date(publishedAt).toISOString() : null,
+      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       categoryIds: allCategoryIds,
       tagIds: allTagIds,
       metaTitle: metaTitle.trim() || null,
@@ -290,9 +308,15 @@ export default function EditArticlePage() {
 
       setSuccess('تم حفظ المقال بنجاح');
       setHasUnsavedChanges(false);
+      setLastSavedAt(new Date());
+
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch {}
 
       if (saveStatus && saveStatus !== status) {
-        window.location.reload();
+        setStatus(saveStatus);
+        setArticle(prev => prev ? { ...prev, status: saveStatus } : prev);
       }
     } catch {
       setError('حدث خطأ أثناء حفظ المقال');
@@ -320,7 +344,8 @@ export default function EditArticlePage() {
           body: JSON.stringify({
             title: title.trim(), slug: slug.trim(), content: content.trim(),
             excerpt: excerpt.trim() || null, status,
-            publishedAt: publishedAt || null, scheduledAt: scheduledAt || null,
+            publishedAt: publishedAt ? new Date(publishedAt).toISOString() : null,
+            scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
             categoryIds: selectedCategories, tagIds: selectedTags,
             metaTitle: metaTitle.trim() || null,
             metaDescription: metaDescription.trim() || null,
@@ -382,12 +407,105 @@ export default function EditArticlePage() {
     if (modalMetaTitle) setMetaTitle(modalMetaTitle);
     if (modalMetaDescription) setMetaDescription(modalMetaDescription);
     if (modalFocusKeyword) setFocusKeyword(modalFocusKeyword);
-    
+
     setShowReadinessModal(false);
     startTransition(() => {
       saveArticle('published');
     });
   }, [modalExcerpt, modalMetaTitle, modalMetaDescription, modalFocusKeyword, saveArticle]);
+
+  const handleSchedule = useCallback(async (scheduledDate: Date) => {
+    setActionLoading('schedule');
+    try {
+      const res = await fetchWithCsrf(`/api/admin/articles/${articleId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'schedule', scheduledAt: scheduledDate.toISOString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'فشل الجدولة');
+        return;
+      }
+      setStatus('scheduled');
+      setScheduledAt(scheduledDate.toISOString().slice(0, 16));
+      setSuccess('تم جدولة المقال');
+    } catch {
+      setError('حدث خطأ أثناء الجدولة');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [articleId]);
+
+  const handleUnschedule = useCallback(async () => {
+    setActionLoading('unschedule');
+    try {
+      const res = await fetchWithCsrf(`/api/admin/articles/${articleId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unschedule' }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'فشل إلغاء الجدولة');
+        return;
+      }
+      setStatus('draft');
+      setScheduledAt('');
+      setSuccess('تم إلغاء جدولة المقال');
+    } catch {
+      setError('حدث خطأ أثناء إلغاء الجدولة');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [articleId]);
+
+  const handleUnpublish = useCallback(async () => {
+    setActionLoading('unpublish');
+    try {
+      const res = await fetchWithCsrf(`/api/admin/articles/${articleId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unpublish' }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'فشل إلغاء النشر');
+        return;
+      }
+      setStatus('draft');
+      setPublishedAt('');
+      setSuccess('تم إلغاء نشر المقال');
+    } catch {
+      setError('حدث خطأ أثناء إلغاء النشر');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [articleId]);
+
+  const handleRestore = useCallback(async () => {
+    setActionLoading('restore');
+    try {
+      const res = await fetchWithCsrf(`/api/admin/articles/${articleId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore' }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'فشل استعادة المقال');
+        return;
+      }
+      setStatus('draft');
+      setPublishedAt('');
+      setScheduledAt('');
+      setSuccess('تم استعادة المقال كمسودة');
+    } catch {
+      setError('حدث خطأ أثناء استعادة المقال');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [articleId]);
 
   if (loading) {
     return (
@@ -417,15 +535,15 @@ export default function EditArticlePage() {
         scores={scores}
         wordCount={wordCount}
         status={status}
-        onStatusChange={setStatus}
-        publishedAt={publishedAt}
-        scheduledAt={scheduledAt}
-        onPublishedAtChange={setPublishedAt}
-        onScheduledAtChange={setScheduledAt}
-        onSave={() => saveArticle('draft')}
+        scheduledAt={scheduledAt || null}
         onPublish={openPublishModal}
-        saving={isPending}
+        onPublishNow={openPublishModal}
+        onSchedule={handleSchedule}
+        onUnschedule={handleUnschedule}
+        onUnpublish={handleUnpublish}
+        onRestore={handleRestore}
         publishing={isPending}
+        actionLoading={actionLoading}
         onDistractionMode={() => setIsDistractionMode(true)}
         panelOpen={panelOpen}
         onTogglePanel={() => setPanelOpen(!panelOpen)}

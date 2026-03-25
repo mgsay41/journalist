@@ -1,265 +1,370 @@
-# Fix: "Rewrite with AI" Feature End-to-End
+# Article Editor End-to-End Flow — Implementation Plan
 
 ## Context
 
-The "Rewrite with AI" button in the new/edit article pages is broken. Root cause analysis across the full SSE pipeline, editor integration, and mark-application system found 5 bugs. The most critical one (Bug 1) causes the UI to silently get stuck in the 'rewriting' state whenever Gemini returns an error — the error event is thrown inside the very `try/catch` meant for JSON parse errors, so it's caught and silently swallowed. Additional bugs cause generic error messages, a race condition when applying AI edit marks, a stale closure calling re-analyze with old content, and mark application failing for paragraphs with inline formatting (bold, italic, links).
+The article editor needs a coherent end-to-end flow: write → auto-save → analyze → review issues/suggestions → AI rewrite. Currently there are 7 problems:
+
+1. Scores (SEO 30, GEO 30, Structure 4/10) display with fake values before any content exists
+2. Auto-save only writes to the database (30s delay) — no localStorage fallback
+3. Analysis results (`completionResults`) are lost on page refresh (React state only)
+4. After "تحليل أولي", intro/conclusion are never shown as suggestions for user approval
+5. "إعادة كتابة بالذكاء الاصطناعي" only sends SEO+GEO issues — misses structure issues
+6. Rewrite rewrites everything including any already-approved intro/conclusion
+7. UI/UX of the analysis flow needs polish
+
+## Files to Modify
+
+| File                                        | Change                                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `components/admin/UnifiedAiPanel.tsx`       | Core: score suppression, sessionStorage, intro/conclusion suggestions, structure issues in rewrite |
+| `app/admin/articles/new/page.tsx`           | localStorage auto-save + recovery banner                                                           |
+| `app/admin/articles/[id]/edit/page.tsx`     | localStorage auto-save                                                                             |
+| `lib/ai/prompts.ts`                         | Rewrite prompt: add structureTopIssues param + preserve intro/conclusion instruction               |
+| `lib/ai/article-completion.ts`              | `rewriteArticle()`: accept structureTopIssues + preserved sections                                 |
+| `app/api/admin/ai/rewrite-article/route.ts` | Schema: add `structureTopIssues`, `preservedIntro`, `preservedConclusion`                          |
 
 ---
 
-## Files to Change
+## Change A — Score Suppression When No Content
 
-- `components/admin/UnifiedAiPanel.tsx` — 5 changes (Bugs 1, 2, 4, 5, 6)
-- `components/admin/RichTextEditor.tsx` — 3 changes (Bug 3)
+**File:** `components/admin/UnifiedAiPanel.tsx` (line ~276)
 
----
+In the debounced `useEffect` that calculates scores:
 
-## Bug 1 (CRITICAL) — SSE error events silently swallowed
-
-**Location**: Both `handleAnalyze` and `handleRewrite` in `UnifiedAiPanel.tsx`
-
-**Root cause**: The SSE loop's inner `try` wraps both JSON parsing AND event handling:
-
-```typescript
-try {
-  const data = JSON.parse(line.slice(6));
-  // ...
-  else if (data.type === 'error') {
-    throw new Error(data.message);  // ← thrown here...
-  }
-} catch {
-  // Skip malformed JSON           // ← ...silently caught here
+```ts
+if (wordCount < 10) {
+  setLiveSeoScore({ score: 0, status: "needs-improvement" });
+  setLiveGeoScore({ score: 0, status: "needs-improvement" });
+  onScoreChange?.({
+    seo: 0,
+    geo: 0,
+    structure: 0,
+    structureTotal: 10,
+    grammar: 0,
+  });
+  return;
 }
+// existing analysis code follows...
 ```
 
-When Gemini returns `{ type: 'error', message: '...' }`, the error is eaten, UI stays stuck in `'rewriting'` forever.
+The `ArticleEditorHeader.tsx` already shows rings with value from `scores` prop — so setting scores to 0 via `onScoreChange` when content is empty will automatically suppress the scores in the header too. Rings showing "0" looks intentional and is correct.
 
-**Fix**: Separate JSON parse from event handling in both functions:
+---
 
-```typescript
-for (const line of lines) {
-  if (!line.startsWith('data: ')) continue;
-  let data;
+## Change B — localStorage Auto-Save
+
+### New Article Page (`app/admin/articles/new/page.tsx`)
+
+Add two effects:
+
+**Effect 1 — Restore on mount (runs once):**
+
+```ts
+const LS_KEY = "article-draft-new";
+useEffect(() => {
   try {
-    data = JSON.parse(line.slice(6));
-  } catch {
-    continue;  // Only malformed JSON is skipped
-  }
-  if (data.type === 'step') { ... }
-  else if (data.type === 'complete') { ... }
-  else if (data.type === 'error') {
-    throw new Error(data.message);  // Now properly reaches outer catch
-  }
-}
-```
-
-Apply this same restructure in **both** `handleAnalyze` and `handleRewrite`.
-
----
-
-## Bug 2 — Generic error message on non-OK HTTP response
-
-**Location**: `handleAnalyze` (~line 288) and `handleRewrite` (~line 422) in `UnifiedAiPanel.tsx`
-
-**Fix**: Read the JSON error body before throwing:
-
-```typescript
-// Before:
-if (!response.ok) {
-  throw new Error("فشل في الاتصال بخدمة إعادة الكتابة");
-}
-
-// After:
-if (!response.ok) {
-  const errorBody = await response.json().catch(() => null);
-  throw new Error(errorBody?.error || "فشل في الاتصال بخدمة إعادة الكتابة");
-}
-```
-
----
-
-## Bug 3 — `applyAiEditMarks` fails for paragraphs with inline formatting
-
-**Location**: `RichTextEditor.tsx`, `findTextPosition` and `applyAiEditMarks`
-
-**Root cause**: `findTextPosition` searches within individual text nodes (`node.isText`). When the AI output includes `<strong>`, `<em>`, or `<a>` tags, TipTap splits the content into multiple text nodes. Searching for `"Some bold text"` fails because no single node contains the full string.
-
-**Fix**: Add a `findBlockPosition` helper using `node.textContent` (which concatenates ALL child text nodes of a block):
-
-```typescript
-const findBlockPosition = useCallback(
-  (searchText: string): { from: number; to: number } | null => {
-    if (!editor) return null;
-    const doc = editor.state.doc;
-    let found: { from: number; to: number } | null = null;
-    const prefix = searchText.substring(0, 40).trim();
-
-    doc.descendants((node, pos) => {
-      if (found) return false;
-      if (node.isBlock && !node.isText && node.textContent) {
-        if (node.textContent.trim().startsWith(prefix)) {
-          found = { from: pos + 1, to: pos + node.nodeSize - 1 };
-          return false;
-        }
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) {
+      const { title: t, content: c } = JSON.parse(saved);
+      if (t || c) {
+        // Show a recovery banner. Add state: [showRecovery, setShowRecovery]
+        setDraftRecovery({ title: t, content: c });
       }
-    });
-
-    return found;
-  },
-  [editor],
-);
+    }
+  } catch {}
+}, []);
 ```
 
-Then in `applyAiEditMarks` (line ~270), change `findTextPosition` → `findBlockPosition`. Also add `findBlockPosition` to the `useImperativeHandle` dep array.
+Add state `draftRecovery: { title: string; content: string } | null` and a banner UI:
+
+```
+"تم العثور على مسودة غير محفوظة. هل تريد استعادتها؟" [استعادة] [تجاهل]
+```
+
+**Effect 2 — Save to localStorage on every change (3-second debounce):**
+
+```ts
+useEffect(() => {
+  const timer = setTimeout(() => {
+    if (!title.trim() && !content.trim()) return;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ title, content }));
+    } catch {}
+  }, 3000);
+  return () => clearTimeout(timer);
+}, [title, content]);
+```
+
+**Clear localStorage after DB save:** in `performAutoSave`, after successful save:
+
+```ts
+try {
+  localStorage.removeItem(LS_KEY);
+} catch {}
+```
+
+### Edit Article Page (`app/admin/articles/[id]/edit/page.tsx`)
+
+Same 3-second localStorage save pattern, key = `article-draft-${articleId}`.
+No recovery banner needed (article loads from DB). Clear after DB save.
 
 ---
 
-## Bug 4 — 100ms timing race condition when applying marks
+## Change C — Persist Analysis Results Across Refresh
 
-**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
+**File:** `components/admin/UnifiedAiPanel.tsx`
 
-**Root cause**:
+Add at top of component:
 
-```typescript
-onContentChange(result.rewrittenContent); // Triggers React re-render cycle
-// ...
-setTimeout(() => editorRef.current?.applyAiEditMarks(marks), 100); // Race!
+```ts
+const RESULTS_KEY = `ai-results-${articleId ?? "new"}`;
 ```
 
-`onContentChange` triggers a re-render → the RichTextEditor `useEffect` calls `editor.commands.setContent()` → this wipes existing marks. The 100ms delay may or may not be enough before marks are applied.
+**On mount (restore):**
 
-**Fix**: Reorder operations — set content directly into the editor first (synchronous), apply marks immediately, THEN call `onContentChange` for state sync. The RichTextEditor's `useEffect` is guarded by `content !== editor.getHTML()`, so when `onContentChange` eventually updates the prop, the editor already has the matching content and `setContent` won't be called again (marks survive):
+```ts
+useEffect(() => {
+  try {
+    const stored = sessionStorage.getItem(RESULTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setCompletionResults(parsed.results);
+      setAiPhase("complete");
+      setAiMessage("اكتمل التحليل");
+      if (parsed.introSuggestion) setIntroSuggestion(parsed.introSuggestion);
+      if (parsed.conclusionSuggestion)
+        setConclusionSuggestion(parsed.conclusionSuggestion);
+    }
+  } catch {}
+}, []); // run once on mount
+```
 
-```typescript
-} else if (data.type === 'complete') {
-  const result: RewriteArticleResult = data.data;
-  const diffResults = computeParagraphDiff(content, result.rewrittenContent);
-  const modified = diffResults.filter((d) => d.type === 'modified');
+**After analysis completes (in `data.type === 'complete'` handler):**
 
-  // 1. Set content directly into editor (synchronous)
-  const editorInstance = editorRef.current?.getEditor();
-  if (editorInstance) {
-    editorInstance.commands.setContent(result.rewrittenContent);
-  }
+```ts
+try {
+  sessionStorage.setItem(
+    RESULTS_KEY,
+    JSON.stringify({
+      results: data.data,
+      introSuggestion,
+      conclusionSuggestion,
+    }),
+  );
+} catch {}
+```
 
-  // 2. Apply marks immediately (no setTimeout needed)
-  if (modified.length > 0) {
-    const marks = buildAiEditMarksFromDiff(diffResults, result.rewrittenContent);
-    editorRef.current?.applyAiEditMarks(marks);
-    setAiEditCount(modified.length);
-    const changes: AiChange[] = modified.map((d, i) => ({
-      id: `ai-edit-${i}`,
-      originalText: d.originalText || '',
-      aiText: d.rewrittenText || '',
-    }));
-    setAiChanges(changes);
-    setShowReviewModal(true);
-  }
+Update sessionStorage again after intro/conclusion are fetched.
 
-  // 3. Sync React state (won't re-trigger setContent since content already matches)
-  if (result.rewrittenTitle) {
-    onTitleChange(result.rewrittenTitle);
-  }
-  setRewriteChanges(result.changesSummary || []);
-  setAiIteration(prev => prev + 1);
-  setAiPhase('complete');
-  setAiMessage('اكتملت إعادة الكتابة');
-  onContentChange(result.rewrittenContent);
+**On new analysis start:** clear sessionStorage key at the start of `handleAnalyze`.
+
+---
+
+## Change D — Intro/Conclusion Suggestions in Panel
+
+**File:** `components/admin/UnifiedAiPanel.tsx`
+
+### New state:
+
+```ts
+const [introSuggestion, setIntroSuggestion] = useState<string | null>(null);
+const [conclusionSuggestion, setConclusionSuggestion] = useState<string | null>(
+  null,
+);
+const [introApplied, setIntroApplied] = useState(false);
+const [conclusionApplied, setConclusionApplied] = useState(false);
+```
+
+### Always fetch after analysis (in `handleAnalyze`, after `setAiPhase('complete')`):
+
+Remove the `if (onIntroGenerated || onConclusionGenerated)` conditional. Always fetch:
+
+```ts
+const [introRes, conclusionRes] = await Promise.allSettled([
+  fetch("/api/admin/ai/content", {
+    method: "POST",
+    body: JSON.stringify({ action: "introduction", title, content }),
+  }).then((r) => r.json()),
+  fetch("/api/admin/ai/content", {
+    method: "POST",
+    body: JSON.stringify({ action: "conclusion", title, content }),
+  }).then((r) => r.json()),
+]);
+if (
+  introRes.status === "fulfilled" &&
+  introRes.value?.introductions?.length > 0
+) {
+  const idx = introRes.value.recommended ?? 0;
+  const text =
+    introRes.value.introductions[idx]?.text ??
+    introRes.value.introductions[0].text;
+  setIntroSuggestion(text);
+  onIntroGenerated?.(text); // keep callback for backward compat
+}
+if (
+  conclusionRes.status === "fulfilled" &&
+  conclusionRes.value?.conclusions?.length > 0
+) {
+  const idx = conclusionRes.value.recommended ?? 0;
+  const text =
+    conclusionRes.value.conclusions[idx]?.text ??
+    conclusionRes.value.conclusions[0].text;
+  setConclusionSuggestion(text);
+  onConclusionGenerated?.(text);
 }
 ```
 
----
+### New collapsible section in panel render — "اقتراحات الكتابة":
 
-## Bug 6 — Stale grammar marks persist after AI rewrite
+Rendered after the "issues" section, only when `aiPhase === 'complete'` and intro or conclusion suggestions exist.
 
-**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
-
-**Root cause**: When the AI rewrites the article, the content changes completely. Any grammar marks applied from the initial analysis now point to text that no longer exists in the editor. TipTap keeps those marks rendered (yellow/red underlines) on whatever text happens to be at those positions in the new content — which is visually confusing and wrong.
-
-**Fix**: Clear all grammar marks and reset the grammar state when the rewrite completes. Add to step 1 of the reorder block (right after `editorInstance.commands.setContent`):
-
-```typescript
-// Clear stale grammar marks — content has completely changed
-editorRef.current?.clearAllMarks();
-setGrammarMarksActive(false);
+```tsx
+<SuggestionCard
+  label="مقترح المقدمة"
+  text={introSuggestion}
+  applied={introApplied}
+  onApply={() => {
+    const editor = editorRef.current?.getEditor();
+    if (editor && introSuggestion) {
+      editor.commands.insertContentAt(0, `<p>${introSuggestion}</p>`);
+      setIntroApplied(true);
+    }
+  }}
+  onDismiss={() => setIntroSuggestion(null)}
+/>
+<SuggestionCard
+  label="مقترح الخاتمة"
+  text={conclusionSuggestion}
+  applied={conclusionApplied}
+  onApply={() => {
+    const editor = editorRef.current?.getEditor();
+    if (editor && conclusionSuggestion) {
+      const endPos = editor.state.doc.content.size;
+      editor.commands.insertContentAt(endPos, `<p>${conclusionSuggestion}</p>`);
+      setConclusionApplied(true);
+    }
+  }}
+  onDismiss={() => setConclusionSuggestion(null)}
+/>
 ```
 
-This reuses the existing `clearAllMarks()` ref method and `setGrammarMarksActive` state already in the component. The user can re-apply grammar check after reviewing the AI rewrite by clicking "تطبيق التدقيق اللغوي" — but that requires running "إعادة التحليل" first to get fresh grammar results for the new content.
+Design for `SuggestionCard`: minimal card with Arabic-right label, truncated preview (2 lines), "تطبيق" (success color) / "رفض" (ghost) action buttons. Show a "✓ مُطبَّق" badge when applied.
 
 ---
 
-## Bug 5 — Auto-reanalyze uses stale closure (wrong content)
+## Change E — Rewrite: Include Structure Issues + Preserve Intro/Conclusion
 
-**Location**: `handleRewrite` complete block, `UnifiedAiPanel.tsx`
+### Step 1: `lib/ai/prompts.ts` — Update `buildRewriteArticlePrompt`
 
-**Root cause**:
+Add parameters:
 
-```typescript
-setTimeout(() => {
-  handleAnalyze(); // stale closure — analyzes OLD content, not the rewritten content
-}, 1000);
+```ts
+structureTopIssues: string[];
+preservedIntro?: string;
+preservedConclusion?: string;
 ```
 
-`handleAnalyze` is captured in `handleRewrite`'s closure before `onContentChange` triggers a re-render with the new content.
+Add to prompt body (after GEO issues section):
 
-**Fix**: Remove the auto-reanalyze entirely. The user can click "إعادة التحليل" manually after reviewing AI changes. Also remove `handleAnalyze` from `handleRewrite`'s `useCallback` dependency array.
+```
+مشاكل هيكل المقال التي يجب معالجتها:
+${structureTopIssues.join('\n') || 'لا توجد مشاكل هيكلية'}
 
----
-
-## Implementation Steps
-
-### Step 1 — `UnifiedAiPanel.tsx`
-
-**1a. Fix `handleAnalyze` non-OK response** (~line 288):
-
-- Replace `throw new Error('فشل...')` with error body read + throw.
-
-**1b. Fix `handleAnalyze` SSE loop** (~lines 303-374):
-
-- Restructure `for` loop: `try{JSON.parse}catch{continue}` then handle events outside the try.
-
-**1c. Fix `handleRewrite` non-OK response** (~line 422):
-
-- Same as 1a for the rewrite endpoint.
-
-**1d. Fix `handleRewrite` SSE loop + complete block + remove auto-reanalyze** (~lines 440-496):
-
-- Restructure try/catch (Bug 1)
-- Reorder content-set → mark-apply → state-sync (Bug 4)
-- Clear stale grammar marks after `setContent` (Bug 6): call `editorRef.current?.clearAllMarks()` and `setGrammarMarksActive(false)`
-- Remove `setTimeout(() => handleAnalyze(), 1000)` (Bug 5)
-- Remove `handleAnalyze` from dependency array
-
-### Step 2 — `RichTextEditor.tsx`
-
-**2a.** Add `findBlockPosition` useCallback after `findTextPosition` (~line 194).
-
-**2b.** Change `findTextPosition` to `findBlockPosition` inside `applyAiEditMarks` (~line 270).
-
-**2c.** Add `findBlockPosition` to `useImperativeHandle` deps array (~line 301).
-
----
-
-## Verification
-
-After making changes, run in order:
-
-```bash
-npx tsc --noEmit   # 0 type errors
-npm run lint       # 0 lint errors
-npm run build      # successful build
+${preservedIntro ? `\n⚠️ المقدمة التالية وافق عليها المستخدم — احتفظ بها كما هي في بداية المقال:\n${preservedIntro}` : ''}
+${preservedConclusion ? `\n⚠️ الخاتمة التالية وافق عليها المستخدم — احتفظ بها كما هي في نهاية المقال:\n${preservedConclusion}` : ''}
 ```
 
-**Manual test**:
+### Step 2: `lib/ai/article-completion.ts` — `rewriteArticle()`
 
-1. Open new article, write 50+ words, add a title
-2. Click "تحليل أولي" → wait for completion → focus keyword auto-populated
-3. Apply grammar marks if any exist (click "تطبيق التدقيق اللغوي") — verify underlines appear in editor
-4. Click "إعادة كتابة بالذكاء الاصطناعي"
-5. Verify: spinner shows, then content updates, **grammar underlines are cleared**, diff review modal appears with AI change highlights
-6. Accept/reject individual changes, verify editor updates
-7. Click "قبول الكل" / "رفض الكل" — verify all AI marks cleared
+Add to function signature:
 
-**Error path test**:
+```ts
+structureTopIssues?: string[];
+preservedIntro?: string;
+preservedConclusion?: string;
+```
 
-- With invalid GEMINI_API_KEY, verify error message appears (not stuck spinner)
-- With rate limit hit (> 5 requests in 60s), verify rate limit message shown
+Pass them to `buildRewriteArticlePrompt`.
+
+### Step 3: `app/api/admin/ai/rewrite-article/route.ts` — schema
+
+```ts
+structureTopIssues: z.array(z.string()).default([]),
+preservedIntro: z.string().optional(),
+preservedConclusion: z.string().optional(),
+```
+
+### Step 4: `components/admin/UnifiedAiPanel.tsx` — `handleRewrite`
+
+Compute structure issues:
+
+```ts
+const structureChecklist = analyzeStructure(
+  title,
+  content,
+  focusKeyword || undefined,
+);
+const structureTopIssues = structureChecklist
+  .filter((item) => !item.passed)
+  .map((item) => item.label || item.description)
+  .slice(0, 5);
+```
+
+Pass preserved sections:
+
+```ts
+preservedIntro: introApplied ? introSuggestion ?? undefined : undefined,
+preservedConclusion: conclusionApplied ? conclusionSuggestion ?? undefined : undefined,
+```
+
+Include `structureTopIssues` in the fetch body to `/api/admin/ai/rewrite-article`.
+
+---
+
+## Change F — UI/UX Polish
+
+### Loading state in panel (`renderQuickStatsSection`):
+
+Replace the simple spinner with a step-by-step live progress:
+
+```
+╔══════════════════════════════╗
+║  [●] جاري استخراج الكلمات...  ║
+║  ████████░░░░░░ خطوة 2/5      ║
+╚══════════════════════════════╝
+```
+
+Use a smooth animated progress bar (CSS width transition) derived from `aiStep`:
+
+- 5 steps mapped to 0/20/40/60/80/100%
+
+### Section auto-open after analysis:
+
+After `setAiPhase('complete')`, also set:
+
+```ts
+setSectionStates((prev) => ({
+  ...prev,
+  issues: true,
+  meta: true,
+  taxonomy: true,
+}));
+```
+
+### Score ring appearance:
+
+When `wordCount < 10`, show rings with `--` instead of `0` in the center (update `ArticleEditorHeader.tsx`'s `ScoreRing` to accept an `empty` prop that renders `--`).
+Pass `empty={wordCount === 0}` from `ArticleEditorHeader` when `wordCount < 10`.
+
+---
+
+## Verification Steps
+
+1. **Score suppression**: Open new article with no content — header should show `--` or `0` in rings. Type 10+ words — rings should start updating.
+2. **localStorage recovery**: Type content on new article, refresh page (before 30s DB save) — should see recovery banner.
+3. **Analysis persistence**: Click "تحليل أولي", wait for completion, refresh page — results should still be visible (sessionStorage).
+4. **Intro/conclusion suggestions**: After analysis, check for new "اقتراحات الكتابة" section. Click "تطبيق" — intro/conclusion should appear in editor.
+5. **Rewrite with all issues**: Click "إعادة كتابة بالذكاء الاصطناعي" — check network request includes `structureTopIssues`. If intro was applied, check `preservedIntro` is sent.
+6. **TypeScript**: `npx tsc --noEmit` — 0 errors
+7. **Lint**: `npm run lint` — 0 errors
+8. **Build**: `npm run build` — completes successfully

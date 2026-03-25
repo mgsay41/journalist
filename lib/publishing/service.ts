@@ -6,6 +6,7 @@ import {
   notifyArticleScheduled,
   notifyPublicationFailed,
 } from "@/lib/notifications";
+import { generateAndCacheTts } from "@/lib/tts/service";
 import type {
   ArticleStatus,
   PublishArticleInput,
@@ -52,14 +53,20 @@ export async function publishArticle(
   try {
     const article = await prisma.article.findUnique({
       where: { id: articleId },
-      include: { author: true },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        content: true,
+        authorId: true,
+        author: true,
+      },
     });
 
     if (!article) {
       return { success: false, error: "المقال غير موجود" };
     }
 
-    // Update article to published
     const updated = await prisma.article.update({
       where: { id: articleId },
       data: {
@@ -69,12 +76,17 @@ export async function publishArticle(
       },
     });
 
-    // Send notification
     await notifyArticlePublished(
       article.authorId,
       articleId,
       article.title
     ).catch(console.error);
+
+    if (article.content && article.slug) {
+      generateAndCacheTts(article.slug, article.content).catch((err) => {
+        console.error("TTS pre-generation failed:", err);
+      });
+    }
 
     return {
       success: true,
@@ -193,6 +205,87 @@ export async function unscheduleArticle(
   } catch (error) {
     console.error("Error unscheduling article:", error);
     return { success: false, error: "فشل في إلغاء جدولة المقال" };
+  }
+}
+
+/**
+ * Unpublish an article (return to draft)
+ */
+export async function unpublishArticle(
+  articleId: string
+): Promise<PublishResult> {
+  try {
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+    });
+
+    if (!article) {
+      return { success: false, error: "المقال غير موجود" };
+    }
+
+    const updated = await prisma.article.update({
+      where: { id: articleId },
+      data: {
+        status: "draft",
+        publishedAt: null,
+      },
+    });
+
+    return {
+      success: true,
+      article: {
+        id: updated.id,
+        title: updated.title,
+        slug: updated.slug,
+        status: updated.status,
+        publishedAt: updated.publishedAt,
+        scheduledAt: updated.scheduledAt,
+      },
+    };
+  } catch (error) {
+    console.error("Error unpublishing article:", error);
+    return { success: false, error: "فشل في إلغاء نشر المقال" };
+  }
+}
+
+/**
+ * Restore an archived article to draft
+ */
+export async function restoreArticleToDraft(
+  articleId: string
+): Promise<PublishResult> {
+  try {
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+    });
+
+    if (!article) {
+      return { success: false, error: "المقال غير موجود" };
+    }
+
+    const updated = await prisma.article.update({
+      where: { id: articleId },
+      data: {
+        status: "draft",
+        publishedAt: null,
+        scheduledAt: null,
+      },
+    });
+
+    return {
+      success: true,
+      article: {
+        id: updated.id,
+        title: updated.title,
+        slug: updated.slug,
+        status: updated.status,
+        publishedAt: updated.publishedAt,
+        scheduledAt: updated.scheduledAt,
+      },
+    };
+  } catch (error) {
+    console.error("Error restoring article to draft:", error);
+    return { success: false, error: "فشل في استعادة المقال" };
   }
 }
 

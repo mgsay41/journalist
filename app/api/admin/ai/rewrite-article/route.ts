@@ -27,6 +27,9 @@ const requestSchema = z.object({
   seoScore: z.number().min(0).max(100),
   seoTopIssues: z.array(z.string()),
   geoTopIssues: z.array(z.string()).default([]),
+  structureTopIssues: z.array(z.string()).default([]),
+  preservedIntro: z.string().optional(),
+  preservedConclusion: z.string().optional(),
   iteration: z.number().min(0).default(0),
   articleType: z.string().default("article"),
 });
@@ -100,6 +103,9 @@ export async function POST(request: NextRequest) {
           seoScore: validatedData.seoScore,
           seoTopIssues: validatedData.seoTopIssues,
           geoTopIssues: validatedData.geoTopIssues,
+          structureTopIssues: validatedData.structureTopIssues,
+          preservedIntro: validatedData.preservedIntro,
+          preservedConclusion: validatedData.preservedConclusion,
           iteration: validatedData.iteration,
           articleType: validatedData.articleType,
         });

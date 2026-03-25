@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -26,25 +26,30 @@ export interface ArticleEditorHeaderProps {
   scores: Scores;
   wordCount: number;
 
-  // Status dropdown — edit page only
+  /** Current article status — read-only display pill */
   status?: string;
-  onStatusChange?: (status: string) => void;
-  publishedAt?: string;
-  scheduledAt?: string;
-  onPublishedAtChange?: (val: string) => void;
-  onScheduledAtChange?: (val: string) => void;
+  /** Scheduled publish date — shown inside the scheduled pill */
+  scheduledAt?: string | null;
 
-  onSave: () => void;
+  /** Always opens the readiness modal (SEO/GEO check) */
   onPublish: () => void;
-  saving?: boolean;
+  /** Opens schedule modal then calls POST /publish {action:'schedule'} */
+  onSchedule?: (date: Date) => void;
+  /** Reverts scheduled → draft */
+  onUnschedule?: () => void;
+  /** Used for "نشر الآن" in scheduled state — defaults to onPublish */
+  onPublishNow?: () => void;
+  /** Reverts published → draft */
+  onUnpublish?: () => void;
+  /** Restores archived → draft */
+  onRestore?: () => void;
+
   publishing?: boolean;
+  actionLoading?: 'schedule' | 'unschedule' | 'unpublish' | 'restore' | null;
 
-  // Distraction-free mode — edit page only
   onDistractionMode?: () => void;
-
   panelOpen: boolean;
   onTogglePanel: () => void;
-
   onFocusSection?: (section: 'issues' | 'meta' | 'taxonomy') => void;
 }
 
@@ -66,16 +71,18 @@ function ScoreRing({
   label,
   onClick,
   children,
+  empty,
 }: {
   score: number;
   max?: number;
   label: string;
   onClick?: () => void;
   children?: React.ReactNode;
+  empty?: boolean;
 }) {
   const pct = Math.min(score / max, 1);
   const offset = CIRCUMFERENCE * (1 - pct);
-  const color = ringColor(score, max);
+  const color = empty ? '#9ca3af' : ringColor(score, max);
 
   const inner = (
     <>
@@ -99,24 +106,26 @@ function ScoreRing({
             strokeWidth="2.5"
             className="text-border/40"
           />
-          <circle
-            cx={RING.SIZE / 2}
-            cy={RING.SIZE / 2}
-            r={RING.R}
-            fill="none"
-            stroke={color}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={offset}
-            style={{ transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s ease' }}
-          />
+          {!empty && (
+            <circle
+              cx={RING.SIZE / 2}
+              cy={RING.SIZE / 2}
+              r={RING.R}
+              fill="none"
+              stroke={color}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeDasharray={CIRCUMFERENCE}
+              strokeDashoffset={offset}
+              style={{ transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s ease' }}
+            />
+          )}
         </svg>
         <span
           className="absolute inset-0 flex items-center justify-center font-bold leading-none select-none"
           style={{ fontSize: '8px', color, letterSpacing: '-0.03em' }}
         >
-          {children ?? score}
+          {empty ? '--' : (children ?? score)}
         </span>
       </div>
 
@@ -262,6 +271,56 @@ const STATUS_CONFIG = {
   },
 } as const;
 
+/* ── Status Pill (read-only) ────────────────────────────── */
+
+function StatusPill({
+  status,
+  scheduledAt,
+}: {
+  status: string;
+  scheduledAt?: string | null;
+}) {
+  const cfg =
+    STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.draft;
+
+  let dateLabel: string | null = null;
+  if (status === 'scheduled' && scheduledAt) {
+    try {
+      dateLabel = new Intl.DateTimeFormat('ar-SA', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(scheduledAt));
+    } catch {
+      // ignore invalid date
+    }
+  }
+
+  return (
+    <span
+      className={cn(
+        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ring-1 shrink-0',
+        cfg.bg,
+        cfg.color,
+        cfg.ring
+      )}
+    >
+      <span
+        className={cn(
+          'w-1.5 h-1.5 rounded-full shrink-0',
+          cfg.dot,
+          status === 'published' && 'animate-pulse'
+        )}
+      />
+      {cfg.label}
+      {dateLabel && (
+        <span className="opacity-70 font-normal">: {dateLabel}</span>
+      )}
+    </span>
+  );
+}
+
 /* ── Icon Button ────────────────────────────────────────── */
 
 function IconButton({
@@ -300,6 +359,62 @@ function Divider() {
   return <div className="shrink-0 w-px h-5 bg-border/50 mx-0.5" />;
 }
 
+/* ── Spinner ────────────────────────────────────────────── */
+
+function Spinner() {
+  return (
+    <svg className="w-3 h-3 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+/* ── Publish Button (amber gradient) ────────────────────── */
+
+function PublishButton({
+  onClick,
+  loading,
+  label,
+}: {
+  onClick: () => void;
+  loading?: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="shrink-0 flex items-center gap-1.5 h-8 px-4 rounded-lg text-sm font-semibold text-white transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{
+        background: loading
+          ? 'linear-gradient(135deg, #d97706, #b45309)'
+          : 'linear-gradient(135deg, #f59e0b, #d97706)',
+        boxShadow: loading ? 'none' : '0 2px 8px rgba(245,158,11,0.28)',
+      }}
+      onMouseEnter={(e) => {
+        if (!loading)
+          (e.currentTarget as HTMLButtonElement).style.boxShadow =
+            '0 3px 12px rgba(245,158,11,0.42)';
+      }}
+      onMouseLeave={(e) => {
+        if (!loading)
+          (e.currentTarget as HTMLButtonElement).style.boxShadow =
+            '0 2px 8px rgba(245,158,11,0.28)';
+      }}
+    >
+      {loading ? (
+        <>
+          <Spinner />
+          جاري النشر...
+        </>
+      ) : (
+        label
+      )}
+    </button>
+  );
+}
+
 /* ── Main Component ─────────────────────────────────────── */
 
 export function ArticleEditorHeader({
@@ -310,163 +425,127 @@ export function ArticleEditorHeader({
   scores,
   wordCount,
   status,
-  onStatusChange,
-  publishedAt,
   scheduledAt,
-  onPublishedAtChange,
-  onScheduledAtChange,
-  onSave,
   onPublish,
-  saving = false,
+  onSchedule,
+  onUnschedule,
+  onPublishNow,
+  onUnpublish,
+  onRestore,
   publishing = false,
+  actionLoading = null,
   onDistractionMode,
   panelOpen,
   onTogglePanel,
   onFocusSection,
 }: ArticleEditorHeaderProps) {
-  const [showStatusMenu, setShowStatusMenu] = useState(false);
-  const statusMenuRef = useRef<HTMLDivElement>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleInput, setScheduleInput] = useState('');
+  const [minSchedule, setMinSchedule] = useState('');
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (
-        statusMenuRef.current &&
-        !statusMenuRef.current.contains(e.target as Node)
-      ) {
-        setShowStatusMenu(false);
-      }
+  const isScoreEmpty = wordCount < 10;
+
+  /* ── Context-aware action buttons ── */
+  function renderActions() {
+    switch (status) {
+      case 'published':
+        return (
+          <button
+            onClick={onUnpublish}
+            disabled={actionLoading === 'unpublish'}
+            className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {actionLoading === 'unpublish' ? (
+              <>
+                <Spinner />
+                جاري إلغاء النشر...
+              </>
+            ) : (
+              'إلغاء النشر'
+            )}
+          </button>
+        );
+
+      case 'scheduled':
+        return (
+          <>
+            <button
+              onClick={onUnschedule}
+              disabled={actionLoading === 'unschedule'}
+              className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'unschedule' ? (
+                <>
+                  <Spinner />
+                  جاري الإلغاء...
+                </>
+              ) : (
+                'إلغاء الجدولة'
+              )}
+            </button>
+            <PublishButton
+              onClick={onPublishNow ?? onPublish}
+              loading={publishing}
+              label="نشر الآن"
+            />
+          </>
+        );
+
+      case 'archived':
+        return (
+          <>
+            <button
+              onClick={onRestore}
+              disabled={actionLoading === 'restore'}
+              className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'restore' ? (
+                <>
+                  <Spinner />
+                  جاري الاستعادة...
+                </>
+              ) : (
+                'استعادة كمسودة'
+              )}
+            </button>
+            <PublishButton onClick={onPublish} loading={publishing} label="نشر" />
+          </>
+        );
+
+      case 'draft':
+      default:
+        return (
+          <>
+            {onSchedule && (
+              <button
+                onClick={() => {
+                  setMinSchedule(new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16));
+                  setShowScheduleModal(true);
+                }}
+                className="shrink-0 hidden sm:flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150"
+              >
+                جدولة
+              </button>
+            )}
+            <PublishButton onClick={onPublish} loading={publishing} label="نشر" />
+          </>
+        );
     }
-    if (showStatusMenu) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showStatusMenu]);
-
-  const statusCfg = status
-    ? STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.draft
-    : null;
-
-  const hasStatusSection = statusCfg && onStatusChange;
-  const hasDatePicker =
-    (status === 'scheduled' && onScheduledAtChange) ||
-    (status === 'published' && onPublishedAtChange);
+  }
 
   return (
-    <header
-      dir="rtl"
-      className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-2 px-4 z-20"
-    >
-      {/* ── Back navigation ── */}
-      <Link
-        href="/admin/articles"
-        className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+    <>
+      <header
+        dir="rtl"
+        className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-2 px-4 z-20"
       >
-        <svg
-          className="w-3.5 h-3.5 shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
-        المقالات
-      </Link>
-
-      <Divider />
-
-      {/* ── Save indicator ── */}
-      <SaveIndicator state={saveState} lastSavedAt={lastSavedAt} />
-
-      {/* ── Article title preview (flex fill) ── */}
-      <span
-        className="flex-1 min-w-0 text-sm text-muted-foreground/40 truncate px-1 select-none"
-        title={articleTitle || undefined}
-      >
-        {articleTitle || 'مقال جديد'}
-      </span>
-
-      {/* ── Scores section ── */}
-      <div className="hidden md:flex items-center shrink-0">
-        <ScoreRing
-          score={scores.seo}
-          label="SEO"
-          onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
-        />
-        <ScoreRing
-          score={scores.geo}
-          label="GEO"
-          onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
-        />
-        <ScoreRing
-          score={scores.structure}
-          max={scores.structureTotal}
-          label="هيكل"
-          onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
-        >
-          {scores.structure}/{scores.structureTotal}
-        </ScoreRing>
-
-        <WordCount count={wordCount} />
-
-        {scores.grammar > 0 && (
-          <button
-            onClick={
-              onFocusSection ? () => onFocusSection('issues') : undefined
-            }
-            className="flex items-center gap-1 px-2 py-1 mx-1 rounded-md text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200/50 dark:border-red-800/40"
-          >
-            <svg
-              className="w-3 h-3 shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {scores.grammar}
-          </button>
-        )}
-      </div>
-
-      <Divider />
-
-      {/* ── Utility icons ── */}
-      {onDistractionMode && (
-        <IconButton
-          onClick={onDistractionMode}
-          title="وضع التركيز (Ctrl+Shift+D)"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m4 0h4m0 0v-4"
-            />
-          </svg>
-        </IconButton>
-      )}
-
-      {articleSlug && (
+        {/* ── Back navigation ── */}
         <Link
-          href={`/article/${articleSlug}`}
-          target="_blank"
-          title="معاينة المقال"
-          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150"
+          href="/admin/articles"
+          className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           <svg
-            className="w-4 h-4"
+            className="w-3.5 h-3.5 shrink-0"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -475,45 +554,84 @@ export function ArticleEditorHeader({
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              d="M9 5l7 7-7 7"
             />
           </svg>
+          المقالات
         </Link>
-      )}
 
-      {(onDistractionMode || articleSlug) && <Divider />}
+        <Divider />
 
-      {/* ── Status pill (edit page only) ── */}
-      {hasStatusSection && (
-        <div className="relative shrink-0" ref={statusMenuRef}>
-          <button
-            onClick={() => setShowStatusMenu((v) => !v)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ring-1 hover:ring-2 hover:shadow-sm',
-              statusCfg.bg,
-              statusCfg.color,
-              statusCfg.ring
-            )}
+        {/* ── Save indicator ── */}
+        <SaveIndicator state={saveState} lastSavedAt={lastSavedAt} />
+
+        {/* ── Article title preview (flex fill) ── */}
+        <span
+          className="flex-1 min-w-0 text-sm text-muted-foreground/40 truncate px-1 select-none"
+          title={articleTitle || undefined}
+        >
+          {articleTitle || 'مقال جديد'}
+        </span>
+
+        {/* ── Scores section ── */}
+        <div className="hidden md:flex items-center shrink-0">
+          <ScoreRing
+            score={scores.seo}
+            label="SEO"
+            empty={isScoreEmpty}
+            onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
+          />
+          <ScoreRing
+            score={scores.geo}
+            label="GEO"
+            empty={isScoreEmpty}
+            onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
+          />
+          <ScoreRing
+            score={scores.structure}
+            max={scores.structureTotal}
+            label="هيكل"
+            empty={isScoreEmpty}
+            onClick={onFocusSection ? () => onFocusSection('issues') : undefined}
           >
-            <span
-              className={cn(
-                'w-1.5 h-1.5 rounded-full shrink-0',
-                statusCfg.dot,
-                status === 'published' && 'animate-pulse'
-              )}
-            />
-            {statusCfg.label}
+            {isScoreEmpty ? '--' : `${scores.structure}/${scores.structureTotal}`}
+          </ScoreRing>
+
+          <WordCount count={wordCount} />
+
+          {scores.grammar > 0 && (
+            <button
+              onClick={
+                onFocusSection ? () => onFocusSection('issues') : undefined
+              }
+              className="flex items-center gap-1 px-2 py-1 mx-1 rounded-md text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200/50 dark:border-red-800/40"
+            >
+              <svg
+                className="w-3 h-3 shrink-0"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {scores.grammar}
+            </button>
+          )}
+        </div>
+
+        <Divider />
+
+        {/* ── Utility icons ── */}
+        {onDistractionMode && (
+          <IconButton
+            onClick={onDistractionMode}
+            title="وضع التركيز (Ctrl+Shift+D)"
+          >
             <svg
-              className={cn(
-                'w-3 h-3 opacity-50 transition-transform duration-150 shrink-0',
-                showStatusMenu && 'rotate-180'
-              )}
+              className="w-4 h-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -522,189 +640,128 @@ export function ArticleEditorHeader({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M19 9l-7 7-7-7"
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m4 0h4m0 0v-4"
               />
             </svg>
-          </button>
+          </IconButton>
+        )}
 
-          {showStatusMenu && (
-            <div
-              className="absolute top-full mt-1.5 end-0 w-44 bg-card border border-border/60 rounded-xl shadow-xl z-50 overflow-hidden py-1.5"
-              dir="rtl"
+        {articleSlug && (
+          <Link
+            href={`/article/${articleSlug}`}
+            target="_blank"
+            title="معاينة المقال"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {(
-                Object.entries(STATUS_CONFIG) as [
-                  string,
-                  (typeof STATUS_CONFIG)[keyof typeof STATUS_CONFIG],
-                ][]
-              ).map(([val, cfg]) => (
-                <button
-                  key={val}
-                  onClick={() => {
-                    onStatusChange(val);
-                    setShowStatusMenu(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3.5 py-2 text-xs transition-colors hover:bg-muted/50',
-                    status === val
-                      ? 'font-bold text-foreground'
-                      : 'text-foreground/80'
-                  )}
-                >
-                  <span
-                    className={cn('w-2 h-2 rounded-full shrink-0', cfg.dot)}
-                  />
-                  <span>{cfg.label}</span>
-                  {status === val && (
-                    <svg
-                      className="w-3.5 h-3.5 mr-auto text-muted-foreground"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  )}
-                </button>
-              ))}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              />
+            </svg>
+          </Link>
+        )}
+
+        {(onDistractionMode || articleSlug) && <Divider />}
+
+        {/* ── Status pill (read-only) ── */}
+        {status && (
+          <StatusPill status={status} scheduledAt={scheduledAt} />
+        )}
+
+        {status && <Divider />}
+
+        {/* ── Context-aware action buttons ── */}
+        {renderActions()}
+
+        {/* ── Panel toggle ── */}
+        <IconButton
+          onClick={onTogglePanel}
+          active={panelOpen}
+          title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
+            />
+          </svg>
+        </IconButton>
+      </header>
+
+      {/* ── Schedule Modal ── */}
+      {showScheduleModal && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+          onClick={() => {
+            setShowScheduleModal(false);
+            setScheduleInput('');
+          }}
+        >
+          <div
+            className="bg-card border border-border rounded-xl shadow-2xl p-5 w-72"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <h3 className="text-sm font-semibold mb-3">جدولة النشر</h3>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              تاريخ ووقت النشر
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduleInput}
+              onChange={(e) => setScheduleInput(e.target.value)}
+              min={minSchedule}
+              className="w-full text-sm px-3 py-2 rounded-lg border border-border/60 bg-background text-foreground outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-colors mb-4"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (scheduleInput && onSchedule) {
+                    onSchedule(new Date(scheduleInput));
+                    setShowScheduleModal(false);
+                    setScheduleInput('');
+                  }
+                }}
+                disabled={!scheduleInput || actionLoading === 'schedule'}
+                className="flex-1 h-8 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {actionLoading === 'schedule' ? 'جاري الجدولة...' : 'جدولة'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowScheduleModal(false);
+                  setScheduleInput('');
+                }}
+                className="flex-1 h-8 rounded-lg text-sm border border-border/60 text-foreground hover:bg-muted/50 transition-colors"
+              >
+                إلغاء
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
-
-      {/* ── Date picker (scheduled / published) ── */}
-      {status === 'scheduled' && onScheduledAtChange && (
-        <input
-          type="datetime-local"
-          value={scheduledAt ?? ''}
-          onChange={(e) => onScheduledAtChange(e.target.value)}
-          min={new Date().toISOString().slice(0, 16)}
-          className="text-xs px-2 py-1.5 rounded-lg border border-border/60 bg-background text-foreground outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-colors shrink-0"
-        />
-      )}
-      {status === 'published' && onPublishedAtChange && (
-        <input
-          type="datetime-local"
-          value={publishedAt ?? ''}
-          onChange={(e) => onPublishedAtChange(e.target.value)}
-          className="text-xs px-2 py-1.5 rounded-lg border border-border/60 bg-background text-foreground outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-colors shrink-0"
-        />
-      )}
-
-      {(hasStatusSection || hasDatePicker) && <Divider />}
-
-      {/* ── Save button ── */}
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="shrink-0 hidden sm:flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {saving ? (
-          <>
-            <svg
-              className="w-3 h-3 animate-spin shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            جاري الحفظ...
-          </>
-        ) : (
-          'حفظ'
-        )}
-      </button>
-
-      {/* ── Publish button ── */}
-      <button
-        onClick={onPublish}
-        disabled={publishing}
-        className="shrink-0 flex items-center gap-1.5 h-8 px-4 rounded-lg text-sm font-semibold text-white transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{
-          background: publishing
-            ? 'linear-gradient(135deg, #d97706, #b45309)'
-            : 'linear-gradient(135deg, #f59e0b, #d97706)',
-          boxShadow: publishing
-            ? 'none'
-            : '0 2px 8px rgba(245,158,11,0.28)',
-        }}
-        onMouseEnter={(e) => {
-          if (!publishing)
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              '0 3px 12px rgba(245,158,11,0.42)';
-        }}
-        onMouseLeave={(e) => {
-          if (!publishing)
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              '0 2px 8px rgba(245,158,11,0.28)';
-        }}
-      >
-        {publishing ? (
-          <>
-            <svg
-              className="w-3 h-3 animate-spin shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            جاري النشر...
-          </>
-        ) : (
-          'نشر'
-        )}
-      </button>
-
-      {/* ── Panel toggle ── */}
-      <IconButton
-        onClick={onTogglePanel}
-        active={panelOpen}
-        title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
-          />
-        </svg>
-      </IconButton>
-    </header>
+    </>
   );
 }
 

@@ -63,6 +63,10 @@ export default function NewArticlePage() {
   const [modalMetaDescription, setModalMetaDescription] = useState('');
   const [modalFocusKeyword, setModalFocusKeyword] = useState('');
 
+  const [draftRecovery, setDraftRecovery] = useState<{ title: string; content: string } | null>(null);
+
+  const LS_KEY = "article-draft-new";
+
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTitle(e.target.value);
     if (titleRef.current) {
@@ -92,6 +96,28 @@ export default function NewArticlePage() {
     }
   }, [panelOpen]);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved) {
+        const { title: t, content: c } = JSON.parse(saved);
+        if (t || c) {
+          setDraftRecovery({ title: t, content: c });
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!title.trim() && !content.trim()) return;
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ title, content }));
+      } catch {}
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [title, content]);
+
   const performAutoSave = useCallback(async () => {
     if (!title.trim() || !content.trim()) return;
     const wordCount = content.replace(/<[^>]*>/g, '').trim().split(/\s+/).filter(Boolean).length;
@@ -117,12 +143,25 @@ export default function NewArticlePage() {
       const data = await res.json();
       if (data.article?.id) {
         articleIdRef.current = data.article.id;
+        // Migrate AI analysis results to the new key before navigating
+        try {
+          const oldKey = 'ai-results-new';
+          const newKey = `ai-results-${data.article.id}`;
+          const existing = sessionStorage.getItem(oldKey);
+          if (existing) {
+            sessionStorage.setItem(newKey, existing);
+            sessionStorage.removeItem(oldKey);
+          }
+        } catch {}
         if (!hasReplacedUrlRef.current) {
           hasReplacedUrlRef.current = true;
           router.replace(`/admin/articles/${data.article.id}/edit`, { scroll: false });
         }
       }
       setSaveStatus('saved');
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch {}
     } catch {
       setSaveStatus('error');
     }
@@ -278,14 +317,43 @@ export default function NewArticlePage() {
         saveState={saveStatus === 'saving' ? 'saving' : saveStatus === 'saved' ? 'saved' : saveStatus === 'error' ? 'error' : 'idle'}
         scores={scores}
         wordCount={wordCount}
-        onSave={performAutoSave}
         onPublish={openPublishModal}
-        saving={saveStatus === 'saving'}
         publishing={publishing}
         panelOpen={panelOpen}
         onTogglePanel={() => setPanelOpen(!panelOpen)}
         onFocusSection={handleFocusSection}
       />
+
+      {draftRecovery && (
+        <div className="px-4 pt-2 shrink-0 z-10">
+          <div className="flex items-center justify-between gap-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg" dir="rtl">
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              تم العثور على مسودة غير محفوظة. هل تريد استعادتها؟
+            </span>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (draftRecovery) {
+                    setTitle(draftRecovery.title);
+                    setContent(draftRecovery.content);
+                  }
+                  setDraftRecovery(null);
+                }}
+              >
+                استعادة
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setDraftRecovery(null)}
+              >
+                تجاهل
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="px-4 pt-2 shrink-0 z-10">
@@ -355,7 +423,6 @@ export default function NewArticlePage() {
               />
             </div>
           </div>
-
         </div>
 
         {panelOpen && (

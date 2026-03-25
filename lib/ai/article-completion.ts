@@ -579,6 +579,9 @@ export interface RewriteArticleInput {
   seoScore: number;
   seoTopIssues: string[];
   geoTopIssues: string[];
+  structureTopIssues?: string[];
+  preservedIntro?: string;
+  preservedConclusion?: string;
   iteration: number;
   articleType: string;
 }
@@ -599,6 +602,9 @@ export async function rewriteArticle(
     seoScore: input.seoScore,
     seoTopIssues: input.seoTopIssues,
     geoTopIssues: input.geoTopIssues,
+    structureTopIssues: input.structureTopIssues,
+    preservedIntro: input.preservedIntro,
+    preservedConclusion: input.preservedConclusion,
     iteration: input.iteration,
     articleType: input.articleType,
   });

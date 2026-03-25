@@ -207,12 +207,17 @@ async function getRelatedArticles(
 }
 
 // Pre-render all published articles at build time — served instantly from CDN
+// Falls back to ISR on first request if DB unavailable at build time
 export async function generateStaticParams() {
-  const articles = await prisma.article.findMany({
-    where: { status: 'published', publishedAt: { lte: new Date() } },
-    select: { slug: true },
-  });
-  return articles.map((a) => ({ slug: a.slug }));
+  try {
+    const articles = await prisma.article.findMany({
+      where: { status: 'published', publishedAt: { lte: new Date() } },
+      select: { slug: true },
+    });
+    return articles.map((a) => ({ slug: a.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {

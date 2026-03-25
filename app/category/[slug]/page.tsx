@@ -129,12 +129,16 @@ async function getCategoryData(slug: string, page: number) {
   };
 }
 
-// Pre-render all category pages at build time
+// Pre-render all category pages at build time (falls back to ISR on first request if DB unavailable)
 export async function generateStaticParams() {
-  const categories = await prisma.category.findMany({
-    select: { slug: true },
-  });
-  return categories.map((c) => ({ slug: c.slug }));
+  try {
+    const categories = await prisma.category.findMany({
+      select: { slug: true },
+    });
+    return categories.map((c) => ({ slug: c.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {

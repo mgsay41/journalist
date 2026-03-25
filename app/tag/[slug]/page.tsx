@@ -164,12 +164,16 @@ async function getTagData(slug: string, page: number) {
   };
 }
 
-// Pre-render all tag pages at build time
+// Pre-render all tag pages at build time (falls back to ISR on first request if DB unavailable)
 export async function generateStaticParams() {
-  const tags = await prisma.tag.findMany({
-    select: { slug: true },
-  });
-  return tags.map((t) => ({ slug: t.slug }));
+  try {
+    const tags = await prisma.tag.findMany({
+      select: { slug: true },
+    });
+    return tags.map((t) => ({ slug: t.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: TagPageProps): Promise<Metadata> {

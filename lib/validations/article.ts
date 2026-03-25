@@ -46,8 +46,8 @@ export const createArticleSchema = z.object({
 
   status: articleStatusEnum.default('draft'),
 
-  publishedAt: z.union([z.string().datetime(), z.null(), z.undefined()]).optional(),
-  scheduledAt: z.union([z.string().datetime(), z.null(), z.undefined()]).optional(),
+  publishedAt: z.union([z.string().datetime({ local: true }), z.null(), z.undefined()]).optional(),
+  scheduledAt: z.union([z.string().datetime({ local: true }), z.null(), z.undefined()]).optional(),
 
   metaTitle: z.union([
     z.string().max(60, { message: 'عنوان الميتا طويل جداً' }),

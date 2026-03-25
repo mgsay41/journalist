@@ -1697,11 +1697,26 @@ export function buildRewriteArticlePrompt(data: {
   seoScore: number;
   seoTopIssues: string[];
   geoTopIssues: string[];
+  structureTopIssues?: string[];
+  preservedIntro?: string;
+  preservedConclusion?: string;
   iteration: number;
   articleType: string;
 }): string {
   const articleTypeInstruction = ARTICLE_TYPE_INSTRUCTIONS[data.articleType] || ARTICLE_TYPE_INSTRUCTIONS.article;
   const plainTextContent = data.content.replace(/<[^>]*>/g, '');
+
+  const structureIssuesSection = data.structureTopIssues && data.structureTopIssues.length > 0
+    ? `\nمشاكل هيكل المقال التي يجب معالجتها:\n${data.structureTopIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n')}`
+    : '';
+
+  const preservedIntroSection = data.preservedIntro
+    ? `\n⚠️ المقدمة التالية وافق عليها المستخدم — احتفظ بها كما هي في بداية المقال:\n${data.preservedIntro}`
+    : '';
+
+  const preservedConclusionSection = data.preservedConclusion
+    ? `\n⚠️ الخاتمة التالية وافق عليها المستخدم — احتفظ بها كما هي في نهاية المقال:\n${data.preservedConclusion}`
+    : '';
 
   return `أعد كتابة المقال التالي بشكل احترافي مع تحسين SEO:
 
@@ -1713,6 +1728,9 @@ export function buildRewriteArticlePrompt(data: {
 
 المشاكل الرئيسية في SEO:
 ${data.seoTopIssues.length > 0 ? data.seoTopIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n') : 'لا توجد مشاكل محددة'}
+${structureIssuesSection}
+${preservedIntroSection}
+${preservedConclusionSection}
 
 المحتوى الأصلي (نص عادي):
 ${plainTextContent.substring(0, 6000)}${plainTextContent.length > 6000 ? '...' : ''}

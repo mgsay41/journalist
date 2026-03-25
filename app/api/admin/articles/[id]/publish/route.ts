@@ -5,6 +5,8 @@ import {
   scheduleArticle,
   unscheduleArticle,
   archiveArticle,
+  unpublishArticle,
+  restoreArticleToDraft,
 } from "@/lib/publishing";
 
 // POST /api/admin/articles/[id]/publish - Publish or schedule an article
@@ -43,6 +45,12 @@ export async function POST(
         break;
       case "archive":
         result = await archiveArticle(id);
+        break;
+      case "unpublish":
+        result = await unpublishArticle(id);
+        break;
+      case "restore":
+        result = await restoreArticleToDraft(id);
         break;
       default:
         return NextResponse.json(
