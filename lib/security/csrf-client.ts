@@ -68,13 +68,29 @@ export async function fetchWithCsrf(
     try {
       const csrfToken = await getCsrfToken();
 
-      return fetch(url, {
+      const response = await fetch(url, {
         ...options,
         headers: {
           ...options.headers,
           'X-CSRF-Token': csrfToken,
         },
       });
+
+      // If the server rejected the token (stale cache after server restart, etc.),
+      // clear the cache, fetch a fresh token, and retry once.
+      if (response.status === 403) {
+        clearCsrfTokenCache();
+        const freshToken = await getCsrfToken();
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            'X-CSRF-Token': freshToken,
+          },
+        });
+      }
+
+      return response;
     } catch (error) {
       console.error('Error getting CSRF token:', error);
       // Fall back to regular fetch if CSRF fails
