@@ -486,7 +486,27 @@ export function UnifiedAiPanel({
     abortControllerRef.current = new AbortController();
 
     try {
-      const seoTopIssues = completionResults?.seoAnalysis?.topIssues || [];
+      const articleContent: ArticleContent = {
+        title,
+        content,
+        metaTitle: metaTitle || undefined,
+        metaDescription: metaDescription || undefined,
+        focusKeyword: focusKeyword || undefined,
+        slug: slug || undefined,
+        hasFeaturedImage,
+        imageCount,
+        imagesWithAlt,
+      };
+      const liveSeoResult = analyzeArticle(articleContent);
+      const liveSeoIssues = liveSeoResult.criteria
+        .filter(c => c.status === 'failed' || c.status === 'warning')
+        .map(c => c.recommendationAr || c.descriptionAr || c.nameAr)
+        .slice(0, 6);
+
+      const liveGeoResult = analyzeGeo(content);
+      const liveGeoIssues = liveGeoResult.criteria
+        .filter(c => c.status === 'failed')
+        .map(c => c.recommendationAr || c.nameAr);
 
       const response = await fetch('/api/admin/ai/rewrite-article', {
         method: 'POST',
@@ -497,7 +517,8 @@ export function UnifiedAiPanel({
           content,
           focusKeyword,
           seoScore: liveSeoScore.score,
-          seoTopIssues,
+          seoTopIssues: liveSeoIssues,
+          geoTopIssues: liveGeoIssues,
           iteration: aiIteration,
           articleType,
         }),
@@ -583,7 +604,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء إعادة الكتابة');
       setAiPhase('error');
     }
-  }, [focusKeyword, articleId, title, content, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, completionResults, editorRef]);
+  }, [focusKeyword, articleId, title, content, metaTitle, metaDescription, slug, hasFeaturedImage, imageCount, imagesWithAlt, liveSeoScore.score, aiIteration, articleType, onContentChange, onTitleChange, editorRef]);
 
   const handleApplyGrammarMarks = useCallback(() => {
     if (!editorRef.current || !completionResults?.grammarIssues) return;

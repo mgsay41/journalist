@@ -453,6 +453,22 @@ export default function EditArticlePage() {
           معاينة
         </Link>
 
+        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs" dir="rtl">
+          <span className={`font-semibold ${scores.seo >= 70 ? 'text-green-600' : scores.seo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+            SEO: {scores.seo}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className={`font-semibold ${scores.geo >= 70 ? 'text-green-600' : scores.geo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+            GEO: {scores.geo}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className={`font-semibold ${scores.structure >= 7 ? 'text-green-600' : scores.structure >= 5 ? 'text-amber-500' : 'text-red-500'}`}>
+            هيكل: {scores.structure}/{scores.structureTotal}
+          </span>
+          <span className="text-border/60">|</span>
+          <span className="text-muted-foreground">{wordCount} كلمة</span>
+        </div>
+
         <Button variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
           {isPending ? 'جاري الحفظ...' : 'حفظ'}
         </Button>

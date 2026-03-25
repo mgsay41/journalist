@@ -34,6 +34,7 @@ function ModalContent({
   const currentChange = pendingChanges[currentIndex];
   const progress = changes.length - pendingChanges.length;
   const total = changes.length;
+  const progressPct = total > 0 ? Math.round((progress / total) * 100) : 0;
 
   const handleAccept = useCallback(() => {
     if (!currentChange) return;
@@ -102,71 +103,106 @@ function ModalContent({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg p-6"
+        className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
         dir="rtl"
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">مراجعة تعديلات الذكاء الاصطناعي</h2>
-          <span className="text-sm text-muted-foreground">
-            {progress + 1} / {total}
-          </span>
-        </div>
-
-        <div className="mb-4">
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${(progress / total) * 100}%` }}
-            />
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-base">
+              ✦
+            </div>
+            <div>
+              <h2 className="text-base font-bold leading-tight">مراجعة تعديلات الذكاء الاصطناعي</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">راجع كل تعديل واقبله أو ارفضه</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+              {progress + 1} / {total}
+            </span>
+            <button
+              onClick={onClose}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-sm"
+            >
+              ✕
+            </button>
           </div>
         </div>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">النص الأصلي:</label>
-            <div className="p-3 bg-muted/50 rounded-lg border border-border text-sm leading-relaxed">
+        {/* Progress bar */}
+        <div className="h-1 bg-muted w-full">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          {/* Original text */}
+          <div className="rounded-xl border border-red-200 dark:border-red-900/40 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900/40">
+              <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+              <span className="text-xs font-medium text-red-700 dark:text-red-400">النص الأصلي</span>
+            </div>
+            <div className="p-3 bg-red-50/30 dark:bg-red-950/10 text-sm leading-relaxed max-h-36 overflow-y-auto text-foreground/80">
               {currentChange.originalText}
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">التعديل المقترح:</label>
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-sm leading-relaxed">
+          {/* AI suggestion */}
+          <div className="rounded-xl border border-green-200 dark:border-green-900/40 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-900/40">
+              <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+              <span className="text-xs font-medium text-green-700 dark:text-green-400">التعديل المقترح</span>
+            </div>
+            <div className="p-3 bg-green-50/30 dark:bg-green-950/10 text-sm leading-relaxed max-h-36 overflow-y-auto text-foreground">
               {currentChange.aiText}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleReject}>
-              ← رفض
-            </Button>
-            <Button variant="ghost" onClick={handleSkip}>
-              تخطي ↓
-            </Button>
-            <Button onClick={handleAccept}>
-              قبول ←
-            </Button>
-          </div>
+        {/* Actions */}
+        <div className="px-6 pb-4 flex items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            onClick={handleReject}
+            className="flex-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+          >
+            رفض
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleSkip}
+            className="flex-1 text-muted-foreground"
+          >
+            تخطي
+          </Button>
+          <Button
+            onClick={handleAccept}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0"
+          >
+            قبول
+          </Button>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-border">
-          <Button variant="ghost" size="sm" onClick={handleAcceptAll}>
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-muted/30">
+          <Button variant="ghost" size="sm" onClick={handleAcceptAll} className="text-xs text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30">
             قبول الكل
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleRejectAll}>
+          <p className="text-xs text-muted-foreground">
+            مفاتيح: ← قبول &nbsp;·&nbsp; → رفض &nbsp;·&nbsp; ↓ تخطي
+          </p>
+          <Button variant="ghost" size="sm" onClick={handleRejectAll} className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
             رفض الكل
           </Button>
-        </div>
-
-        <div className="text-xs text-muted-foreground text-center mt-2">
-          استخدم ← للقبول، → للرفض، ↓ للتخطي
         </div>
       </div>
     </div>

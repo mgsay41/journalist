@@ -570,6 +570,7 @@ export interface RewriteArticleInput {
   focusKeyword: string;
   seoScore: number;
   seoTopIssues: string[];
+  geoTopIssues: string[];
   iteration: number;
   articleType: string;
 }
@@ -589,6 +590,7 @@ export async function rewriteArticle(
     focusKeyword: input.focusKeyword,
     seoScore: input.seoScore,
     seoTopIssues: input.seoTopIssues,
+    geoTopIssues: input.geoTopIssues,
     iteration: input.iteration,
     articleType: input.articleType,
   });

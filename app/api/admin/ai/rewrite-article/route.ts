@@ -26,6 +26,7 @@ const requestSchema = z.object({
   focusKeyword: z.string().min(1, { message: "الكلمة المفتاحية مطلوبة" }),
   seoScore: z.number().min(0).max(100),
   seoTopIssues: z.array(z.string()),
+  geoTopIssues: z.array(z.string()).default([]),
   iteration: z.number().min(0).default(0),
   articleType: z.string().default("article"),
 });
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
           focusKeyword: validatedData.focusKeyword,
           seoScore: validatedData.seoScore,
           seoTopIssues: validatedData.seoTopIssues,
+          geoTopIssues: validatedData.geoTopIssues,
           iteration: validatedData.iteration,
           articleType: validatedData.articleType,
         });
