@@ -1084,7 +1084,11 @@ export function UnifiedAiPanel({
                       onCategoriesChange(selectedCategoryIds.filter(id => id !== cat.id), newCategoryNames);
                     }
                   } else {
-                    onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
+                    if (isNew) {
+                      onCategoriesChange(selectedCategoryIds, [...newCategoryNames, cat.name]);
+                    } else {
+                      onCategoriesChange([...selectedCategoryIds, cat.id], newCategoryNames);
+                    }
                   }
                 }}
                 className={`px-3 py-1 text-sm rounded-full flex items-center gap-1 ${
@@ -1129,7 +1133,11 @@ export function UnifiedAiPanel({
                       onTagsChange(selectedTagIds.filter(id => id !== tag.id), newTagNames);
                     }
                   } else {
-                    onTagsChange([...selectedTagIds, tag.id], newTagNames);
+                    if (isNew) {
+                      onTagsChange(selectedTagIds, [...newTagNames, tag.name]);
+                    } else {
+                      onTagsChange([...selectedTagIds, tag.id], newTagNames);
+                    }
                   }
                 }}
                 className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${

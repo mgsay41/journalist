@@ -29,7 +29,7 @@ export const createArticleSchema = z.object({
     .min(1, { message: 'محتوى المقال مطلوب' }),
 
   excerpt: z.union([
-    z.string().max(500, { message: 'المقدمة طويلة جداً (الحد الأقصى 500 حرف)' }),
+    z.string().max(2000, { message: 'المقدمة طويلة جداً (الحد الأقصى 2000 حرف)' }),
     z.null(),
     z.undefined(),
   ]).optional(),

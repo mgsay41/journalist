@@ -159,6 +159,14 @@ export default function EditArticlePage() {
     loadArticle();
   }, [articleId]);
 
+  // Auto-resize title textarea once article loads
+  useEffect(() => {
+    if (!loading && titleRef.current) {
+      titleRef.current.style.height = 'auto';
+      titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+    }
+  }, [loading]);
+
   useEffect(() => {
     if (article) {
       const changed =
@@ -627,6 +635,21 @@ export default function EditArticlePage() {
 
 
               <div className="border-t border-border/40 mb-8" />
+
+              {excerpt && (
+                <div className="mb-6 p-4 rounded-xl border border-border/40 bg-muted/20" dir="rtl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-muted-foreground">المقدمة</span>
+                    <button type="button" onClick={() => setExcerpt('')} className="text-xs text-muted-foreground hover:text-foreground">حذف</button>
+                  </div>
+                  <Textarea
+                    value={excerpt}
+                    onChange={(e) => setExcerpt(e.target.value)}
+                    placeholder="مقدمة المقال..."
+                    rows={3}
+                  />
+                </div>
+              )}
 
               {generatedIntro && (
                 <div className="mb-4 p-4 rounded-xl border border-accent/40 bg-accent/5" dir="rtl">
