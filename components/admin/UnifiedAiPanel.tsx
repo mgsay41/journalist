@@ -388,14 +388,11 @@ export function UnifiedAiPanel({
             if (data.data.slug) {
               onSlugChange(data.data.slug);
             }
-            if (data.data.excerpt) {
-              onExcerptChange(data.data.excerpt);
-            }
             if (data.data.metaTitles?.[0]) {
-              onMetaTitleChange(data.data.metaTitles[0].title);
+              onMetaTitleChange((data.data.metaTitles[0].title || '').slice(0, 60));
             }
             if (data.data.metaDescriptions?.[0]) {
-              onMetaDescriptionChange(data.data.metaDescriptions[0].description);
+              onMetaDescriptionChange((data.data.metaDescriptions[0].description || '').slice(0, 200));
             }
             const existingCatIds = data.data.suggestedCategories
               .filter((c: SuggestedCategory) => c.isExisting && c.id)

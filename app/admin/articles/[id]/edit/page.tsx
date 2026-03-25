@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useTransition, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -16,6 +15,7 @@ import { DistractionMode } from '@/components/admin/DistractionMode';
 import { Alert } from '@/components/ui/Alert';
 import { Loading } from '@/components/ui/Loading';
 import { generateSlug } from '@/lib/utils/slug';
+import { ArticleEditorHeader, type SaveState } from '@/components/admin/ArticleEditorHeader';
 
 function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
   if (!content) return { imageCount: 0, imagesWithAlt: 0 };
@@ -92,8 +92,6 @@ export default function EditArticlePage() {
   const [featuredImageId, setFeaturedImageId] = useState<string | null>(null);
   const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
   const [showImagePicker, setShowImagePicker] = useState(false);
-  const [showStatusMenu, setShowStatusMenu] = useState(false);
-  const statusMenuRef = useRef<HTMLDivElement>(null);
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [generatedIntro, setGeneratedIntro] = useState<string | null>(null);
   const [generatedConclusion, setGeneratedConclusion] = useState<string | null>(null);
@@ -109,22 +107,6 @@ export default function EditArticlePage() {
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
   const slugCheckRef = useRef<NodeJS.Timeout | null>(null);
 
-  const statusConfig = {
-    draft:     { label: 'مسودة',  color: 'text-gray-600 dark:text-gray-400',    bg: 'bg-gray-100 dark:bg-gray-800',     dot: 'bg-gray-400' },
-    published: { label: 'منشور',  color: 'text-green-700 dark:text-green-400',  bg: 'bg-green-50 dark:bg-green-950/40', dot: 'bg-green-500' },
-    scheduled: { label: 'مجدول',  color: 'text-blue-700 dark:text-blue-400',    bg: 'bg-blue-50 dark:bg-blue-950/40',   dot: 'bg-blue-500' },
-    archived:  { label: 'مؤرشف',  color: 'text-orange-700 dark:text-orange-400',bg: 'bg-orange-50 dark:bg-orange-950/40',dot: 'bg-orange-400' },
-  } as const;
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
-        setShowStatusMenu(false);
-      }
-    }
-    if (showStatusMenu) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showStatusMenu]);
 
   useEffect(() => {
     async function loadArticle() {
@@ -425,156 +407,30 @@ export default function EditArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-3 px-5 z-20">
-        <Link
-          href="/admin/articles"
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          dir="rtl"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          المقالات
-        </Link>
-
-        <div className="w-px h-4 bg-border/60 shrink-0" />
-
-        <div className="shrink-0" dir="rtl">
-          {autoSaving && (
-            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
-              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              حفظ تلقائي...
-            </span>
-          )}
-          {hasUnsavedChanges && !autoSaving && (
-            <span className="text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">تغييرات غير محفوظة</span>
-          )}
-          {lastSavedAt && !hasUnsavedChanges && !autoSaving && (
-            <span className="text-xs text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-full">
-              محفوظ {lastSavedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
-
-        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs" dir="rtl">
-          <span className={`font-semibold ${scores.seo >= 70 ? 'text-green-600' : scores.seo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            SEO: {scores.seo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.geo >= 70 ? 'text-green-600' : scores.geo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            GEO: {scores.geo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.structure >= 7 ? 'text-green-600' : scores.structure >= 5 ? 'text-amber-500' : 'text-red-500'}`}>
-            هيكل: {scores.structure}/{scores.structureTotal}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className="text-muted-foreground">{wordCount} كلمة</span>
-          {scores.grammar > 0 && (
-            <>
-              <span className="text-border/60">|</span>
-              <span className="text-danger font-semibold">⚠ {scores.grammar} أخطاء</span>
-            </>
-          )}
-        </div>
-
-        <div className="flex-1" />
-
-        <button
-          onClick={() => setIsDistractionMode(true)}
-          className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          title="وضع التركيز (Ctrl+Shift+D)"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m4 0h4m0 0v-4" />
-          </svg>
-        </button>
-
-        <Link
-          href={`/article/${article?.slug}`}
-          target="_blank"
-          className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          title="معاينة المقال"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-        </Link>
-
-        <div className="w-px h-4 bg-border/60 shrink-0" />
-
-        {/* Status pill */}
-        <div className="relative shrink-0" ref={statusMenuRef} dir="rtl">
-          <button
-            onClick={() => setShowStatusMenu(!showStatusMenu)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-transparent hover:border-border/60 ${statusConfig[status as keyof typeof statusConfig]?.bg} ${statusConfig[status as keyof typeof statusConfig]?.color}`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusConfig[status as keyof typeof statusConfig]?.dot}`} />
-            {statusConfig[status as keyof typeof statusConfig]?.label}
-            <svg className={`w-3 h-3 opacity-50 transition-transform duration-150 ${showStatusMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {showStatusMenu && (
-            <div className="absolute top-full mt-1.5 end-0 w-44 bg-card border border-border/60 rounded-xl shadow-xl z-50 overflow-hidden py-1" dir="rtl">
-              {(Object.entries(statusConfig) as [string, typeof statusConfig[keyof typeof statusConfig]][]).map(([val, cfg]) => (
-                <button
-                  key={val}
-                  onClick={() => { setStatus(val); setShowStatusMenu(false); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors hover:bg-muted/50 ${status === val ? 'font-semibold' : 'text-foreground/80'}`}
-                >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
-                  <span>{cfg.label}</span>
-                  {status === val && (
-                    <svg className="w-3.5 h-3.5 mr-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Inline date picker when scheduled or published */}
-        {(status === 'scheduled' || status === 'published') && (
-          <input
-            type="datetime-local"
-            value={status === 'scheduled' ? scheduledAt : publishedAt}
-            onChange={(e) => status === 'scheduled' ? setScheduledAt(e.target.value) : setPublishedAt(e.target.value)}
-            min={status === 'scheduled' ? new Date().toISOString().slice(0, 16) : undefined}
-            className="text-xs px-2 py-1.5 rounded-lg border border-border/60 bg-background text-foreground outline-none focus:border-primary transition-colors shrink-0"
-          />
-        )}
-
-        <Button variant="secondary" size="sm" onClick={() => saveArticle('draft')} disabled={isPending}>
-          {isPending ? 'جاري الحفظ...' : 'حفظ'}
-        </Button>
-
-        <Button
-          size="sm"
-          onClick={openPublishModal}
-          disabled={isPending}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
-        >
-          {isPending ? 'جاري النشر...' : 'نشر'}
-        </Button>
-
-        <button
-          onClick={() => setPanelOpen(!panelOpen)}
-          className="p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-          </svg>
-        </button>
-      </header>
+      <ArticleEditorHeader
+        articleTitle={title}
+        articleSlug={article?.slug}
+        saveState={
+          (autoSaving ? 'saving' : hasUnsavedChanges ? 'unsaved' : lastSavedAt ? 'saved' : 'idle') as SaveState
+        }
+        lastSavedAt={lastSavedAt}
+        scores={scores}
+        wordCount={wordCount}
+        status={status}
+        onStatusChange={setStatus}
+        publishedAt={publishedAt}
+        scheduledAt={scheduledAt}
+        onPublishedAtChange={setPublishedAt}
+        onScheduledAtChange={setScheduledAt}
+        onSave={() => saveArticle('draft')}
+        onPublish={openPublishModal}
+        saving={isPending}
+        publishing={isPending}
+        onDistractionMode={() => setIsDistractionMode(true)}
+        panelOpen={panelOpen}
+        onTogglePanel={() => setPanelOpen(!panelOpen)}
+        onFocusSection={handleFocusSection}
+      />
 
       {(error || success) && (
         <div className="px-4 pt-2 shrink-0 z-10">

@@ -508,8 +508,16 @@ export async function completeArticlePhase2(input: {
   const parsed = parseJsonResponse<MetaPhaseResult>(result.text);
 
   parsed.titleSuggestions = parsed.titleSuggestions || [];
-  parsed.metaTitles = parsed.metaTitles || [];
-  parsed.metaDescriptions = parsed.metaDescriptions || [];
+  parsed.metaTitles = (parsed.metaTitles || []).map(mt => ({
+    ...mt,
+    title: (mt.title || '').slice(0, 60),
+    length: Math.min(mt.length || 0, 60),
+  }));
+  parsed.metaDescriptions = (parsed.metaDescriptions || []).map(md => ({
+    ...md,
+    description: (md.description || '').slice(0, 200),
+    length: Math.min(md.length || 0, 200),
+  }));
 
   return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
 }

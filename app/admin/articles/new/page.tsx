@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -12,6 +11,7 @@ import ImagePickerModal from '@/components/admin/ImagePickerModal';
 import { Alert } from '@/components/ui/Alert';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { analyzeArticle, analyzeGeo } from '@/lib/seo';
+import { ArticleEditorHeader } from '@/components/admin/ArticleEditorHeader';
 
 function extractImageInfo(content: string): { imageCount: number; imagesWithAlt: number } {
   if (!content) return { imageCount: 0, imagesWithAlt: 0 };
@@ -273,98 +273,19 @@ export default function NewArticlePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="h-14 shrink-0 border-b border-border/60 bg-card/95 backdrop-blur-sm flex items-center gap-3 px-5 z-20">
-        <Link
-          href="/admin/articles"
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          dir="rtl"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          المقالات
-        </Link>
-
-        <div className="w-px h-4 bg-border/60 shrink-0" />
-
-        <span className="flex-1 text-sm text-muted-foreground/50 truncate text-right" dir="rtl">
-          {title || 'مقال جديد'}
-        </span>
-
-        <div className="shrink-0">
-          {saveStatus === 'saving' && (
-            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
-              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              حفظ...
-            </span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="flex items-center gap-1.5 text-xs text-success bg-success/10 px-2.5 py-1 rounded-full">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              محفوظ
-            </span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-xs text-danger bg-danger/10 px-2.5 py-1 rounded-full">خطأ في الحفظ</span>
-          )}
-        </div>
-
-        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs" dir="rtl">
-          <span className={`font-semibold ${scores.seo >= 70 ? 'text-green-600' : scores.seo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            SEO: {scores.seo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.geo >= 70 ? 'text-green-600' : scores.geo >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-            GEO: {scores.geo}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className={`font-semibold ${scores.structure >= 7 ? 'text-green-600' : scores.structure >= 5 ? 'text-amber-500' : 'text-red-500'}`}>
-            هيكل: {scores.structure}/{scores.structureTotal}
-          </span>
-          <span className="text-border/60">|</span>
-          <span className="text-muted-foreground">{wordCount} كلمة</span>
-          {scores.grammar > 0 && (
-            <>
-              <span className="text-border/60">|</span>
-              <span className="text-danger font-semibold">⚠ {scores.grammar} أخطاء</span>
-            </>
-          )}
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={performAutoSave}
-          disabled={saveStatus === 'saving'}
-          className="shrink-0 hidden sm:flex"
-        >
-          حفظ مسودة
-        </Button>
-
-        <Button
-          size="sm"
-          onClick={openPublishModal}
-          disabled={publishing || !title.trim()}
-          className="shrink-0 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
-        >
-          {publishing ? 'جاري النشر...' : 'نشر'}
-        </Button>
-
-        <button
-          onClick={() => setPanelOpen(!panelOpen)}
-          className="shrink-0 p-2 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-          title={panelOpen ? 'إخفاء اللوحة الجانبية' : 'إظهار اللوحة الجانبية'}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-          </svg>
-        </button>
-      </header>
+      <ArticleEditorHeader
+        articleTitle={title}
+        saveState={saveStatus === 'saving' ? 'saving' : saveStatus === 'saved' ? 'saved' : saveStatus === 'error' ? 'error' : 'idle'}
+        scores={scores}
+        wordCount={wordCount}
+        onSave={performAutoSave}
+        onPublish={openPublishModal}
+        saving={saveStatus === 'saving'}
+        publishing={publishing}
+        panelOpen={panelOpen}
+        onTogglePanel={() => setPanelOpen(!panelOpen)}
+        onFocusSection={handleFocusSection}
+      />
 
       {error && (
         <div className="px-4 pt-2 shrink-0 z-10">

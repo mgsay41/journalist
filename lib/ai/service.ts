@@ -192,10 +192,13 @@ export async function generateMetaTitle(data: {
     ...DEFAULT_OPTIONS,
     maxTokens: 8192,
   });
-  return {
-    data: parseJsonResponse<MetaTitleResult>(result.text),
-    usage: extractUsage(result, DEFAULT_MODEL),
-  };
+  const parsed = parseJsonResponse<MetaTitleResult>(result.text);
+  parsed.suggestions = (parsed.suggestions || []).map(s => ({
+    ...s,
+    title: (s.title || '').slice(0, 60),
+    length: Math.min(s.length || 0, 60),
+  }));
+  return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
 }
 
 // ============================================
@@ -225,10 +228,13 @@ export async function generateMetaDescription(data: {
     ...DEFAULT_OPTIONS,
     maxTokens: 8192,
   });
-  return {
-    data: parseJsonResponse<MetaDescriptionResult>(result.text),
-    usage: extractUsage(result, DEFAULT_MODEL),
-  };
+  const parsed = parseJsonResponse<MetaDescriptionResult>(result.text);
+  parsed.suggestions = (parsed.suggestions || []).map(s => ({
+    ...s,
+    description: (s.description || '').slice(0, 200),
+    length: Math.min(s.length || 0, 200),
+  }));
+  return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };
 }
 
 // ============================================

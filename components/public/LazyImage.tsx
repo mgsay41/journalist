@@ -102,7 +102,7 @@ export function LazyImage({
   // This is critical for LCP — no IntersectionObserver delay, no skeleton blocking paint.
   if (priority) {
     return (
-      <div className={cn('relative overflow-hidden', className)}>
+      <div className={cn(fill ? 'absolute inset-0 overflow-hidden' : 'relative overflow-hidden', className)}>
         <Image
           src={src}
           alt={alt}
@@ -132,7 +132,7 @@ export function LazyImage({
   return (
     <div
       ref={containerRef}
-      className={cn('relative overflow-hidden', className)}
+      className={cn(fill ? 'absolute inset-0 overflow-hidden' : 'relative overflow-hidden', className)}
       style={{ width: fill ? undefined : width, height: fill ? undefined : height }}
     >
       {/* Skeleton — always rendered, hidden once image is loaded */}
