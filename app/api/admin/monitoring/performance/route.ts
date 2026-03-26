@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getPerformanceReport, getMemoryUsage, updateCacheMetrics, resetMetrics } from '@/lib/monitoring/performance';
 import { withErrorHandler } from '@/lib/errors/handler';
@@ -65,7 +65,7 @@ export const POST = withErrorHandler(async (request: Request) => {
  */
 export const GET = withErrorHandler(async (request: Request) => {
   // Verify admin session
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession();
 
   if (!session) {
     return NextResponse.json(
@@ -106,7 +106,7 @@ export const GET = withErrorHandler(async (request: Request) => {
  */
 export const DELETE = withErrorHandler(async (request: Request) => {
   // Verify admin session
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession();
 
   if (!session) {
     return NextResponse.json(

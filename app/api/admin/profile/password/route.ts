@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { passwordChangeSchema } from '@/lib/validations/settings';
 import bcrypt from 'bcryptjs';
 
@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }

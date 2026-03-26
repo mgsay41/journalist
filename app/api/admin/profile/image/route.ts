@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 
@@ -9,7 +9,7 @@ import { checkRateLimit } from '@/lib/security/rate-limit';
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }

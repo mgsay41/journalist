@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { profileSettingsSchema, passwordChangeSchema } from '@/lib/validations/settings';
 import bcrypt from 'bcryptjs';
 import { sendEmailVerification } from '@/lib/email';
@@ -12,7 +12,7 @@ import { isEmailConfigured } from '@/lib/email';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }

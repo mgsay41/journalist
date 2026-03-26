@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -11,9 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; revisionId: string }> }
 ) {
   try {
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    const session = await getServerSession();
 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

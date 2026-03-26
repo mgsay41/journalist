@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 
 /**
  * GET /api/admin/subscribers
  * List all newsletter subscribers
  */
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await getServerSession();
   if (!session) {
     return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
   }
