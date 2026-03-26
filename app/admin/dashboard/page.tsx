@@ -211,19 +211,15 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       {/* ─── Hero Welcome Banner ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-card border border-border px-6 py-8 md:px-8">
-        <div className="absolute inset-0 bg-linear-to-l from-accent/8 to-transparent pointer-events-none" />
-        <div className="absolute -bottom-12 -start-12 w-48 h-48 rounded-full bg-accent/5 pointer-events-none" />
-        <div className="absolute top-4 start-32 w-24 h-24 rounded-full bg-accent/3 pointer-events-none" />
-        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+      <div className="relative overflow-hidden rounded-xl bg-card border border-border px-5 py-4 md:px-6">
+        <div className="absolute inset-0 bg-linear-to-l from-accent/15 via-accent/5 to-transparent pointer-events-none" />
+        <div className="absolute -bottom-8 -start-8 w-32 h-32 rounded-full bg-accent/8 pointer-events-none" />
+        <div className="relative flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-1 h-6 rounded-full bg-accent shrink-0" />
-              <p className="text-sm text-muted-foreground font-medium">
-                {new Intl.DateTimeFormat('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}
-              </p>
-            </div>
-            <h1 className="text-4xl font-bold text-foreground tracking-tight">لوحة التحكم</h1>
+            <p className="text-xs text-muted-foreground font-medium mb-1">
+              {new Intl.DateTimeFormat('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}
+            </p>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">لوحة التحكم</h1>
           </div>
           <Link href="/admin/articles/new">
             <Button variant="primary" size="sm">

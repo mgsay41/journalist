@@ -30,8 +30,8 @@ export function AdminLayoutWrapper({
         onMobileClose={() => setIsMobileOpen(false)}
       />
 
-      {/* Main content area — me-* creates right margin in RTL for the right-side sidebar */}
-      <div className={cn('transition-all duration-300', isSidebarCollapsed ? 'lg:me-24' : 'lg:me-56')}>
+      {/* Main content area — ms-* creates margin-right in RTL to clear the right-side sidebar */}
+      <div className={cn('transition-all duration-300', isSidebarCollapsed ? 'lg:ms-15' : 'lg:ms-60')}>
         {/* Top Bar */}
         <AdminTopBar
           userName={userName}
