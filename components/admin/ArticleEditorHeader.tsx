@@ -31,6 +31,11 @@ export interface ArticleEditorHeaderProps {
   /** Scheduled publish date — shown inside the scheduled pill */
   scheduledAt?: string | null;
 
+  /** Saves the article with current status (used by Update Article button) */
+  onSave?: () => void;
+  hasUnsavedChanges?: boolean;
+  saving?: boolean;
+
   /** Always opens the readiness modal (SEO/GEO check) */
   onPublish: () => void;
   /** Opens schedule modal then calls POST /publish {action:'schedule'} */
@@ -313,9 +318,9 @@ function StatusPill({
           status === 'published' && 'animate-pulse'
         )}
       />
-      {cfg.label}
+      <span className="hidden sm:inline">{cfg.label}</span>
       {dateLabel && (
-        <span className="opacity-70 font-normal">: {dateLabel}</span>
+        <span className="opacity-70 font-normal hidden sm:inline">: {dateLabel}</span>
       )}
     </span>
   );
@@ -341,7 +346,7 @@ function IconButton({
       onClick={onClick}
       title={title}
       className={cn(
-        'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150',
+        'shrink-0 min-w-[44px] min-h-[44px] md:min-w-[32px] md:min-h-[32px] md:w-8 md:h-8 flex items-center justify-center rounded-lg transition-all duration-150',
         active
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
@@ -355,8 +360,8 @@ function IconButton({
 
 /* ── Divider ────────────────────────────────────────────── */
 
-function Divider() {
-  return <div className="shrink-0 w-px h-5 bg-border/50 mx-0.5" />;
+function Divider({ className }: { className?: string }) {
+  return <div className={cn("shrink-0 w-px h-5 bg-border/50 mx-0.5", className)} />;
 }
 
 /* ── Spinner ────────────────────────────────────────────── */
@@ -385,7 +390,7 @@ function PublishButton({
     <button
       onClick={onClick}
       disabled={loading}
-      className="shrink-0 flex items-center gap-1.5 h-8 px-4 rounded-lg text-sm font-semibold text-white transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="shrink-0 flex items-center gap-1.5 h-10 px-3 rounded-lg text-sm font-semibold text-white transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed md:h-8 md:px-4"
       style={{
         background: loading
           ? 'linear-gradient(135deg, #d97706, #b45309)'
@@ -426,6 +431,9 @@ export function ArticleEditorHeader({
   wordCount,
   status,
   scheduledAt,
+  onSave,
+  hasUnsavedChanges = false,
+  saving = false,
   onPublish,
   onSchedule,
   onUnschedule,
@@ -450,20 +458,38 @@ export function ArticleEditorHeader({
     switch (status) {
       case 'published':
         return (
-          <button
-            onClick={onUnpublish}
-            disabled={actionLoading === 'unpublish'}
-            className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {actionLoading === 'unpublish' ? (
-              <>
-                <Spinner />
-                جاري إلغاء النشر...
-              </>
-            ) : (
-              'إلغاء النشر'
+          <>
+            {hasUnsavedChanges && (
+              <button
+                onClick={onSave}
+                disabled={saving}
+                className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? (
+                  <>
+                    <Spinner />
+                    جاري التحديث...
+                  </>
+                ) : (
+                  'تحديث المقال'
+                )}
+              </button>
             )}
-          </button>
+            <button
+              onClick={onUnpublish}
+              disabled={actionLoading === 'unpublish'}
+              className="shrink-0 flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-sm font-medium border border-border/80 bg-background text-foreground hover:bg-muted/60 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {actionLoading === 'unpublish' ? (
+                <>
+                  <Spinner />
+                  جاري إلغاء النشر...
+                </>
+              ) : (
+                'إلغاء النشر'
+              )}
+            </button>
+          </>
         );
 
       case 'scheduled':
@@ -682,7 +708,7 @@ export function ArticleEditorHeader({
           <StatusPill status={status} scheduledAt={scheduledAt} />
         )}
 
-        {status && <Divider />}
+        {status && <Divider className="hidden sm:block" />}
 
         {/* ── Context-aware action buttons ── */}
         {renderActions()}
@@ -719,7 +745,7 @@ export function ArticleEditorHeader({
           }}
         >
           <div
-            className="bg-card border border-border rounded-xl shadow-2xl p-5 w-72"
+            className="bg-card border border-border rounded-xl shadow-2xl p-5 w-full max-w-xs"
             onClick={(e) => e.stopPropagation()}
             dir="rtl"
           >

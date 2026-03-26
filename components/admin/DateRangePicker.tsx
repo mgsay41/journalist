@@ -296,8 +296,8 @@ export function DateRangePicker({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className={`absolute z-50 w-80 mt-1 bg-card border rounded-lg shadow-lg p-2 ${
-            align === 'left' ? 'left-0' : 'right-0'
+          className={`absolute z-50 w-full sm:w-80 mt-1 bg-card border rounded-lg shadow-lg p-2 ${
+            align === 'left' ? 'start-0' : 'end-0'
           }`}
         >
           {/* Presets */}

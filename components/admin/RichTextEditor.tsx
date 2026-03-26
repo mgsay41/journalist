@@ -383,13 +383,15 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       {/* Inject editor styles */}
       <EditorStyles />
 
-      {/* Toolbar */}
+      {/* Toolbar - hidden on mobile */}
       {editable && (
-        <EditorToolbar
-          editor={editor}
-          onInsertImage={() => setShowImagePicker(true)}
-          onInsertVideo={() => setShowVideoPicker(true)}
-        />
+        <div className="hidden md:block">
+          <EditorToolbar
+            editor={editor}
+            onInsertImage={() => setShowImagePicker(true)}
+            onInsertVideo={() => setShowVideoPicker(true)}
+          />
+        </div>
       )}
 
       {/* Editor */}

@@ -88,7 +88,13 @@ export default function EditArticlePage() {
   const [checkingSlug, setCheckingSlug] = useState(false);
 
   const [isDistractionMode, setIsDistractionMode] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setPanelOpen(true);
+    }
+  }, []);
   const [conclusion, setConclusion] = useState('');
   const [featuredImageId, setFeaturedImageId] = useState<string | null>(null);
   const [featuredImageUrl, setFeaturedImageUrl] = useState<string | null>(null);
@@ -105,7 +111,7 @@ export default function EditArticlePage() {
   const [modalMetaDescription, setModalMetaDescription] = useState('');
   const [modalFocusKeyword, setModalFocusKeyword] = useState('');
 
-  const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const slugCheckRef = useRef<NodeJS.Timeout | null>(null);
   const lsSaveRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -235,6 +241,7 @@ export default function EditArticlePage() {
     setSuccess(null);
 
     const createdCategoryIds: string[] = [];
+    const failedCategories: string[] = [];
     for (const name of newCategoryNames) {
       try {
         const res = await fetchWithCsrf('/api/admin/categories', {
@@ -245,8 +252,12 @@ export default function EditArticlePage() {
         if (res.ok) {
           const data = await res.json();
           if (data.id) createdCategoryIds.push(data.id);
+        } else {
+          failedCategories.push(name);
         }
-      } catch { /* ignore */ }
+      } catch {
+        failedCategories.push(name);
+      }
     }
     if (createdCategoryIds.length > 0) {
       setNewCategoryNames([]);
@@ -254,6 +265,7 @@ export default function EditArticlePage() {
     }
 
     const createdTagIds: string[] = [];
+    const failedTags: string[] = [];
     for (const name of newTagNames) {
       try {
         const res = await fetchWithCsrf('/api/admin/tags', {
@@ -264,12 +276,23 @@ export default function EditArticlePage() {
         if (res.ok) {
           const data = await res.json();
           if (data.id) createdTagIds.push(data.id);
+        } else {
+          failedTags.push(name);
         }
-      } catch { /* ignore */ }
+      } catch {
+        failedTags.push(name);
+      }
     }
     if (createdTagIds.length > 0) {
       setNewTagNames([]);
       setSelectedTags(prev => [...prev, ...createdTagIds]);
+    }
+
+    if (failedCategories.length > 0 || failedTags.length > 0) {
+      const parts: string[] = [];
+      if (failedCategories.length > 0) parts.push(`التصنيفات: ${failedCategories.join('، ')}`);
+      if (failedTags.length > 0) parts.push(`الوسوم: ${failedTags.join('، ')}`);
+      setError(`فشل إنشاء ${parts.join(' | ')} — تم الحفظ بدونها`);
     }
 
     const allCategoryIds = [...selectedCategories, ...createdCategoryIds];
@@ -334,7 +357,9 @@ export default function EditArticlePage() {
   useEffect(() => {
     if (!article || !hasUnsavedChanges) return;
 
-    const performAutoSave = async () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    debounceTimerRef.current = setTimeout(async () => {
       if (!title && !content) return;
       setAutoSaving(true);
       try {
@@ -359,10 +384,9 @@ export default function EditArticlePage() {
       } catch { /* ignore */ } finally {
         setAutoSaving(false);
       }
-    };
+    }, 2500);
 
-    autoSaveRef.current = setInterval(performAutoSave, 30000);
-    return () => { if (autoSaveRef.current) clearInterval(autoSaveRef.current); };
+    return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); };
   }, [article, hasUnsavedChanges, articleId, title, slug, content, excerpt, status, publishedAt, scheduledAt, selectedCategories, selectedTags, metaTitle, metaDescription, focusKeyword]);
 
   const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
@@ -536,6 +560,9 @@ export default function EditArticlePage() {
         wordCount={wordCount}
         status={status}
         scheduledAt={scheduledAt || null}
+        onSave={() => saveArticle()}
+        hasUnsavedChanges={hasUnsavedChanges}
+        saving={autoSaving}
         onPublish={openPublishModal}
         onPublishNow={openPublishModal}
         onSchedule={handleSchedule}
@@ -560,7 +587,7 @@ export default function EditArticlePage() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto px-8 py-10">
+            <div className="max-w-2xl mx-auto px-4 md:px-8 py-10">
 
               <div className="mb-6" dir="rtl">
                 {featuredImageUrl ? (
@@ -734,8 +761,9 @@ export default function EditArticlePage() {
 
         </div>
 
+        {/* Desktop side panel */}
         {panelOpen && (
-          <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
+          <aside className="hidden md:flex w-80 xl:w-88 shrink-0 border-e border-border bg-card flex-col overflow-hidden">
             <UnifiedAiPanel
               editorRef={richTextRef}
               title={title}
@@ -777,11 +805,72 @@ export default function EditArticlePage() {
             />
           </aside>
         )}
+
+        {/* Mobile bottom sheet */}
+        {panelOpen && (
+          <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setPanelOpen(false)} />
+            <div className="relative bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col overflow-hidden z-50">
+              <div className="flex justify-center pt-2 pb-1 shrink-0">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0" dir="rtl">
+                <span className="text-sm font-semibold">الإعدادات والتحليل</span>
+                <button onClick={() => setPanelOpen(false)} className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <UnifiedAiPanel
+                  editorRef={richTextRef}
+                  title={title}
+                  content={content}
+                  articleId={articleId}
+                  articleType={articleType}
+                  onTitleChange={(newTitle) => handleTitleChange(newTitle)}
+                  onContentChange={setContent}
+                  onArticleTypeChange={setArticleType}
+                  onSlugChange={setSlug}
+                  onMetaTitleChange={setMetaTitle}
+                  onMetaDescriptionChange={setMetaDescription}
+                  onExcerptChange={setExcerpt}
+                  onFocusKeywordChange={setFocusKeyword}
+                  selectedCategoryIds={selectedCategories}
+                  onCategoriesChange={(ids, names) => {
+                    setSelectedCategories(ids);
+                    setNewCategoryNames(names);
+                  }}
+                  selectedTagIds={selectedTags}
+                  onTagsChange={(ids, names) => {
+                    setSelectedTags(ids);
+                    setNewTagNames(names);
+                  }}
+                  slug={slug}
+                  metaTitle={metaTitle}
+                  metaDescription={metaDescription}
+                  excerpt={excerpt}
+                  focusKeyword={focusKeyword}
+                  hasFeaturedImage={!!featuredImageId}
+                  imageCount={imageInfo.imageCount}
+                  imagesWithAlt={imageInfo.imagesWithAlt}
+                  onFocusSection={handleFocusSection}
+                  focusSection={focusSection}
+                  onScoreChange={handleScoreChange}
+                  onTitleSuggestionsReady={setTitleSuggestions}
+                  onIntroGenerated={setGeneratedIntro}
+                  onConclusionGenerated={setGeneratedConclusion}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <KeyboardShortcuts
         onShortcutTriggered={(shortcut) => {
-          if (shortcut === 'save') saveArticle('draft');
+          if (shortcut === 'save') saveArticle();
           if (shortcut === 'publish') saveArticle('published');
         }}
       />

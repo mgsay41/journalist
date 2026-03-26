@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import Image from 'next/image';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { getSiteSettings } from '@/lib/settings/getSiteSettings';
 import { PublicLayout } from '@/components/public';
 import { ArticleContent } from '@/components/public/ArticleContent';
 import { SocialShare } from '@/components/public/SocialShare';
@@ -143,67 +144,61 @@ async function getRelatedArticles(
   categoryIds: string[],
   tagIds: string[]
 ) {
-  // Build the where clause dynamically to handle empty arrays
-  const orConditions = [];
-
-  if (categoryIds.length > 0) {
-    orConditions.push({
-      categories: {
-        some: {
-          id: { in: categoryIds },
-        },
-      },
-    });
-  }
-
-  if (tagIds.length > 0) {
-    orConditions.push({
-      tags: {
-        some: {
-          id: { in: tagIds },
-        },
-      },
-    });
-  }
-
-  // If no categories or tags, return empty array
-  if (orConditions.length === 0) {
-    return [];
-  }
-
-  const whereClause: Record<string, unknown> = {
+  const baseWhere = {
     id: { not: articleId },
     status: 'published',
     publishedAt: { lte: new Date() },
   };
 
-  if (orConditions.length === 1) {
-    whereClause.OR = orConditions;
-  } else {
-    whereClause.OR = orConditions;
+  const categorySet = new Set(categoryIds);
+  const tagSet = new Set(tagIds);
+
+  // Fallback: no taxonomy — return 4 most-recent articles
+  if (categoryIds.length === 0 && tagIds.length === 0) {
+    return prisma.article.findMany({
+      where: baseWhere,
+      include: {
+        categories: { select: { id: true, name: true, slug: true } },
+        featuredImage: { select: { id: true, url: true, altText: true } },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: 4,
+    });
   }
 
-  return prisma.article.findMany({
-    where: whereClause,
+  const orConditions = [];
+  if (categoryIds.length > 0) {
+    orConditions.push({ categories: { some: { id: { in: categoryIds } } } });
+  }
+  if (tagIds.length > 0) {
+    orConditions.push({ tags: { some: { id: { in: tagIds } } } });
+  }
+
+  // Fetch a wider candidate pool for relevance scoring
+  const candidates = await prisma.article.findMany({
+    where: { ...baseWhere, OR: orConditions },
     include: {
-      categories: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-        },
-      },
-      featuredImage: {
-        select: {
-          id: true,
-          url: true,
-          altText: true,
-        },
-      },
+      categories: { select: { id: true, name: true, slug: true } },
+      tags: { select: { id: true } },
+      featuredImage: { select: { id: true, url: true, altText: true } },
     },
     orderBy: { publishedAt: 'desc' },
-    take: 4,
+    take: 10,
   });
+
+  // Score: +2 per matching category, +1 per matching tag
+  const scored = candidates.map((a) => {
+    const catScore = a.categories.filter((c) => categorySet.has(c.id)).length * 2;
+    const tagScore = a.tags.filter((t) => tagSet.has(t.id)).length;
+    return { article: a, score: catScore + tagScore };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return (b.article.publishedAt?.getTime() ?? 0) - (a.article.publishedAt?.getTime() ?? 0);
+  });
+
+  return scored.slice(0, 4).map((s) => s.article);
 }
 
 // Pre-render all published articles at build time — served instantly from CDN
@@ -222,22 +217,25 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const article = await prisma.article.findUnique({
-    where: { slug },
-    select: {
-      title: true,
-      excerpt: true,
-      metaTitle: true,
-      metaDescription: true,
-      featuredImage: true,
-      publishedAt: true,
-      categories: {
-        select: {
-          name: true,
+  const [article, siteSettings] = await Promise.all([
+    prisma.article.findUnique({
+      where: { slug },
+      select: {
+        title: true,
+        excerpt: true,
+        metaTitle: true,
+        metaDescription: true,
+        featuredImage: true,
+        publishedAt: true,
+        categories: {
+          select: {
+            name: true,
+          },
         },
       },
-    },
-  });
+    }),
+    getSiteSettings(),
+  ]);
 
   if (!article) {
     return {};
@@ -259,7 +257,7 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
       title,
       description,
       url,
-      siteName: 'الموقع الصحفي',
+      siteName: siteSettings.siteName,
       locale: 'ar_AR',
       type: 'article',
       publishedTime: article.publishedAt?.toISOString(),

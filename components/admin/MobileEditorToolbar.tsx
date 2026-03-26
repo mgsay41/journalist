@@ -86,7 +86,7 @@ export function MobileEditorToolbar({
 
   return (
     <div className={cn(
-      'fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-pb',
+      'fixed bottom-0 inset-x-0 bg-card border-t border-border z-50 safe-area-pb',
       className
     )}
     style={{

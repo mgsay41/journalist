@@ -118,13 +118,13 @@ export function BulkActionsBar({ selectedIds, onClearSelection, categories = [],
 
   return (
     <>
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-card border rounded-lg shadow-lg p-4 z-50">
-        <div className="flex items-center gap-4">
+      <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 bg-card border rounded-lg shadow-lg p-4 z-50">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <span className="text-sm font-medium">
             تم تحديد {selectedIds.length} مقال
           </span>
-          <div className="h-6 w-px bg-border" />
-          <div className="flex gap-2">
+          <div className="hidden sm:block h-6 w-px bg-border" />
+          <div className="flex flex-wrap gap-1.5">
             <Button
               size="sm"
               variant="secondary"

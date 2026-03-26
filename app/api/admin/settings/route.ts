@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { updateSettingsSchema } from '@/lib/validations/settings';
 import { checkRateLimit } from '@/lib/security/rate-limit';
+import { revalidateTag } from 'next/cache';
 
 /**
  * GET /api/admin/settings
@@ -107,6 +108,9 @@ export async function PUT(request: NextRequest) {
         data: validation.data,
       });
     }
+
+    // Revalidate cached site settings so public pages reflect changes immediately
+    revalidateTag('settings', {});
 
     return NextResponse.json({ settings });
   } catch (error) {

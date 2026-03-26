@@ -11,6 +11,7 @@ import {
   type GenerateOptions,
   type GeminiModelId,
 } from "../gemini";
+import { generateSlug } from "../utils/slug";
 
 import {
   ARABIC_SYSTEM_INSTRUCTION,
@@ -492,6 +493,17 @@ export async function completeArticlePhase1(
       suggestedIntro: null, suggestedConclusion: null,
       tone: "professional", targetAudience: "",
     };
+  }
+
+  // Sanitize slug: if AI returned Arabic/non-Latin characters, transliterate
+  if (parsed.slug) {
+    const isValidSlug = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(parsed.slug);
+    if (!isValidSlug) {
+      parsed.slug =
+        generateSlug(parsed.focusKeyword || '') ||
+        generateSlug(input.title) ||
+        `article-${Date.now()}`;
+    }
   }
 
   return { data: parsed, usage: extractUsage(result, DEFAULT_MODEL) };

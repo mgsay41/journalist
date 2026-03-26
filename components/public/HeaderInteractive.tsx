@@ -6,9 +6,11 @@ import { DarkModeToggle } from './DarkModeToggle';
 
 interface HeaderInteractiveProps {
   mainCategories: Array<{ id: string; name: string; slug: string }>;
+  siteName?: string;
+  siteTagline?: string | null;
 }
 
-export function HeaderInteractive({ mainCategories }: HeaderInteractiveProps) {
+export function HeaderInteractive({ mainCategories, siteName = 'الموقع الصحفي', siteTagline = 'صحافة مستقلة · صوت حر' }: HeaderInteractiveProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -46,12 +48,14 @@ export function HeaderInteractive({ mainCategories }: HeaderInteractiveProps) {
             <div className="pt-4 pb-3 flex flex-col items-start">
               <Link href="/" className="no-underline group">
                 <span className="font-display text-3xl font-bold text-foreground group-hover:text-accent transition-colors duration-200 leading-none">
-                  الموقع الصحفي
+                  {siteName}
                 </span>
               </Link>
-              <p className="text-xs text-muted-foreground mt-1 tracking-widest select-none">
-                صحافة مستقلة · صوت حر
-              </p>
+              {siteTagline && (
+                <p className="text-xs text-muted-foreground mt-1 tracking-widest select-none">
+                  {siteTagline}
+                </p>
+              )}
             </div>
           </div>
 
@@ -67,7 +71,7 @@ export function HeaderInteractive({ mainCategories }: HeaderInteractiveProps) {
                 href="/"
                 className="font-display text-xl font-bold text-foreground hover:text-accent transition-colors no-underline whitespace-nowrap"
               >
-                الموقع الصحفي
+                {siteName}
               </Link>
             </div>
 

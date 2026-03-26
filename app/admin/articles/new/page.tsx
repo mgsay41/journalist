@@ -53,7 +53,13 @@ export default function NewArticlePage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setPanelOpen(true);
+    }
+  }, []);
   const [showReadinessModal, setShowReadinessModal] = useState(false);
   const [focusSection, setFocusSection] = useState<string | undefined>(undefined);
   const [scores, setScores] = useState({ seo: 0, geo: 0, structure: 0, structureTotal: 10, grammar: 0 });
@@ -135,6 +141,9 @@ export default function NewArticlePage() {
           excerpt: excerpt || undefined,
           metaTitle: metaTitle || undefined,
           metaDescription: metaDescription || undefined,
+          featuredImageId: featuredImageId || undefined,
+          focusKeyword: focusKeyword || undefined,
+          slug: slug || undefined,
         }),
       });
 
@@ -165,7 +174,7 @@ export default function NewArticlePage() {
     } catch {
       setSaveStatus('error');
     }
-  }, [title, content, excerpt, metaTitle, metaDescription, router]);
+  }, [title, content, excerpt, metaTitle, metaDescription, featuredImageId, focusKeyword, slug, router]);
 
   useEffect(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -208,6 +217,7 @@ export default function NewArticlePage() {
       }
 
       const createdCategoryIds: string[] = [];
+      const failedCategories: string[] = [];
       for (const name of newCategoryNames) {
         const res = await fetchWithCsrf('/api/admin/categories', {
           method: 'POST',
@@ -217,10 +227,13 @@ export default function NewArticlePage() {
         if (res.ok) {
           const data = await res.json();
           if (data.id) createdCategoryIds.push(data.id);
+        } else {
+          failedCategories.push(name);
         }
       }
 
       const createdTagIds: string[] = [];
+      const failedTags: string[] = [];
       for (const name of newTagNames) {
         const res = await fetchWithCsrf('/api/admin/tags', {
           method: 'POST',
@@ -230,7 +243,16 @@ export default function NewArticlePage() {
         if (res.ok) {
           const data = await res.json();
           if (data.id) createdTagIds.push(data.id);
+        } else {
+          failedTags.push(name);
         }
+      }
+
+      if (failedCategories.length > 0 || failedTags.length > 0) {
+        const parts: string[] = [];
+        if (failedCategories.length > 0) parts.push(`التصنيفات: ${failedCategories.join('، ')}`);
+        if (failedTags.length > 0) parts.push(`الوسوم: ${failedTags.join('، ')}`);
+        setError(`فشل إنشاء ${parts.join(' | ')} — تم النشر بدونها`);
       }
 
       const allCategoryIds = [...selectedCategoryIds, ...createdCategoryIds];
@@ -364,7 +386,7 @@ export default function NewArticlePage() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto px-8 py-10">
+            <div className="max-w-2xl mx-auto px-4 md:px-8 py-10">
               <div className="mb-6" dir="rtl">
                 {featuredImageUrl ? (
                   <div className="relative group rounded-xl overflow-hidden border border-border/40">
@@ -425,8 +447,9 @@ export default function NewArticlePage() {
           </div>
         </div>
 
+        {/* Desktop side panel */}
         {panelOpen && (
-          <aside className="w-80 xl:w-88 shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
+          <aside className="hidden md:flex w-80 xl:w-88 shrink-0 border-e border-border bg-card flex-col overflow-hidden">
             <UnifiedAiPanel
               editorRef={editorRef}
               title={title}
@@ -458,6 +481,58 @@ export default function NewArticlePage() {
               onScoreChange={handleScoreChange}
             />
           </aside>
+        )}
+
+        {/* Mobile bottom sheet */}
+        {panelOpen && (
+          <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setPanelOpen(false)} />
+            <div className="relative bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col overflow-hidden z-50">
+              <div className="flex justify-center pt-2 pb-1 shrink-0">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0" dir="rtl">
+                <span className="text-sm font-semibold">الإعدادات والتحليل</span>
+                <button onClick={() => setPanelOpen(false)} className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <UnifiedAiPanel
+                  editorRef={editorRef}
+                  title={title}
+                  content={content}
+                  articleId={articleIdRef.current}
+                  articleType={articleType}
+                  onTitleChange={setTitle}
+                  onContentChange={setContent}
+                  onArticleTypeChange={setArticleType}
+                  onSlugChange={setSlug}
+                  onMetaTitleChange={setMetaTitle}
+                  onMetaDescriptionChange={setMetaDescription}
+                  onExcerptChange={setExcerpt}
+                  onFocusKeywordChange={setFocusKeyword}
+                  selectedCategoryIds={selectedCategoryIds}
+                  onCategoriesChange={handleCategoriesChange}
+                  selectedTagIds={selectedTagIds}
+                  onTagsChange={handleTagsChange}
+                  slug={slug}
+                  metaTitle={metaTitle}
+                  metaDescription={metaDescription}
+                  excerpt={excerpt}
+                  focusKeyword={focusKeyword}
+                  hasFeaturedImage={!!featuredImageId}
+                  imageCount={imageCount}
+                  imagesWithAlt={imagesWithAlt}
+                  onFocusSection={handleFocusSection}
+                  focusSection={focusSection}
+                  onScoreChange={handleScoreChange}
+                />
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

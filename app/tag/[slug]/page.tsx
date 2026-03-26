@@ -6,6 +6,7 @@ import { ScrollReveal } from '@/components/public/ScrollReveal';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { generateBreadcrumbJsonLd } from '@/lib/seo/metadata';
+import { getSiteSettings } from '@/lib/settings/getSiteSettings';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000';
 
@@ -178,15 +179,18 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: TagPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const tag = await getTagBySlug(slug);
+  const [tag, siteSettings] = await Promise.all([
+    getTagBySlug(slug),
+    getSiteSettings(),
+  ]);
 
   if (!tag) {
     return {};
   }
 
-  const title = tag.nameEn 
-    ? `#${tag.name} (${tag.nameEn}) - الموقع الصحفي`
-    : `#${tag.name} - الموقع الصحفي`;
+  const title = tag.nameEn
+    ? `#${tag.name} (${tag.nameEn}) - ${siteSettings.siteName}`
+    : `#${tag.name} - ${siteSettings.siteName}`;
   const description = tag.description || `جميع المقالات الموسومة بـ ${tag.name}`;
   const url = `${SITE_URL}/tag/${tag.slug}`;
 
@@ -206,7 +210,7 @@ export async function generateMetadata({ params }: TagPageProps): Promise<Metada
       url,
       locale: 'ar_AR',
       type: 'website',
-      siteName: 'الموقع الصحفي',
+      siteName: siteSettings.siteName,
     },
     twitter: {
       card: 'summary',

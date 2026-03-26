@@ -328,7 +328,7 @@ export function AiPanel({
       <AiPanelTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Content */}
-      <div className="p-4 max-h-[500px] overflow-y-auto">
+      <div className="p-4 overflow-y-auto">
         {!hasContent ? (
           <AiPanelEmptyState />
         ) : (

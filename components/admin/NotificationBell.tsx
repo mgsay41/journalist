@@ -162,7 +162,7 @@ export function NotificationBell() {
           ref={panelRef}
           role="dialog"
           aria-label="الإشعارات"
-          className="absolute end-0 top-full mt-2 w-80 bg-card border border-border rounded-xl z-50 overflow-hidden"
+          className="absolute end-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-1rem)] bg-card border border-border rounded-xl z-50 overflow-hidden"
           style={{
             boxShadow: 'var(--shadow-lg)',
             animation: 'notifSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards',
@@ -197,7 +197,7 @@ export function NotificationBell() {
           </div>
 
           {/* Notification List */}
-          <div className="max-h-[360px] overflow-y-auto divide-y divide-border">
+          <div className="max-h-[50vh] sm:max-h-[360px] overflow-y-auto divide-y divide-border">
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 px-4 text-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">

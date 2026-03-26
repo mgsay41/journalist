@@ -486,8 +486,54 @@ export function UnifiedAiPanel({
         setAiMessage("اكتمل التحليل");
         if (parsed.introSuggestion) setIntroSuggestion(parsed.introSuggestion);
         if (parsed.conclusionSuggestion) setConclusionSuggestion(parsed.conclusionSuggestion);
+
+        // Re-apply AI-suggested data to parent state so categories/tags/keyword
+        // are not lost after the new→edit page navigation
+        const r = parsed.results;
+        if (r) {
+          if (r.focusKeyword && !focusKeyword) onFocusKeywordChange(r.focusKeyword);
+          if (r.slug && !slug) onSlugChange(r.slug);
+          if (r.excerpt && !excerpt) onExcerptChange(r.excerpt);
+          if (r.metaTitles?.[0] && !metaTitle)
+            onMetaTitleChange((r.metaTitles[0].title || '').slice(0, 60));
+          if (r.metaDescriptions?.[0] && !metaDescription)
+            onMetaDescriptionChange((r.metaDescriptions[0].description || '').slice(0, 200));
+
+          const existingCatIds = (r.suggestedCategories || [])
+            .filter((c: SuggestedCategory) => c.isExisting && c.id)
+            .map((c: SuggestedCategory) => c.id as string);
+          const newCats = (r.suggestedCategories || [])
+            .filter((c: SuggestedCategory) => !c.isExisting)
+            .map((c: SuggestedCategory) => c.name);
+          if (existingCatIds.length > 0 || newCats.length > 0) {
+            const mergedCatIds = Array.from(new Set([...selectedCategoryIds, ...existingCatIds]));
+            onCategoriesChange(mergedCatIds, newCats);
+            setNewCategoryNames(newCats);
+          }
+
+          const existingTagIds = (r.suggestedTags || [])
+            .filter((t: SuggestedTag) => t.isExisting && t.id)
+            .map((t: SuggestedTag) => t.id as string);
+          const newTags = (r.suggestedTags || [])
+            .filter((t: SuggestedTag) => !t.isExisting)
+            .map((t: SuggestedTag) => t.name);
+          if (existingTagIds.length > 0 || newTags.length > 0) {
+            const mergedTagIds = Array.from(new Set([...selectedTagIds, ...existingTagIds]));
+            onTagsChange(mergedTagIds, newTags);
+            setNewTagNames(newTags);
+          }
+
+          // Open taxonomy section so restored categories/tags are visible
+          if (
+            existingCatIds.length > 0 || newCats.length > 0 ||
+            existingTagIds.length > 0 || newTags.length > 0
+          ) {
+            setSectionStates(prev => ({ ...prev, taxonomy: true }));
+          }
+        }
       }
     } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [RESULTS_KEY]);
 
   const handleAnalyze = useCallback(async () => {
@@ -567,22 +613,27 @@ export function UnifiedAiPanel({
             if (data.data.metaDescriptions?.[0]) {
               onMetaDescriptionChange((data.data.metaDescriptions[0].description || '').slice(0, 200));
             }
-            const existingCatIds = data.data.suggestedCategories
+            if (data.data.excerpt) {
+              onExcerptChange(data.data.excerpt);
+            }
+            const aiCatIds = data.data.suggestedCategories
               .filter((c: SuggestedCategory) => c.isExisting && c.id)
-              .map((c: SuggestedCategory) => c.id);
+              .map((c: SuggestedCategory) => c.id as string);
             const newCats = data.data.suggestedCategories
               .filter((c: SuggestedCategory) => !c.isExisting)
               .map((c: SuggestedCategory) => c.name);
-            onCategoriesChange(existingCatIds, newCats);
+            const mergedCatIds = Array.from(new Set([...selectedCategoryIds, ...aiCatIds]));
+            onCategoriesChange(mergedCatIds, newCats);
             setNewCategoryNames(newCats);
 
-            const existingTagIds = data.data.suggestedTags
+            const aiTagIds = data.data.suggestedTags
               .filter((t: SuggestedTag) => t.isExisting && t.id)
-              .map((t: SuggestedTag) => t.id);
+              .map((t: SuggestedTag) => t.id as string);
             const newTags = data.data.suggestedTags
               .filter((t: SuggestedTag) => !t.isExisting)
               .map((t: SuggestedTag) => t.name);
-            onTagsChange(existingTagIds, newTags);
+            const mergedTagIds = Array.from(new Set([...selectedTagIds, ...aiTagIds]));
+            onTagsChange(mergedTagIds, newTags);
             setNewTagNames(newTags);
 
             setAiPhase('complete');
@@ -625,6 +676,8 @@ export function UnifiedAiPanel({
               fetchedIntro = text;
               setIntroSuggestion(text);
               onIntroGenerated?.(text);
+            } else if (introRes.status === 'rejected') {
+              console.warn('Intro generation failed:', introRes.reason);
             }
             if (conclusionRes.status === 'fulfilled' && conclusionRes.value?.conclusions?.length > 0) {
               const idx = conclusionRes.value.recommended ?? 0;
@@ -634,6 +687,8 @@ export function UnifiedAiPanel({
               fetchedConclusion = text;
               setConclusionSuggestion(text);
               onConclusionGenerated?.(text);
+            } else if (conclusionRes.status === 'rejected') {
+              console.warn('Conclusion generation failed:', conclusionRes.reason);
             }
 
             if (fetchedIntro || fetchedConclusion) {
@@ -722,7 +777,7 @@ export function UnifiedAiPanel({
       );
       const structureTopIssues = structureChecklist
         .filter((item) => !item.passed)
-        .map((item) => item.label || item.details || '')
+        .map((item) => item.details ? `${item.label}: ${item.details}` : item.label)
         .slice(0, 5);
 
       const response = await fetch('/api/admin/ai/rewrite-article', {
@@ -936,6 +991,16 @@ export function UnifiedAiPanel({
     ...(completionResults?.availableTags || []),
     ...newTagNames.map(name => ({ id: `new-${name}`, name })),
   ];
+
+  // Maps for AI confidence/relevance — used to show coloured dots on taxonomy chips
+  const categoryConfidenceMap = new Map<string, number>();
+  completionResults?.suggestedCategories?.forEach(sc => {
+    categoryConfidenceMap.set(sc.id ?? `new-${sc.name}`, sc.confidence);
+  });
+  const tagRelevanceMap = new Map<string, 'high' | 'medium' | 'low'>();
+  completionResults?.suggestedTags?.forEach(st => {
+    tagRelevanceMap.set(st.id ?? `new-${st.name}`, st.relevance);
+  });
 
   const renderSectionHeader = (title: string, section: string, count?: number) => (
     <button
@@ -1293,6 +1358,23 @@ export function UnifiedAiPanel({
             ))}
           </div>
         )}
+        {completionResults?.titleSuggestions && completionResults.titleSuggestions.length > 0 && (
+          <div className="mt-3">
+            <label className="block text-xs text-muted-foreground mb-1.5">اقتراحات العنوان</label>
+            <div className="space-y-1.5">
+              {completionResults.titleSuggestions.slice(0, 3).map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => onTitleChange(s.title)}
+                  className="w-full text-right text-xs px-2.5 py-2 bg-muted hover:bg-muted/80 rounded-lg leading-relaxed"
+                  dir="rtl"
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -1393,10 +1475,33 @@ export function UnifiedAiPanel({
                 {isNew && isSelected && (
                   <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
                 )}
+                {(() => {
+                  const conf = categoryConfidenceMap.get(cat.id);
+                  if (conf === undefined) return null;
+                  const color = conf >= 0.8 ? 'bg-green-400' : conf >= 0.5 ? 'bg-amber-400' : 'bg-gray-400';
+                  return <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${color}`} title={`ثقة ${Math.round(conf * 100)}%`} />;
+                })()}
               </button>
             );
           })}
         </div>
+        <input
+          type="text"
+          placeholder="أضف تصنيفاً جديداً... (Enter للإضافة)"
+          dir="rtl"
+          className="mt-2 w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val && !newCategoryNames.includes(val)) {
+                const updated = [...newCategoryNames, val];
+                setNewCategoryNames(updated);
+                onCategoriesChange(selectedCategoryIds, updated);
+              }
+              (e.target as HTMLInputElement).value = '';
+            }
+          }}
+        />
       </div>
 
       <div>
@@ -1407,7 +1512,7 @@ export function UnifiedAiPanel({
           </span>
         </h4>
         <div className="flex flex-wrap gap-2">
-          {allTags.slice(0, 20).map((tag) => {
+          {allTags.map((tag) => {
             const isNew = tag.id.startsWith('new-');
             const isSelected = isNew
               ? newTagNames.includes(tag.name)
@@ -1442,10 +1547,34 @@ export function UnifiedAiPanel({
                 {isNew && isSelected && (
                   <span className="text-xs bg-amber-200 px-1 rounded">جديد</span>
                 )}
+                {(() => {
+                  const rel = tagRelevanceMap.get(tag.id);
+                  if (!rel) return null;
+                  const color = rel === 'high' ? 'bg-green-400' : rel === 'medium' ? 'bg-amber-400' : 'bg-gray-400';
+                  const label = rel === 'high' ? 'صلة عالية' : rel === 'medium' ? 'صلة متوسطة' : 'صلة منخفضة';
+                  return <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${color}`} title={label} />;
+                })()}
               </button>
             );
           })}
         </div>
+        <input
+          type="text"
+          placeholder="أضف وسماً جديداً... (Enter للإضافة)"
+          dir="rtl"
+          className="mt-2 w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val && !newTagNames.includes(val)) {
+                const updated = [...newTagNames, val];
+                setNewTagNames(updated);
+                onTagsChange(selectedTagIds, updated);
+              }
+              (e.target as HTMLInputElement).value = '';
+            }
+          }}
+        />
       </div>
     </div>
   );

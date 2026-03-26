@@ -3,6 +3,7 @@ import { PublicHeader } from './PublicHeader';
 import { PublicFooter } from './PublicFooter';
 import { BreakingNewsBanner } from './BreakingNewsBanner';
 import { prisma } from '@/lib/prisma';
+import { getSiteSettings } from '@/lib/settings/getSiteSettings';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -34,18 +35,29 @@ const getBreakingNews = unstable_cache(
 );
 
 export async function PublicLayout({ children, categories = [], popularTags = [] }: PublicLayoutProps) {
-  const breakingNews = await getBreakingNews();
+  const [breakingNews, siteSettings] = await Promise.all([
+    getBreakingNews(),
+    getSiteSettings(),
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col">
       {breakingNews && (
         <BreakingNewsBanner text={breakingNews.text} url={breakingNews.url} />
       )}
-      <PublicHeader categories={categories} />
+      <PublicHeader
+        categories={categories}
+        siteName={siteSettings.siteName}
+        siteTagline={siteSettings.siteTagline}
+      />
       <main className="flex-1">
         {children}
       </main>
-      <PublicFooter categories={categories} popularTags={popularTags} />
+      <PublicFooter
+        categories={categories}
+        popularTags={popularTags}
+        siteName={siteSettings.siteName}
+      />
     </div>
   );
 }

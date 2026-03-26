@@ -17,6 +17,9 @@ const autoSaveSchema = z.object({
   excerpt: z.string().optional(),
   metaTitle: z.string().optional(),
   metaDescription: z.string().optional(),
+  featuredImageId: z.string().optional(),
+  focusKeyword: z.string().optional(),
+  slug: z.string().optional(),
   // Don't change status via auto-save - keep it as draft
 });
 
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { articleId, title, content, excerpt, metaTitle, metaDescription } = validation.data;
+    const { articleId, title, content, excerpt, metaTitle, metaDescription, featuredImageId, focusKeyword, slug: bodySlug } = validation.data;
 
     // If articleId is provided, update existing article
     if (articleId) {
@@ -87,6 +90,8 @@ export async function POST(request: NextRequest) {
           excerpt: excerpt?.trim() || null,
           metaTitle: metaTitle?.trim() || null,
           metaDescription: metaDescription?.trim() || null,
+          ...(featuredImageId !== undefined ? { featuredImageId } : {}),
+          ...(focusKeyword !== undefined ? { focusKeyword: focusKeyword.trim() || null } : {}),
           wordCount,
           readingTime,
           updatedAt: new Date(),
@@ -107,14 +112,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a new draft article
-    // Regex keeps Arabic, Latin, and digits; replaces spaces with hyphens
+    // Use provided slug if available, otherwise generate from title
     const baseSlug = title
       .trim()
       .replace(/\s+/g, '-')
       .replace(/[^\u0600-\u06FFa-zA-Z0-9-]/g, '')
       .replace(/^-+|-+$/g, '')
       .substring(0, 80);
-    const slug = baseSlug || `draft-${Date.now()}`;
+    const slug = bodySlug?.trim() || baseSlug || `draft-${Date.now()}`;
 
     // Calculate word count
     const plainText = content.replace(/<[^>]*>/g, '').trim();
@@ -130,6 +135,8 @@ export async function POST(request: NextRequest) {
         excerpt: excerpt?.trim() || null,
         metaTitle: metaTitle?.trim() || null,
         metaDescription: metaDescription?.trim() || null,
+        ...(featuredImageId ? { featuredImageId } : {}),
+        ...(focusKeyword ? { focusKeyword: focusKeyword.trim() } : {}),
         status: 'draft',
         authorId: session.user.id,
         wordCount,

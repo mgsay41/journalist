@@ -8,9 +8,10 @@ const NEWSLETTER_KEY = 'newsletter_subscribed';
 interface PublicFooterProps {
   categories?: Array<{ id: string; name: string; slug: string }>;
   popularTags?: Array<{ id: string; name: string; slug: string }>;
+  siteName?: string;
 }
 
-export function PublicFooter({ categories = [], popularTags = [] }: PublicFooterProps) {
+export function PublicFooter({ categories = [], popularTags = [], siteName = 'الموقع الصحفي' }: PublicFooterProps) {
   const currentYear = new Date().getFullYear();
   const mainCategories = categories.filter(c => !c.slug.includes('/')).slice(0, 6);
 
@@ -26,7 +27,7 @@ export function PublicFooter({ categories = [], popularTags = [] }: PublicFooter
           <div>
             <Link href="/" className="no-underline block mb-3">
               <span className="font-display text-xl font-bold text-[#F5F0E8]">
-                الموقع الصحفي
+                {siteName}
               </span>
             </Link>
             <p className="text-sm text-[#9A9590] leading-relaxed mb-5">
@@ -108,7 +109,7 @@ export function PublicFooter({ categories = [], popularTags = [] }: PublicFooter
         <div className="container mx-auto px-4 py-5">
           <div className="flex flex-col md:flex-row justify-between items-center gap-3">
             <p className="text-xs text-[#6B6560]">
-              © {currentYear} الموقع الصحفي. جميع الحقوق محفوظة.
+              © {currentYear} {siteName}. جميع الحقوق محفوظة.
             </p>
             <div className="flex gap-5">
               {[

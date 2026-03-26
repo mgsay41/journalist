@@ -81,7 +81,8 @@
       "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/app' -path *\\\\\\(public\\\\\\) -name *.tsx -o -path *\\\\\\(public\\\\\\) -name *.ts)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete"
+      "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete",
+      "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\lib\\ai"
     ]
   }
 }

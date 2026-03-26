@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSiteSettings } from '@/lib/settings/getSiteSettings';
 
 /**
  * GET /feed.xml
@@ -8,28 +9,31 @@ import { prisma } from '@/lib/prisma';
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000';
 
-  const articles = await prisma.article.findMany({
-    where: {
-      status: 'published',
-      publishedAt: { lte: new Date() },
-    },
-    select: {
-      title: true,
-      slug: true,
-      excerpt: true,
-      metaDescription: true,
-      publishedAt: true,
-      updatedAt: true,
-      author: { select: { name: true } },
-      categories: { select: { name: true } },
-      featuredImage: { select: { url: true, altText: true } },
-    },
-    orderBy: { publishedAt: 'desc' },
-    take: 50,
-  });
+  const [siteSettings, articles] = await Promise.all([
+    getSiteSettings(),
+    prisma.article.findMany({
+      where: {
+        status: 'published',
+        publishedAt: { lte: new Date() },
+      },
+      select: {
+        title: true,
+        slug: true,
+        excerpt: true,
+        metaDescription: true,
+        publishedAt: true,
+        updatedAt: true,
+        author: { select: { name: true } },
+        categories: { select: { name: true } },
+        featuredImage: { select: { url: true, altText: true } },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: 50,
+    }),
+  ]);
 
-  const siteName = 'الموقع الصحفي';
-  const siteDescription = 'آخر الأخبار والمقالات';
+  const siteName = siteSettings.siteName;
+  const siteDescription = siteSettings.siteTagline || 'آخر الأخبار والمقالات';
   const buildDate = new Date().toUTCString();
 
   const items = articles

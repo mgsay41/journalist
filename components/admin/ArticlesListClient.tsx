@@ -98,10 +98,10 @@ export function ArticlesListClient({ articles, categories, tags }: ArticlesListC
               </th>
               <th className="text-right py-3 px-4 font-medium text-sm">العنوان</th>
               <th className="text-right py-3 px-4 font-medium text-sm">الحالة</th>
-              <th className="text-right py-3 px-4 font-medium text-sm">التصنيفات</th>
-              <th className="text-right py-3 px-4 font-medium text-sm">الكاتب</th>
-              <th className="text-right py-3 px-4 font-medium text-sm">تاريخ النشر</th>
-              <th className="text-right py-3 px-4 font-medium text-sm">المشاهدات</th>
+              <th className="text-right py-3 px-4 font-medium text-sm hidden md:table-cell">التصنيفات</th>
+              <th className="text-right py-3 px-4 font-medium text-sm hidden lg:table-cell">الكاتب</th>
+              <th className="text-right py-3 px-4 font-medium text-sm hidden sm:table-cell">تاريخ النشر</th>
+              <th className="text-right py-3 px-4 font-medium text-sm hidden lg:table-cell">المشاهدات</th>
               <th className="text-right py-3 px-4 font-medium text-sm w-32">الإجراءات</th>
             </tr>
           </thead>
@@ -132,60 +132,60 @@ export function ArticlesListClient({ articles, categories, tags }: ArticlesListC
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  {getStatusBadge(article.status)}
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex flex-wrap gap-1">
-                    {article.categories.length > 0 ? (
-                      article.categories.map((cat) => (
-                        <Badge key={cat.id} variant="secondary" size="sm">
-                          {cat.name}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-sm">
-                  {article.author.name}
-                </td>
-                <td className="py-3 px-4 text-sm">
-                  {formatDate(article.publishedAt || article.createdAt)}
-                </td>
-                <td className="py-3 px-4 text-sm">
-                  {article.views.toLocaleString('ar-SA')}
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex gap-1">
-                    <Link
-                      href={`/admin/articles/${article.id}/edit`}
-                      className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted-foreground/10 transition-colors"
-                      title="تعديل"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </Link>
-                    <Link
-                      href={`/article/${article.slug}`}
-                      target="_blank"
-                      className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted-foreground/10 transition-colors"
-                      title="عرض"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </Link>
-                    <ArticleActionsButton
-                      articleId={article.id}
-                      articleTitle={article.title}
-                      articleSlug={article.slug}
-                    />
-                    <DeleteArticleButton articleId={article.id} articleTitle={article.title} />
-                  </div>
-                </td>
+                   {getStatusBadge(article.status)}
+                 </td>
+                 <td className="py-3 px-4 hidden md:table-cell">
+                   <div className="flex flex-wrap gap-1">
+                     {article.categories.length > 0 ? (
+                       article.categories.map((cat) => (
+                         <Badge key={cat.id} variant="secondary" size="sm">
+                           {cat.name}
+                         </Badge>
+                       ))
+                     ) : (
+                       <span className="text-muted-foreground text-sm">-</span>
+                     )}
+                   </div>
+                 </td>
+                 <td className="py-3 px-4 text-sm hidden lg:table-cell">
+                   {article.author.name}
+                 </td>
+                 <td className="py-3 px-4 text-sm hidden sm:table-cell">
+                   {formatDate(article.publishedAt || article.createdAt)}
+                 </td>
+                 <td className="py-3 px-4 text-sm hidden lg:table-cell">
+                   {article.views.toLocaleString('ar-SA')}
+                 </td>
+                 <td className="py-3 px-4">
+                   <div className="flex gap-1">
+                     <Link
+                       href={`/admin/articles/${article.id}/edit`}
+                       className="inline-flex items-center justify-center p-2.5 rounded-md hover:bg-muted-foreground/10 transition-colors"
+                       title="تعديل"
+                     >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                       </svg>
+                     </Link>
+                     <Link
+                       href={`/article/${article.slug}`}
+                       target="_blank"
+                       className="inline-flex items-center justify-center p-2.5 rounded-md hover:bg-muted-foreground/10 transition-colors"
+                       title="عرض"
+                     >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                       </svg>
+                     </Link>
+                     <ArticleActionsButton
+                       articleId={article.id}
+                       articleTitle={article.title}
+                       articleSlug={article.slug}
+                     />
+                     <DeleteArticleButton articleId={article.id} articleTitle={article.title} />
+                   </div>
+                 </td>
               </tr>
             ))}
           </tbody>

@@ -129,7 +129,7 @@ export function MobileQuickActions({
   // Floating action button style
   if (variant === 'floating') {
     return (
-      <div className={cn('fixed bottom-24 left-4 right-4 z-40', className)}>
+      <div className={cn('fixed bottom-24 inset-x-4 z-40', className)}>
         <div className="flex flex-col gap-2">
           {/* One-tap publish button */}
           {article.status === 'draft' && onPublish && (
@@ -235,7 +235,7 @@ export function MobileQuickActions({
     return (
       <div
         className={cn(
-          'fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 p-4 safe-area-pb',
+          'fixed bottom-0 inset-x-0 bg-card border-t border-border z-50 p-4 safe-area-pb',
           className
         )}
         style={{

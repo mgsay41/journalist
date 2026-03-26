@@ -13,10 +13,10 @@ export interface ModalProps {
 }
 
 const sizeStyles = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
+  sm: 'max-w-sm sm:max-w-md',
+  md: 'max-w-full sm:max-w-lg',
+  lg: 'max-w-full sm:max-w-2xl',
+  xl: 'max-w-full sm:max-w-4xl',
 };
 
 /**
@@ -139,8 +139,8 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          'relative bg-card rounded-xl shadow-2xl w-full mx-4 animate-slide-in',
-          'max-h-[90vh] overflow-hidden flex flex-col',
+          'relative bg-card rounded-xl shadow-2xl w-full mx-3 sm:mx-4 animate-slide-in',
+          'max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col',
           sizeStyles[size]
         )}
         role="dialog"
@@ -150,7 +150,7 @@ export function Modal({
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-6 border-b border-border">
+          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border">
             {title && (
               <h2 id="modal-title" className="text-xl font-bold text-foreground">
                 {title}
@@ -181,7 +181,7 @@ export function Modal({
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );

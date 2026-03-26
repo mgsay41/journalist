@@ -386,7 +386,7 @@ function CategoriesSection({ categories }: { categories: Array<{ id: string; nam
             <a
               key={category.id}
               href={`/category/${category.slug}`}
-              className="group relative p-5 border border-border bg-card hover:border-accent transition-all duration-200 text-center overflow-hidden"
+              className="group relative p-5 min-h-[56px] border border-border bg-card hover:border-accent transition-all duration-200 text-center overflow-hidden flex items-center justify-center"
               style={{ boxShadow: 'var(--shadow-sm)' }}
             >
               {/* Amber accent line on hover */}

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cairo, Amiri } from "next/font/google";
 import { cookies } from "next/headers";
 import { RootErrorBoundary } from "@/components/RootErrorBoundary";
@@ -28,6 +28,10 @@ const amiri = Amiri({
   display: "swap", // Show fallback immediately, swap when loaded — no invisible text
   weight: ["400", "700"],
 });
+
+export const viewport: Viewport = {
+  interactiveWidget: 'resizes-visual',
+};
 
 export const metadata: Metadata = {
   title: {

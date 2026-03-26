@@ -3,7 +3,6 @@
 import { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { getBreadcrumbs } from "@/lib/admin-nav";
 import { DarkModeToggle } from "@/components/admin/DarkModeToggle";
 import { NotificationBell } from "@/components/admin/NotificationBell";
 
@@ -86,20 +85,24 @@ export function AdminTopBar({
     <header
       className={cn(
         "sticky top-0 z-30 bg-card/95 backdrop-blur-sm border-b border-border shadow-sm",
-        "h-14 flex items-center justify-between px-6",
+        "h-14 flex items-center justify-between px-4 lg:px-6",
         className,
       )}
       dir="rtl"
     >
       {/* Right side - Breadcrumbs */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 pe-14 lg:pe-0">
         {breadcrumbs && <BreadcrumbClient breadcrumbs={breadcrumbs} />}
       </div>
 
       {/* Left side - Actions, User */}
       <div className="flex items-center gap-4">
-        <DarkModeToggle />
-        <NotificationBell />
+        <div className="flex items-center justify-center min-h-11 min-w-11">
+          <DarkModeToggle />
+        </div>
+        <div className="flex items-center justify-center min-h-11 min-w-11">
+          <NotificationBell />
+        </div>
         {actions}
 
         {/* Separator */}
@@ -128,10 +131,10 @@ export function AdminTopBar({
                 <img
                   src={userImage}
                   alt={userName || "المدير"}
-                  className="w-9 h-9 rounded-full object-cover ring-2 ring-border"
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-border"
                 />
               ) : (
-                <div className="w-9 h-9 bg-linear-to-br from-accent/20 to-accent/5 border border-accent/20 rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-linear-to-br from-accent/20 to-accent/5 border border-accent/20 rounded-full flex items-center justify-center">
                   <span className="text-accent text-sm font-bold">
                     {userName && userName.length > 0 ? userName.charAt(0) : "م"}
                   </span>

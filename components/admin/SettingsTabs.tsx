@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -118,6 +118,8 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [profile, setProfile] = useState<UserProfile>(initialProfile);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Password change state
   const [passwordForm, setPasswordForm] = useState({
@@ -232,6 +234,37 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
 
   const updateProfile = <K extends keyof UserProfile>(key: K, value: UserProfile[K]) => {
     setProfile(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/admin/profile/image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'فشل رفع الصورة');
+      }
+
+      updateProfile('image', data.url);
+      gooeyToast.success('تم رفع الصورة بنجاح');
+    } catch (error) {
+      gooeyToast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء رفع الصورة');
+    } finally {
+      setIsUploadingImage(false);
+      // Reset file input so same file can be re-selected
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
   };
 
   return (
@@ -383,13 +416,57 @@ export function SettingsTabs({ initialSettings, initialProfile, categories }: Se
                   helperText="البريد الإلكتروني لتسجيل الدخول"
                 />
 
-                <Input
-                  label="رابط الصورة الشخصية"
-                  type="url"
-                  value={profile.image || ''}
-                  onChange={(e) => updateProfile('image', e.target.value || null)}
-                  helperText="رابط صورة الملف الشخصي (اختياري)"
-                />
+                {/* Profile image upload */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">الصورة الشخصية</label>
+                  <div className="flex items-center gap-4">
+                    {/* Avatar preview */}
+                    <div className="w-16 h-16 rounded-full bg-muted border border-border overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {profile.image ? (
+                        <img
+                          src={profile.image}
+                          alt="صورة الملف الشخصي"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl font-bold text-muted-foreground">
+                          {profile.name ? profile.name.charAt(0) : 'م'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 flex-1">
+                      {/* Hidden file input */}
+                      <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={isUploadingImage}
+                      >
+                        {isUploadingImage ? 'جاري الرفع...' : 'رفع صورة جديدة'}
+                      </Button>
+                      {profile.image && (
+                        <button
+                          type="button"
+                          onClick={() => updateProfile('image', null)}
+                          className="text-xs text-danger hover:underline text-start"
+                        >
+                          حذف الصورة
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG, WebP أو GIF — حد أقصى 5 ميجابايت
+                  </p>
+                </div>
 
                 <Input
                   label="المسمى الوظيفي"
