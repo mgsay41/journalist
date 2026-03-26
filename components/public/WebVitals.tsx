@@ -153,7 +153,11 @@ function flushQueue() {
   }
 }
 
+const MAX_QUEUE_SIZE = 20;
+
 function queueMetric(payload: MetricPayload) {
+  // Flush immediately if queue is full to prevent unbounded memory growth
+  if (metricQueue.length >= MAX_QUEUE_SIZE) flushQueue();
   metricQueue.push(payload);
   // Reschedule the trailing flush
   if (flushTimer) clearTimeout(flushTimer);

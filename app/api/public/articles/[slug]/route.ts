@@ -56,7 +56,15 @@ export async function GET(
             caption: true,
           },
         },
-        videos: true,
+        videos: {
+          select: {
+            id: true,
+            youtubeId: true,
+            title: true,
+            privacyMode: true,
+            startTime: true,
+          },
+        },
         seoAnalysis: {
           select: {
             score: true,
@@ -112,7 +120,8 @@ export async function GET(
     };
 
     return NextResponse.json(formattedArticle, {
-      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+      // Published articles are immutable — cache at CDN for 1 hour, serve stale for 24 h while revalidating
+      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
     });
   } catch (error) {
     console.error('Error fetching article:', error);

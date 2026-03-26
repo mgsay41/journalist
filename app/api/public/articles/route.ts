@@ -37,10 +37,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
+      // Search title + excerpt only — content field is 10–50KB per article and makes LIKE queries 50-100x slower
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
         { excerpt: { contains: search, mode: 'insensitive' } },
-        { content: { contains: search, mode: 'insensitive' } },
       ];
     }
 

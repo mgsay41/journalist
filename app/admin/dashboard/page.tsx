@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/Button';
 import { ArticleStatusBadge } from '@/components/ui/Badge';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { unstable_cache } from 'next/cache';
 import { SparklineChart } from '@/components/admin/SparklineChart';
 import { getTrendFillColor } from '@/lib/utils/trend-colors';
 import { getDashboardChartsData } from '@/lib/analytics/service';
@@ -74,11 +73,12 @@ async function getDashboardStats(period: 'today' | 'week' | 'month' | 'all' = 'a
 
   const dateRange = getDateRange();
 
-  const [totalArticles, published, drafts, scheduled, totalImages, avgSeoScore, totalViewsResult, publishedCountResult] = await Promise.all([
-    prisma.article.count(),
-    prisma.article.count({ where: { status: 'published' } }),
-    prisma.article.count({ where: { status: 'draft' } }),
-    prisma.article.count({ where: { status: 'scheduled' } }),
+  // Single groupBy replaces 4 separate article.count() calls (total, published, draft, scheduled)
+  const [statusCounts, totalImages, avgSeoScore, totalViewsResult, publishedCountResult] = await Promise.all([
+    prisma.article.groupBy({
+      by: ['status'],
+      _count: { id: true },
+    }),
     prisma.image.count(),
     prisma.seoAnalysis.aggregate({
       _avg: { score: true }
@@ -92,6 +92,12 @@ async function getDashboardStats(period: 'today' | 'week' | 'month' | 'all' = 'a
       where: { status: 'published', publishedAt: dateRange }
     }),
   ]);
+
+  const countByStatus = Object.fromEntries(statusCounts.map(r => [r.status, r._count.id]));
+  const totalArticles = statusCounts.reduce((sum, r) => sum + r._count.id, 0);
+  const published = countByStatus['published'] ?? 0;
+  const drafts = countByStatus['draft'] ?? 0;
+  const scheduled = countByStatus['scheduled'] ?? 0;
 
   // Previous period data for trends
   const [prevViewsResult, prevPublishedCountResult] = await Promise.all([

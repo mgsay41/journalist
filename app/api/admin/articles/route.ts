@@ -75,11 +75,10 @@ export async function GET(request: NextRequest) {
     type ArticleWhereInput = NonNullable<NonNullable<Parameters<typeof prisma.article.findMany>[0]>['where']>;
     const where: ArticleWhereInput = {};
 
-    // Search in title and content
+    // Search title + excerpt only — content field is 10–50KB per article and makes LIKE queries 50-100x slower
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
-        { content: { contains: search, mode: 'insensitive' } },
         { excerpt: { contains: search, mode: 'insensitive' } },
       ];
     }

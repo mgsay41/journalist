@@ -14,11 +14,12 @@ import "@/lib/env";
 const VALID_FONT_SIZES: FontSize[] = ['small', 'medium', 'large', 'xlarge'];
 
 // Cairo — body text and UI, excellent for Arabic
+// Dropped "300" (light) — not used in news layouts; saves one font file download
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
   variable: "--font-cairo",
   display: "swap",
-  weight: ["300", "400", "600", "700", "800"],
+  weight: ["400", "600", "700", "800"],
 });
 
 // Amiri — classical Arabic serif for display headlines
@@ -79,6 +80,9 @@ export default async function RootLayout({
       <head>
         {/* Preconnect to Cloudinary CDN — crossOrigin required so the connection is reused for CORS image requests */}
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        {/* DNS prefetch for AI and font services — resolves DNS early without blocking */}
+        <link rel="dns-prefetch" href="https://generativelanguage.googleapis.com" />
+        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="alternate" type="application/rss+xml" title="الموقع الصحفي - RSS" href="/feed.xml" />
         <meta name="theme-color" content="#C8892A" />

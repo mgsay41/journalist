@@ -41,26 +41,19 @@ const getHomepageData = unstable_cache(
     }
   },
   ['homepage-layout'],
-  { revalidate: 300, tags: ['articles', 'categories', 'tags'] }
+  // Categories/tags rarely change — cache for 1 hour instead of 5 min to cut DB load
+  { revalidate: 3600, tags: ['articles', 'categories', 'tags'] }
 );
 
 // unstable_cache: server-process cache for 5 min (reduces DB load during ISR revalidation).
 // cache(): per-render deduplication — both HeroSection and RecentArticlesSection call this.
 const getCachedHeroArticle = unstable_cache(
   async () => {
-    const featuredArticle = await prisma.article.findFirst({
-      where: { status: 'published', publishedAt: { lte: new Date() }, isFeatured: true },
-      orderBy: { publishedAt: 'desc' },
-      include: {
-        categories: { select: { id: true, name: true, slug: true } },
-        featuredImage: { select: { id: true, url: true, altText: true } },
-        author: { select: { id: true, name: true } },
-      },
-    });
-
-    return featuredArticle ?? await prisma.article.findFirst({
+    // Single query: isFeatured desc puts featured first, publishedAt desc as tiebreaker.
+    // Eliminates the previous two-query fallback pattern (was: find featured → if null, find latest).
+    return prisma.article.findFirst({
       where: { status: 'published', publishedAt: { lte: new Date() } },
-      orderBy: { publishedAt: 'desc' },
+      orderBy: [{ isFeatured: 'desc' }, { publishedAt: 'desc' }],
       include: {
         categories: { select: { id: true, name: true, slug: true } },
         featuredImage: { select: { id: true, url: true, altText: true } },

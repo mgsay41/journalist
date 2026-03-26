@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import dynamic from 'next/dynamic';
 import { RichTextEditor, type RichTextEditorRef } from '@/components/admin/RichTextEditor';
-import { UnifiedAiPanel } from '@/components/admin/UnifiedAiPanel';
-import ImagePickerModal from '@/components/admin/ImagePickerModal';
+// Lazy-load heavy panel + modal — only mounted when user opens them, saving ~120KB on initial parse
+const UnifiedAiPanel = dynamic(() => import('@/components/admin/UnifiedAiPanel').then(m => m.UnifiedAiPanel), { ssr: false });
+const ImagePickerModal = dynamic(() => import('@/components/admin/ImagePickerModal'), { ssr: false });
 import { Alert } from '@/components/ui/Alert';
 import { fetchWithCsrf } from '@/lib/security/csrf-client';
 import { analyzeArticle, analyzeGeo } from '@/lib/seo';

@@ -39,11 +39,11 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    // Client-side router cache: keep dynamic pages fresh for 30s,
-    // static/ISR pages for 3 minutes — avoids redundant refetches on back-navigation
+    // Client-side router cache: keep dynamic pages fresh for 60s,
+    // static/ISR pages for 5 minutes — avoids redundant refetches on back-navigation
     staleTimes: {
-      dynamic: 30,
-      static: 180,
+      dynamic: 60,
+      static: 300,
     },
   },
 
@@ -81,7 +81,7 @@ const nextConfig: NextConfig = {
       "'unsafe-inline'",
       ...(isDev ? ["'unsafe-eval'"] : []),
       "https://cdn.jsdelivr.net",
-      "https://cdn.tailwindcss.com",
+      // cdn.tailwindcss.com removed — Tailwind v4 is bundled locally, no CDN script needed
     ].join(' ');
 
     const ContentSecurityPolicy = [

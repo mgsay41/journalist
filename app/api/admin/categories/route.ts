@@ -66,19 +66,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build hierarchical tree structure (only root categories)
-    const rootCategories = categories.filter(cat => !cat.parentId);
-
-    const buildTree = (parentId: string | null): typeof categories => {
-      return categories
-        .filter(cat => cat.parentId === parentId)
-        .map(cat => ({
-          ...cat,
-          children: buildTree(cat.id),
-        }));
-    };
-
-    const tree = buildTree(null);
+    // Build hierarchical tree — O(n) via Map, replacing the old O(n²) recursive .filter() approach
+    type CategoryWithChildren = (typeof categories)[number] & { children: CategoryWithChildren[] };
+    const nodeMap = new Map<string, CategoryWithChildren>();
+    for (const cat of categories) {
+      nodeMap.set(cat.id, { ...cat, children: [] });
+    }
+    const tree: CategoryWithChildren[] = [];
+    for (const node of nodeMap.values()) {
+      if (node.parentId) {
+        nodeMap.get(node.parentId)?.children.push(node);
+      } else {
+        tree.push(node);
+      }
+    }
 
     return NextResponse.json({
       categories: tree.map(cat => ({
