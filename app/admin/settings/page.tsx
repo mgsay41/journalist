@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
-import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Loading } from '@/components/ui/Loading';
 import { SettingsTabs } from '@/components/admin/SettingsTabs';
@@ -75,8 +74,7 @@ async function getCategories() {
 }
 
 export default async function SettingsPage() {
-  const headersList = await headers();
-  const session = await auth.api.getSession({ headers: headersList });
+  const session = await getServerSession();
   if (!session) {
     redirect('/admin/login');
   }

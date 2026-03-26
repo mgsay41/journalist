@@ -54,10 +54,12 @@ export function HeaderInteractive({ mainCategories, siteName = 'الموقع ا�
         <div className="bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 border-b border-border">
           <div className="container mx-auto px-4">
 
-            {/* Logo + tagline — collapses on scroll */}
+            {/* Logo + tagline — collapses on scroll; always hidden on mobile */}
             <div
               className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                scrolled ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-20 opacity-100'
+                scrolled
+                  ? 'max-h-0 opacity-0 pointer-events-none'
+                  : 'max-h-0 opacity-0 pointer-events-none md:max-h-20 md:opacity-100 md:pointer-events-auto'
               }`}
             >
               <div className="pt-3 pb-2 md:pt-4 md:pb-3 flex flex-col items-start">
@@ -79,7 +81,7 @@ export function HeaderInteractive({ mainCategories, siteName = 'الموقع ا�
               {/* Compact logo — only visible when scrolled */}
               <div
                 className={`shrink-0 overflow-hidden transition-all duration-300 ${
-                  scrolled ? 'max-w-50 opacity-100' : 'max-w-0 opacity-0'
+                  scrolled ? 'max-w-50 opacity-100' : 'max-w-50 opacity-100 md:max-w-0 md:opacity-0'
                 }`}
               >
                 <Link

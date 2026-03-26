@@ -11,12 +11,13 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggle?: () => void;
   siteName?: string;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
-export function AdminSidebar({ className, isCollapsed = false, onToggle, siteName = 'صحيفتي' }: SidebarProps) {
+export function AdminSidebar({ className, isCollapsed = false, onToggle, siteName = 'صحيفتي', isMobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const toggleSection = (title: string) => {
     setCollapsedSections((prev) => {
@@ -36,17 +37,17 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
       {isMobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
+          onClick={onMobileClose}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — right side in RTL */}
       <aside
         className={cn(
-          'fixed top-0 end-0 h-full bg-card border-s border-border z-50',
+          'fixed top-0 start-0 h-full bg-card border-e border-border z-50',
           'flex flex-col transition-transform duration-300 ease-in-out',
           isCollapsed ? 'w-15' : 'w-60',
-          '-translate-x-full lg:translate-x-0',
+          'translate-x-full lg:translate-x-0',
           isMobileOpen && '!translate-x-0',
           className
         )}
@@ -110,7 +111,7 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
                     isCollapsed={isCollapsed}
                     isSectionCollapsed={collapsedSections.has(item.title)}
                     onToggle={() => toggleSection(item.title)}
-                    onMobileClick={() => setIsMobileOpen(false)}
+                    onMobileClick={() => onMobileClose?.()}
                   />
                 ))}
               </ul>
@@ -141,25 +142,6 @@ export function AdminSidebar({ className, isCollapsed = false, onToggle, siteNam
         </div>
       </aside>
 
-      {/* Mobile toggle button - positioned on the left side (end in RTL) */}
-      <button
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="lg:hidden fixed top-4 end-4 z-50 p-2.5 bg-card border border-border rounded-lg shadow-md hover:bg-muted transition-colors"
-        aria-label={isMobileOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
-      >
-        <svg
-          className="w-5 h-5 text-foreground"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          {isMobileOpen ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
     </>
   );
 }

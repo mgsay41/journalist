@@ -18,6 +18,7 @@ export function AdminLayoutWrapper({
   children,
 }: AdminLayoutWrapperProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
@@ -25,14 +26,18 @@ export function AdminLayoutWrapper({
       <AdminSidebar
         isCollapsed={isSidebarCollapsed}
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileOpen}
+        onMobileClose={() => setIsMobileOpen(false)}
       />
 
-      {/* Main content area */}
-      <div className={cn('transition-all duration-300', isSidebarCollapsed ? 'lg:ms-24' : 'lg:ms-56')}>
+      {/* Main content area — me-* creates right margin in RTL for the right-side sidebar */}
+      <div className={cn('transition-all duration-300', isSidebarCollapsed ? 'lg:me-24' : 'lg:me-56')}>
         {/* Top Bar */}
         <AdminTopBar
           userName={userName}
           breadcrumbs={breadcrumbs}
+          isMobileMenuOpen={isMobileOpen}
+          onMobileMenuToggle={() => setIsMobileOpen(!isMobileOpen)}
         />
 
         {/* Page content */}

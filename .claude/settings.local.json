@@ -78,7 +78,8 @@
       "Read(//c/Users/mgsay/.claude/plans/**)",
       "Bash(grep -E '\"\"@google/genai\"\"' package.json)",
       "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website' -type f \\\\\\(-name *auto-save* -o -name *publish* -o -name *featured* \\\\\\) -path */api/*)",
-      "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/app' -path *\\\\\\(public\\\\\\) -name *.tsx -o -path *\\\\\\(public\\\\\\) -name *.ts)"
+      "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/app' -path *\\\\\\(public\\\\\\) -name *.tsx -o -path *\\\\\\(public\\\\\\) -name *.ts)",
+      "Bash(grep -v \"^--$\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete",
