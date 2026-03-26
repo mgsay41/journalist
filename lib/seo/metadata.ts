@@ -186,6 +186,139 @@ export function generateArticleJsonLd({
 }
 
 /**
+ * Generate JSON-LD structured data for NewsArticle (journalism-specific)
+ * Preferred over generic Article for Google News eligibility.
+ */
+export function generateNewsArticleJsonLd({
+  title,
+  description,
+  image,
+  url,
+  authorName,
+  publishedTime,
+  modifiedTime,
+  section,
+  keywords,
+  wordCount,
+  siteName = 'موقعي',
+}: {
+  title: string;
+  description?: string;
+  image?: string;
+  url: string;
+  authorName: string;
+  publishedTime?: string;
+  modifiedTime?: string;
+  section?: string;
+  keywords?: string[];
+  wordCount?: number;
+  siteName?: string;
+}) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000';
+  const fullUrl = `${baseUrl}${url}`;
+  const fullImage = image ? (image.startsWith('http') ? image : `${baseUrl}${image}`) : `${baseUrl}/og-image.jpg`;
+
+  const jsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: title,
+    description: description || title,
+    image: {
+      '@type': 'ImageObject',
+      url: fullImage,
+      width: 1200,
+      height: 630,
+    },
+    url: fullUrl,
+    datePublished: publishedTime || new Date().toISOString(),
+    dateModified: modifiedTime || publishedTime || new Date().toISOString(),
+    author: {
+      '@type': 'Person',
+      name: authorName,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: siteName,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${baseUrl}/logo.png`,
+        width: 600,
+        height: 60,
+      },
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': fullUrl,
+    },
+    speakable: {
+      '@type': 'SpeakableSpecification',
+      cssSelector: ['h1', 'h2', '.article-lead'],
+    },
+    inLanguage: 'ar',
+  };
+
+  if (section) jsonLd.articleSection = section;
+  if (keywords && keywords.length > 0) jsonLd.keywords = keywords.join(', ');
+  if (wordCount) jsonLd.wordCount = wordCount;
+
+  return JSON.stringify(jsonLd);
+}
+
+/**
+ * Extract FAQ pairs from article HTML content.
+ * Finds H2/H3 headings with "?" / "؟" / "أسئلة شائعة" / "الأسئلة المتكررة"
+ * and pairs them with the immediately following paragraph.
+ */
+export function extractFaqFromContent(content: string): Array<{ question: string; answer: string }> {
+  const faqs: Array<{ question: string; answer: string }> = [];
+
+  // Match heading (h2/h3) followed by the immediately following paragraph
+  const headingRegex = /<(h[23])[^>]*>([\s\S]*?)<\/\1>\s*(<p[^>]*>[\s\S]*?<\/p>)?/gi;
+  let match;
+
+  while ((match = headingRegex.exec(content)) !== null) {
+    const headingText = match[2].replace(/<[^>]+>/g, '').trim();
+    const followingParagraph = match[3] ? match[3].replace(/<[^>]+>/g, '').trim() : '';
+
+    const isQuestion =
+      headingText.includes('?') ||
+      headingText.includes('؟') ||
+      headingText.includes('أسئلة شائعة') ||
+      headingText.includes('الأسئلة المتكررة') ||
+      headingText.toLowerCase().includes('faq');
+
+    if (isQuestion && followingParagraph.length > 10) {
+      faqs.push({ question: headingText, answer: followingParagraph });
+    }
+  }
+
+  return faqs;
+}
+
+/**
+ * Generate JSON-LD structured data for FAQPage.
+ * Enables FAQ rich results in Google Search.
+ */
+export function generateFaqJsonLd(faqs: Array<{ question: string; answer: string }>) {
+  if (faqs.length === 0) return null;
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(faq => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
+  };
+
+  return JSON.stringify(jsonLd);
+}
+
+/**
  * Generate JSON-LD structured data for Breadcrumb
  */
 export function generateBreadcrumbJsonLd(items: Array<{ name: string; url: string }>) {

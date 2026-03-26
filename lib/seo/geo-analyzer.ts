@@ -39,6 +39,15 @@ const FLUFF_PHRASES = [
   'لا خلاف',
   'كما هو معروف',
   'كما نعلم',
+  // Additional fluff phrases
+  'من الجدير بالذكر',
+  'تجدر الإشارة',
+  'من المهم الإشارة',
+  'يمكن القول',
+  'في هذا الصدد',
+  'في هذا السياق',
+  'على صعيد آخر',
+  'من ناحية أخرى',
 ];
 
 const ARABIC_LOCATION_KEYWORDS = [
@@ -84,14 +93,19 @@ export function analyzeGeo(content: string): GeoAnalysisResult {
   const wordCount = countWords(content);
   const firstParagraph = getFirstParagraph(content);
 
-  criteria.push(analyzeFirstParagraphCompleteness(firstParagraph));
-  criteria.push(analyzeAnswerFirstWriting(firstParagraph));
-  criteria.push(analyzeDataDensity(plainText, wordCount));
-  criteria.push(analyzeListsUsage(content));
-  criteria.push(analyzeQuotePresence(content));
-  criteria.push(analyzeFaqSection(content));
-  criteria.push(analyzeShortSentences(content));
-  criteria.push(analyzeNoFluffIntro(firstParagraph));
+  // Existing criteria (weights adjusted to keep total at 100 after adding 30 new pts)
+  criteria.push(analyzeFirstParagraphCompleteness(firstParagraph)); // 15 pts (was 20)
+  criteria.push(analyzeAnswerFirstWriting(firstParagraph));         // 10 pts (was 15)
+  criteria.push(analyzeDataDensity(plainText, wordCount));          // 15 pts
+  criteria.push(analyzeListsUsage(content));                        // 10 pts
+  criteria.push(analyzeQuotePresence(content));                     // 10 pts
+  criteria.push(analyzeFaqSection(content));                        // 10 pts (was 15)
+  criteria.push(analyzeShortSentences(content));                    // 10 pts
+  criteria.push(analyzeNoFluffIntro(firstParagraph));               //  5 pts (unchanged)
+  // New criteria
+  criteria.push(analyzeConversationalQueries(content));             // 10 pts
+  criteria.push(analyzeNamedEntities(content));                     //  5 pts
+  criteria.push(analyzeKeyTakeaways(content));                      // 10 pts (total = 110 → pct normalizes)
 
   const totalScore = criteria.reduce((sum, c) => sum + c.score, 0);
   const maxScore = criteria.reduce((sum, c) => sum + c.maxScore, 0);
@@ -118,30 +132,30 @@ function analyzeFirstParagraphCompleteness(firstParagraph: string): GeoCriterion
 
   const hasDate = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})|(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})|((اليوم|أمس|غداً|السبت|الأحد|الإثنين|الثلاثاء|الأربعاء|الخميس|الجمعة)(\s+الماضي|\s+القادم)?)|((يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر)(\s+\d{1,4})?)/i.test(firstParagraph);
   if (hasDate) {
-    score += 5;
+    score += 4;
     elements.push('تاريخ');
   }
 
   const hasLocation = ARABIC_LOCATION_KEYWORDS.some(kw => firstParagraph.includes(kw));
   if (hasLocation) {
-    score += 5;
+    score += 4;
     elements.push('مكان');
   }
 
   const hasPersonOrg = /[أ-ي]{3,}(?=\s+(الشركة|المؤسسة|الوزارة|الجامعة|البنك|الاتحاد|النادي|الهيئة|المجلس|الجمعية|الحكومة|الوزير|الرئيس|المدير|الرئيس التنفيذي|المتحدث|المصدر|المسؤول))/i.test(firstParagraph) ||
     /(قال|أعلن|صرح|أكد|أضاف|أوضح|ذكر|أشار|أفاد)\s+[أ-ي]{3,}/i.test(firstParagraph);
   if (hasPersonOrg) {
-    score += 5;
+    score += 4;
     elements.push('شخص/جهة');
   }
 
   const hasFactualVerb = FACTUAL_VERBS.some(verb => firstParagraph.includes(verb));
   if (hasFactualVerb) {
-    score += 5;
+    score += 3;
     elements.push('فعل واقعي');
   }
 
-  const maxScore = 20;
+  const maxScore = 15;
   let status: 'passed' | 'warning' | 'failed' = 'failed';
   if (score >= 15) {
     status = 'passed';
@@ -166,12 +180,12 @@ function analyzeFirstParagraphCompleteness(firstParagraph: string): GeoCriterion
 
 function analyzeAnswerFirstWriting(firstParagraph: string): GeoCriterionResult {
   const firstSentence = firstParagraph.split(/[.!?؟]/)[0]?.trim() || '';
-  
-  const startsWithFluff = FLUFF_PHRASES.some(phrase => 
+
+  const startsWithFluff = FLUFF_PHRASES.some(phrase =>
     firstSentence.startsWith(phrase) || firstSentence.includes(phrase + ' أن')
   );
 
-  const maxScore = 15;
+  const maxScore = 10;
   const score = startsWithFluff ? 0 : maxScore;
   const status: 'passed' | 'warning' | 'failed' = startsWithFluff ? 'failed' : 'passed';
 
@@ -285,8 +299,8 @@ function analyzeQuotePresence(content: string): GeoCriterionResult {
 
 function analyzeFaqSection(content: string): GeoCriterionResult {
   const headings = extractHeadings(content);
-  
-  const hasFaqHeading = headings.some(h => 
+
+  const hasFaqHeading = headings.some(h =>
     h.level >= 2 && h.level <= 3 && (
       h.text.includes('?') ||
       h.text.includes('؟') ||
@@ -296,7 +310,7 @@ function analyzeFaqSection(content: string): GeoCriterionResult {
     )
   );
 
-  const maxScore = 15;
+  const maxScore = 10;
   const score = hasFaqHeading ? maxScore : 0;
   const status: 'passed' | 'warning' | 'failed' = hasFaqHeading ? 'passed' : 'failed';
 
@@ -345,8 +359,136 @@ function analyzeShortSentences(content: string): GeoCriterionResult {
   };
 }
 
+/**
+ * Analyze conversational queries in headings — 10 pts
+ * AI engines prefer content that directly answers question-form headings
+ */
+function analyzeConversationalQueries(content: string): GeoCriterionResult {
+  const headings = extractHeadings(content);
+  const questionWords = ['كيف', 'لماذا', 'ما هو', 'ما هي', 'متى', 'أين', 'من هو', 'من هي', 'هل', 'ماذا', 'ما هي أسباب', 'ما هي طرق'];
+
+  const questionHeadings = headings.filter(h =>
+    h.level >= 2 && h.level <= 3 &&
+    questionWords.some(qw => h.text.includes(qw) || h.text.includes('؟') || h.text.includes('?'))
+  );
+
+  const maxScore = 10;
+  let score = 0;
+  let status: 'passed' | 'warning' | 'failed' = 'failed';
+
+  if (questionHeadings.length >= 2) {
+    score = maxScore;
+    status = 'passed';
+  } else if (questionHeadings.length === 1) {
+    score = Math.round(maxScore * 0.5);
+    status = 'warning';
+  }
+
+  return {
+    id: 'conversational-queries',
+    name: 'Conversational Query Headings',
+    nameAr: 'عناوين استفهامية',
+    description: 'Use question-form H2/H3 headings (How, Why, What) so AI engines can extract direct answers',
+    descriptionAr: 'استخدم عناوين H2/H3 بصيغة أسئلة (كيف، لماذا، ما هو) لتسهيل استخراج الإجابات من محركات الذكاء الاصطناعي',
+    score,
+    maxScore,
+    status,
+    value: `${questionHeadings.length} عنوان استفهامي`,
+    recommendation: score < maxScore ? 'أضف عناوين بصيغة أسئلة مثل "كيف...؟" و"لماذا...؟" لتحسين الظهور في محركات AI' : undefined,
+    recommendationAr: score < maxScore ? 'أضف عناوين بصيغة أسئلة مثل "كيف...؟" و"لماذا...؟" لتحسين الظهور في محركات AI' : undefined,
+  };
+}
+
+/**
+ * Analyze named entity density — 5 pts
+ * Named entities (people, organizations, places) make content more factual and extractable by AI
+ */
+function analyzeNamedEntities(content: string): GeoCriterionResult {
+  const plainText = stripHtml(content);
+  const entityMarkers = [
+    'وزير', 'رئيس', 'مدير', 'مسؤول', 'متحدث', 'خبير', 'مصدر',
+    'شركة', 'مؤسسة', 'هيئة', 'وزارة', 'جامعة', 'منظمة', 'اتحاد',
+    'مدينة', 'دولة', 'محافظة', 'منطقة', 'عاصمة',
+  ];
+
+  // Count occurrences near entity markers
+  let entityCount = 0;
+  entityMarkers.forEach(marker => {
+    const regex = new RegExp(`[أ-ي\\s]{2,15}\\s+${marker}|${marker}\\s+[أ-ي\\s]{2,15}`, 'g');
+    const matches = plainText.match(regex) || [];
+    entityCount += matches.length;
+  });
+
+  const maxScore = 5;
+  let score = 0;
+  let status: 'passed' | 'warning' | 'failed' = 'failed';
+
+  if (entityCount >= 5) {
+    score = maxScore;
+    status = 'passed';
+  } else if (entityCount >= 2) {
+    score = Math.round(maxScore * 0.6);
+    status = 'warning';
+  }
+
+  return {
+    id: 'named-entities',
+    name: 'Named Entities',
+    nameAr: 'الكيانات المسمّاة',
+    description: 'Include named people, organizations, and places to make content more factual',
+    descriptionAr: 'اذكر أشخاصاً ومؤسسات وأماكن محددة لجعل المحتوى أكثر واقعية',
+    score,
+    maxScore,
+    status,
+    value: `${entityCount} كيان`,
+    recommendation: score < maxScore ? 'اذكر أسماء أشخاص ومؤسسات وأماكن محددة لتعزيز مصداقية المحتوى' : undefined,
+    recommendationAr: score < maxScore ? 'اذكر أسماء أشخاص ومؤسسات وأماكن محددة لتعزيز مصداقية المحتوى' : undefined,
+  };
+}
+
+/**
+ * Analyze key takeaways section — 10 pts
+ * Summary boxes help AI engines extract the most important points quickly
+ */
+function analyzeKeyTakeaways(content: string): GeoCriterionResult {
+  const headings = extractHeadings(content);
+  const takeawayKeywords = ['أبرز', 'خلاصة', 'أهم النقاط', 'ما يجب معرفته', 'النقاط الرئيسية', 'ملخص', 'أهم ما جاء'];
+
+  const hasTakeawayHeading = headings.some(h =>
+    h.level >= 2 && h.level <= 3 &&
+    takeawayKeywords.some(kw => h.text.includes(kw))
+  );
+
+  // Also check for a <ul> that follows one of these keywords in the HTML
+  const hasTakeawayList = takeawayKeywords.some(kw => {
+    const idx = content.indexOf(kw);
+    if (idx === -1) return false;
+    const following = content.slice(idx, idx + 500);
+    return /<ul[^>]*>/i.test(following);
+  });
+
+  const hasTakeaways = hasTakeawayHeading || hasTakeawayList;
+  const maxScore = 10;
+  const score = hasTakeaways ? maxScore : 0;
+  const status: 'passed' | 'warning' | 'failed' = hasTakeaways ? 'passed' : 'failed';
+
+  return {
+    id: 'key-takeaways',
+    name: 'Key Takeaways Section',
+    nameAr: 'قسم أبرز النقاط',
+    description: 'Include a "key takeaways" or summary section with bullet points for AI extraction',
+    descriptionAr: 'أضف قسم "أبرز النقاط" أو خلاصة بنقاط مرقّمة لتسهيل الاستخراج بواسطة محركات AI',
+    score,
+    maxScore,
+    status,
+    value: hasTakeaways ? 'نعم' : 'لا',
+    recommendation: !hasTakeaways ? 'أضف قسم <h2>أبرز النقاط</h2> مع قائمة نقطية في بداية أو نهاية المقال' : undefined,
+    recommendationAr: !hasTakeaways ? 'أضف قسم <h2>أبرز النقاط</h2> مع قائمة نقطية في بداية أو نهاية المقال' : undefined,
+  };
+}
+
 function analyzeNoFluffIntro(firstParagraph: string): GeoCriterionResult {
-  const startsWithFluff = FLUFF_PHRASES.some(phrase => 
+  const startsWithFluff = FLUFF_PHRASES.some(phrase =>
     firstParagraph.trim().startsWith(phrase)
   );
 

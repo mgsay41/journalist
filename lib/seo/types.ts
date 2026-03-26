@@ -58,29 +58,30 @@ export interface ArticleContent {
   hasFeaturedImage: boolean;
   imageCount: number;
   imagesWithAlt: number;
+  authorName?: string;
 }
 
 // SEO Thresholds
 export const SEO_THRESHOLDS = {
   title: {
     minLength: 40,
-    maxLength: 60,
-    optimalMin: 45,
-    optimalMax: 55,
+    maxLength: 65,
+    optimalMin: 50,
+    optimalMax: 60,
   },
   metaDescription: {
     minLength: 120,
-    maxLength: 160,
-    optimalMin: 130,
-    optimalMax: 150,
+    maxLength: 165,
+    optimalMin: 140,
+    optimalMax: 160,
   },
   content: {
     minWords: 300,
-    goodWords: 600,
-    excellentWords: 1000,
+    goodWords: 800,
+    excellentWords: 1500,
   },
   headings: {
-    minH2: 2,
+    minH2: 3,
     minH3: 1,
   },
   images: {
@@ -88,8 +89,8 @@ export const SEO_THRESHOLDS = {
     altTextRequired: true,
   },
   links: {
-    minInternal: 1,
-    minExternal: 1,
+    minInternal: 3,
+    minExternal: 2,
   },
   keyword: {
     minDensity: 0.5, // percentage
@@ -101,7 +102,13 @@ export const SEO_THRESHOLDS = {
   },
   readability: {
     maxSentenceLength: 25,
-    maxParagraphLength: 150,
+    idealSentenceMin: 12,
+    idealSentenceMax: 20,
+    maxParagraphLength: 120,
+  },
+  eatSignals: {
+    minQuotes: 1,
+    minExternalAuthority: 1,
   },
 };
 
@@ -143,11 +150,17 @@ export const SEO_WEIGHTS = {
     powerWordsInTitle: 4,
     numberInTitle: 3,
   },
-  // Content Readability Tests (20 points)
+  // Content Readability Tests (16 points — reduced to make room for E-E-A-T)
   contentReadability: {
-    tableOfContents: 5,
+    tableOfContents: 3,
     shortParagraphs: 5,
     mediaPresence: 5,
-    readabilityScore: 5,
+    readabilityScore: 3,
+  },
+  // E-E-A-T Tests (10 points)
+  eeat: {
+    authorMention: 4,
+    quotePresence: 3,
+    authorityExternalLinks: 3,
   },
 };

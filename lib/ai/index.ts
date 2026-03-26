@@ -23,6 +23,8 @@ export {
   autoFixExternalLinks,
   autoFixLongParagraphs,
   autoFixSeoIssues,
+  generateFaqSection,
+  generateKeyTakeaways,
   safeAiCall,
   parseJsonResponse,
 } from "./service";
@@ -58,6 +60,8 @@ export type {
   AutoFixLongParagraphsResult,
   AutoFixSeoIssuesChanges,
   AutoFixSeoIssuesResult,
+  FaqGenerationResult,
+  KeyTakeawaysResult,
   AiResult,
   AiResultWithUsage,
   TokenUsage,

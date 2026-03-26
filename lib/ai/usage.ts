@@ -36,7 +36,9 @@ export type AiFeature =
   | "writing-assistant-fix-passive"
   | "writing-assistant-suggest-transitions"
   | "writing-assistant-expand-text"
-  | "writing-assistant-summarize-text";
+  | "writing-assistant-summarize-text"
+  | "faq-generation"
+  | "key-takeaways";
 
 // Usage record interface
 export interface UsageRecord {

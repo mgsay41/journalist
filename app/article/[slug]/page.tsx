@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getSiteSettings } from '@/lib/settings/getSiteSettings';
+import { extractFaqFromContent, generateFaqJsonLd } from '@/lib/seo/metadata';
 import { PublicLayout } from '@/components/public';
 import { ArticleContent } from '@/components/public/ArticleContent';
 import { SocialShare } from '@/components/public/SocialShare';
@@ -365,7 +366,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
   const articleUrl = `${baseUrl}/article/${slug}`;
 
-  // JSON-LD structured data — Article + BreadcrumbList
+  // JSON-LD structured data — NewsArticle + BreadcrumbList
+  const siteSettings = await getSiteSettings();
   const breadcrumbItems: object[] = [
     { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: baseUrl },
   ];
@@ -385,10 +387,12 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     '@context': 'https://schema.org',
     '@graph': [
       {
-        '@type': 'Article',
+        '@type': 'NewsArticle',
         headline: article.title,
         description: article.excerpt || article.metaDescription || '',
-        image: article.featuredImage?.url || [],
+        image: article.featuredImage
+          ? { '@type': 'ImageObject', url: article.featuredImage.url, width: 1200, height: 630 }
+          : [],
         datePublished: article.publishedAt?.toISOString(),
         dateModified: article.updatedAt.toISOString(),
         author: {
@@ -397,16 +401,26 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         },
         publisher: {
           '@type': 'Organization',
-          name: 'الموقع الصحفي',
+          name: siteSettings.siteName,
           logo: {
             '@type': 'ImageObject',
             url: `${baseUrl}/logo.png`,
+            width: 600,
+            height: 60,
           },
         },
         mainEntityOfPage: {
           '@type': 'WebPage',
           '@id': articleUrl,
         },
+        speakable: {
+          '@type': 'SpeakableSpecification',
+          cssSelector: ['h1', 'h2', '.article-lead'],
+        },
+        inLanguage: 'ar',
+        ...(article.wordCount ? { wordCount: article.wordCount } : {}),
+        ...(article.tags.length > 0 ? { keywords: article.tags.map(t => t.name).join(', ') } : {}),
+        ...(article.categories.length > 0 ? { articleSection: article.categories[0].name } : {}),
       },
       {
         '@type': 'BreadcrumbList',
@@ -414,6 +428,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       },
     ],
   };
+
+  // FAQ JSON-LD — auto-detected from content headings with "?" or "أسئلة شائعة"
+  const faqPairs = extractFaqFromContent(article.content || '');
+  const faqJsonLd = faqPairs.length > 0 ? generateFaqJsonLd(faqPairs) : null;
 
   return (
     <PublicLayout categories={categories} popularTags={popularTags}>
@@ -427,6 +445,12 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: faqJsonLd }}
+        />
+      )}
 
       {/* ── Breadcrumb ── */}
       {article.categories.length > 0 && (

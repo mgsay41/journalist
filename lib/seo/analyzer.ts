@@ -153,6 +153,15 @@ export function analyzeArticle(article: ArticleContent): SeoAnalysisResult {
     }
   }
 
+  // 14. E-E-A-T analysis (Experience, Expertise, Authority, Trust)
+  const eeatCriteria = analyzeEeat(article.content, article.authorName);
+  criteria.push(...eeatCriteria);
+  eeatCriteria.forEach(c => {
+    if (c.status !== 'passed') {
+      suggestions.push(generateSuggestion(c, c.id === 'eeat-quotes' ? 'medium' : 'low'));
+    }
+  });
+
   // Calculate total score
   const totalScore = criteria.reduce((sum, c) => sum + c.score, 0);
   const maxScore = criteria.reduce((sum, c) => sum + c.maxScore, 0);
@@ -716,6 +725,76 @@ function analyzeSlug(slug?: string): SeoCriterion {
 }
 
 /**
+ * Analyze E-E-A-T signals (Experience, Expertise, Authority, Trust)
+ * 10 points total: author mention (4) + expert quotes (3) + authority links (3)
+ */
+function analyzeEeat(content: string, authorName?: string): SeoCriterion[] {
+  const criteria: SeoCriterion[] = [];
+
+  // Author mention / attribution — 4 pts
+  const attributionWords = ['كاتب', 'محرر', 'مراسل', 'خبير', 'مصدر', 'بحسب', 'وفق', 'أفاد', 'قال', 'صرح', 'أعلن', 'أكد'];
+  const hasAuthorMention =
+    (Boolean(authorName) && content.includes(authorName!)) ||
+    attributionWords.some(w => content.includes(w));
+  const authorMaxScore = SEO_WEIGHTS.eeat.authorMention;
+  criteria.push({
+    id: 'eeat-author',
+    name: 'Author / Attribution',
+    nameAr: 'الكاتب / الإسناد',
+    description: 'Content should mention the author or attribute information to named sources',
+    descriptionAr: 'يجب أن يذكر المحتوى الكاتب أو يُسند المعلومات لمصادر مسمّاة',
+    weight: authorMaxScore,
+    status: hasAuthorMention ? 'passed' : 'warning',
+    score: hasAuthorMention ? authorMaxScore : Math.round(authorMaxScore * 0.3),
+    maxScore: authorMaxScore,
+    value: hasAuthorMention ? 'نعم' : 'لا',
+    recommendation: !hasAuthorMention ? 'Attribute information to named sources or authors' : undefined,
+    recommendationAr: !hasAuthorMention ? 'أسند المعلومات لمصادر أو كتّاب مسمّين لتعزيز المصداقية' : undefined,
+  });
+
+  // Expert quotes — 3 pts
+  const hasBlockquote = /<blockquote[^>]*>/i.test(content);
+  const hasArabicQuote = /«[^»]+»/.test(content);
+  const hasQuote = hasBlockquote || hasArabicQuote;
+  const quoteMaxScore = SEO_WEIGHTS.eeat.quotePresence;
+  criteria.push({
+    id: 'eeat-quotes',
+    name: 'Expert Quotes',
+    nameAr: 'اقتباسات الخبراء',
+    description: 'Include direct quotes from experts or official sources',
+    descriptionAr: 'أضف اقتباسات مباشرة من خبراء أو مصادر رسمية',
+    weight: quoteMaxScore,
+    status: hasQuote ? 'passed' : 'failed',
+    score: hasQuote ? quoteMaxScore : 0,
+    maxScore: quoteMaxScore,
+    value: hasQuote ? 'نعم' : 'لا',
+    recommendation: !hasQuote ? 'Add blockquotes or direct quotes from authoritative sources' : undefined,
+    recommendationAr: !hasQuote ? 'أضف اقتباسات مباشرة من مصادر موثوقة (<blockquote> أو «...»)' : undefined,
+  });
+
+  // Authority external links — 3 pts
+  const authorityPattern = /href="https?:\/\/[^"]*\.(gov|edu)[^"]*"|href="https?:\/\/(www\.)?(wikipedia\.org|who\.int|un\.org|bbc\.com|reuters\.com|aljazeera\.net|ap\.org|afp\.com)[^"]*"/i;
+  const hasAuthorityLink = authorityPattern.test(content);
+  const authorityMaxScore = SEO_WEIGHTS.eeat.authorityExternalLinks;
+  criteria.push({
+    id: 'eeat-authority-links',
+    name: 'Authority Links',
+    nameAr: 'روابط موثوقة',
+    description: 'Link to government, educational, or reputable news sources',
+    descriptionAr: 'أضف روابط لمصادر حكومية أو تعليمية أو إخبارية موثوقة',
+    weight: authorityMaxScore,
+    status: hasAuthorityLink ? 'passed' : 'warning',
+    score: hasAuthorityLink ? authorityMaxScore : Math.round(authorityMaxScore * 0.4),
+    maxScore: authorityMaxScore,
+    value: hasAuthorityLink ? 'نعم' : 'لا',
+    recommendation: !hasAuthorityLink ? 'Link to authoritative external sources (.gov, .edu, Wikipedia, major news outlets)' : undefined,
+    recommendationAr: !hasAuthorityLink ? 'أضف روابط لمصادر خارجية موثوقة (حكومية، تعليمية، ويكيبيديا، وسائل إعلام كبرى)' : undefined,
+  });
+
+  return criteria;
+}
+
+/**
  * Group criteria by category for display
  */
 function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
@@ -768,6 +847,14 @@ function groupCriteriaByCategory(criteria: SeoCriterion[]): SeoCategory[] {
       score: 0,
       maxScore: 0,
     },
+    {
+      id: 'eeat',
+      name: 'E-E-A-T',
+      nameAr: 'الخبرة والمصداقية',
+      criteria: criteria.filter(c => c.id.startsWith('eeat-')),
+      score: 0,
+      maxScore: 0,
+    },
   ];
 
   // Calculate category scores
@@ -806,4 +893,5 @@ export {
   analyzeKeyword,
   analyzeReadability,
   analyzeSlug,
+  analyzeEeat,
 };

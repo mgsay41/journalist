@@ -12,3 +12,7 @@ export * from './tests';
 // GEO (Generative Engine Optimization) analysis
 export { analyzeGeo, GEO_THRESHOLDS } from './geo-analyzer';
 export type { GeoAnalysisResult, GeoCriterionResult } from './geo-analyzer';
+
+// Journalistic Structure analysis
+export { analyzeStructure, STRUCTURE_THRESHOLDS } from './structure-analyzer';
+export type { StructureAnalysisResult, StructureCriterionResult } from './structure-analyzer';

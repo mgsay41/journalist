@@ -42,6 +42,8 @@ import {
   buildAutoFixExternalLinksPrompt,
   buildAutoFixLongParagraphsPrompt,
   buildAutoFixSeoIssuesPrompt,
+  buildFaqGenerationPrompt,
+  buildKeyTakeawaysPrompt,
 } from "./prompts";
 
 // Default model
@@ -649,6 +651,66 @@ export async function autoFixSeoIssues(data: {
   });
   return {
     data: parseJsonResponse<AutoFixSeoIssuesResult>(result.text),
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+// ============================================
+// FAQ Generation
+// ============================================
+
+export interface FaqGenerationResult {
+  faqs: Array<{ question: string; answer: string }>;
+  html: string;
+}
+
+export async function generateFaqSection(data: {
+  title: string;
+  content: string;
+  focusKeyword?: string;
+}): Promise<AiResultWithUsage<FaqGenerationResult>> {
+  const prompt = buildFaqGenerationPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 4096,
+    temperature: 0.5,
+    useCache: false,
+  });
+  const parsed = parseJsonResponse<{ faqs: Array<{ question: string; answer: string }> }>(result.text);
+  const html =
+    '<h2>أسئلة شائعة</h2>' +
+    parsed.faqs
+      .map(f => `<h3>${f.question}</h3><p>${f.answer}</p>`)
+      .join('');
+  return {
+    data: { faqs: parsed.faqs, html },
+    usage: extractUsage(result, DEFAULT_MODEL),
+  };
+}
+
+// ============================================
+// Key Takeaways Generation
+// ============================================
+
+export interface KeyTakeawaysResult {
+  takeaways: string[];
+  html: string;
+}
+
+export async function generateKeyTakeaways(data: {
+  title: string;
+  content: string;
+}): Promise<AiResultWithUsage<KeyTakeawaysResult>> {
+  const prompt = buildKeyTakeawaysPrompt(data);
+  const result = await generateContent(prompt, {
+    ...DEFAULT_OPTIONS,
+    maxTokens: 2048,
+    temperature: 0.4,
+    useCache: false,
+  });
+  const parsed = parseJsonResponse<KeyTakeawaysResult>(result.text);
+  return {
+    data: parsed,
     usage: extractUsage(result, DEFAULT_MODEL),
   };
 }

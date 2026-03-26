@@ -387,6 +387,9 @@ export function UnifiedAiPanel({
   const [liveSeoScore, setLiveSeoScore] = useState<{ score: number; status: string }>({ score: 0, status: 'needs-improvement' });
   const [aiEditCount, setAiEditCount] = useState(0);
   const [liveGeoScore, setLiveGeoScore] = useState<{ score: number; status: string }>({ score: 0, status: 'needs-improvement' });
+  const [liveStructureScore, setLiveStructureScore] = useState<number>(0);
+  const [faqLoading, setFaqLoading] = useState(false);
+  const [takeawaysLoading, setTakeawaysLoading] = useState(false);
   const [aiChanges, setAiChanges] = useState<AiChange[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [sectionStates, setSectionStates] = useState<Record<string, boolean>>(loadSectionStates);
@@ -449,6 +452,10 @@ export function UnifiedAiPanel({
 
       const structureChecklist = analyzeStructure(title, content, focusKeyword || undefined);
       const structurePassed = structureChecklist.filter(item => item.passed).length;
+      const structureScore = structureChecklist.length > 0
+        ? Math.round((structurePassed / structureChecklist.length) * 100)
+        : 0;
+      setLiveStructureScore(structureScore);
 
       onScoreChange?.({
         seo: result.percentage,
@@ -983,6 +990,65 @@ export function UnifiedAiPanel({
     }
   }, []);
 
+  // Generate FAQ section and append to article content
+  const handleGenerateFaq = useCallback(async () => {
+    if (!title.trim() || !content.trim()) return;
+    setFaqLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/ai/faq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'فشل توليد الأسئلة الشائعة');
+        return;
+      }
+      if (data.html && editorRef.current) {
+        onContentChange(content + data.html);
+      }
+    } catch {
+      setError('فشل الاتصال بالخادم');
+    } finally {
+      setFaqLoading(false);
+    }
+  }, [title, content, editorRef, onContentChange]);
+
+  // Generate Key Takeaways and prepend to article content (after first paragraph)
+  const handleGenerateTakeaways = useCallback(async () => {
+    if (!title.trim() || !content.trim()) return;
+    setTakeawaysLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/ai/key-takeaways', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'فشل توليد أبرز النقاط');
+        return;
+      }
+      if (data.html && editorRef.current) {
+        // Insert after first </p> tag (after the lead paragraph)
+        const firstParaEnd = content.indexOf('</p>');
+        if (firstParaEnd !== -1) {
+          const newContent = content.slice(0, firstParaEnd + 4) + data.html + content.slice(firstParaEnd + 4);
+          onContentChange(newContent);
+        } else {
+          onContentChange(data.html + content);
+        }
+      }
+    } catch {
+      setError('فشل الاتصال بالخادم');
+    } finally {
+      setTakeawaysLoading(false);
+    }
+  }, [title, content, editorRef, onContentChange]);
+
   const allCategories = [
     ...(completionResults?.availableCategories || []),
     ...newCategoryNames.map(name => ({ id: `new-${name}`, name })),
@@ -1039,40 +1105,85 @@ export function UnifiedAiPanel({
         </Alert>
       )}
 
-      <div className="flex items-center justify-center gap-6 py-3">
+      <div className="flex items-center justify-center gap-4 py-3">
         <ScoreRing score={liveSeoScore.score} label="SEO" empty={wordCount < 10} />
         <ScoreRing score={liveGeoScore.score} label="GEO" empty={wordCount < 10} />
+        <ScoreRing score={liveStructureScore} label="بنية" empty={wordCount < 10} />
         <div className="flex flex-col items-center gap-1">
-          <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
-            <span className="text-base font-bold text-foreground">{wordCount}</span>
+          <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center">
+            <span className="text-xs font-bold text-foreground">{wordCount}</span>
           </div>
           <span className="text-[10px] text-muted-foreground font-medium">كلمة</span>
         </div>
       </div>
 
-      {/* idle: show analyze button */}
+      {/* idle: show analyze button + quick tools */}
       {aiPhase === 'idle' && (
-        <button
-          onClick={handleAnalyze}
-          disabled={!title.trim() || wordCount < 50}
-          className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            background: (!title.trim() || wordCount < 50)
-              ? undefined
-              : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-            boxShadow: (!title.trim() || wordCount < 50) ? undefined : '0 2px 12px rgba(99,102,241,0.35)',
-            backgroundColor: (!title.trim() || wordCount < 50) ? 'var(--muted)' : undefined,
-            color: (!title.trim() || wordCount < 50) ? 'var(--muted-foreground)' : undefined,
-          }}
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-          </svg>
-          تحليل أولي
-          {wordCount < 50 && wordCount > 0 && (
-            <span className="text-[10px] opacity-70">({50 - wordCount} كلمة متبقية)</span>
+        <div className="space-y-2">
+          <button
+            onClick={handleAnalyze}
+            disabled={!title.trim() || wordCount < 50}
+            className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: (!title.trim() || wordCount < 50)
+                ? undefined
+                : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              boxShadow: (!title.trim() || wordCount < 50) ? undefined : '0 2px 12px rgba(99,102,241,0.35)',
+              backgroundColor: (!title.trim() || wordCount < 50) ? 'var(--muted)' : undefined,
+              color: (!title.trim() || wordCount < 50) ? 'var(--muted-foreground)' : undefined,
+            }}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            تحليل أولي
+            {wordCount < 50 && wordCount > 0 && (
+              <span className="text-[10px] opacity-70">({50 - wordCount} كلمة متبقية)</span>
+            )}
+          </button>
+
+          {/* Quick GEO tools — available when article has enough content */}
+          {wordCount >= 50 && title.trim() && (
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleGenerateFaq}
+                disabled={faqLoading}
+                className="flex-1 flex items-center justify-center gap-1 h-8 rounded-lg text-[11px] font-medium border border-border/60 hover:bg-muted/40 transition-colors disabled:opacity-50"
+                title="توليد قسم أسئلة شائعة وإضافته في نهاية المقال"
+              >
+                {faqLoading ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                أسئلة شائعة
+              </button>
+              <button
+                onClick={handleGenerateTakeaways}
+                disabled={takeawaysLoading}
+                className="flex-1 flex items-center justify-center gap-1 h-8 rounded-lg text-[11px] font-medium border border-border/60 hover:bg-muted/40 transition-colors disabled:opacity-50"
+                title="توليد قسم أبرز النقاط وإضافته في بداية المقال"
+              >
+                {takeawaysLoading ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                )}
+                أبرز النقاط
+              </button>
+            </div>
           )}
-        </button>
+        </div>
       )}
 
       {/* analyzing / rewriting: show step progress */}
