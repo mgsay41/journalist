@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { updateSettingsSchema } from '@/lib/validations/settings';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { revalidateTag } from 'next/cache';
@@ -9,9 +9,9 @@ import { revalidateTag } from 'next/cache';
  * GET /api/admin/settings
  * Get user settings (creates default if not exists)
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getServerSession();
     if (!session) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
     }
