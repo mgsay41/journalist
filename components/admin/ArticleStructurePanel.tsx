@@ -259,9 +259,9 @@ function checkInternalLinks(content: string): { passed: boolean; details: string
   
   return {
     passed: count >= 1,
-    details: count >= 1 
+    details: count >= 1
       ? `${count} رابط داخلي`
-      : 'لا توجد روابط داخلية'
+      : 'لا توجد روابط داخلية (يجب إضافته يدوياً)'
   };
 }
 

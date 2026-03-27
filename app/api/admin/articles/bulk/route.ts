@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/auth';
+import { generateAndCacheTts } from '@/lib/tts/service';
 import { z } from 'zod';
 
 const bulkActionSchema = z.object({
@@ -94,8 +95,13 @@ export async function POST(request: NextRequest) {
         });
         break;
 
-      case 'publish':
-        // Publish articles
+      case 'publish': {
+        // Fetch slug+content before updating so we can trigger TTS
+        const articlesToPublish = await prisma.article.findMany({
+          where: { id: { in: articleIds } },
+          select: { slug: true, content: true },
+        });
+
         result = await prisma.article.updateMany({
           where: { id: { in: articleIds } },
           data: {
@@ -103,7 +109,17 @@ export async function POST(request: NextRequest) {
             publishedAt: new Date(),
           },
         });
+
+        // Fire TTS in background for each article — no await, non-blocking
+        for (const a of articlesToPublish) {
+          if (a.slug && a.content) {
+            generateAndCacheTts(a.slug, a.content).catch((err) => {
+              console.error(`TTS pre-generation failed for ${a.slug}:`, err);
+            });
+          }
+        }
         break;
+      }
 
       case 'draft':
         // Set articles to draft

@@ -18,6 +18,7 @@ import type { RewriteArticleResult, ArticleGrammarIssue } from '@/lib/ai';
 import { analyzeArticle, analyzeGeo, type ArticleContent } from '@/lib/seo';
 import { computeParagraphDiff, buildAiEditMarksFromDiff } from '@/lib/ai/diff-utils';
 import { ArticleStructurePanel, analyzeStructure } from './ArticleStructurePanel';
+import { fetchWithCsrf } from '@/lib/security/csrf-client';
 
 interface SuggestedCategory {
   name: string;
@@ -398,6 +399,14 @@ export function UnifiedAiPanel({
   const [conclusionSuggestion, setConclusionSuggestion] = useState<string | null>(null);
   const [introApplied, setIntroApplied] = useState(false);
   const [conclusionApplied, setConclusionApplied] = useState(false);
+  const [preloadedCategories, setPreloadedCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [preloadedTags, setPreloadedTags] = useState<Array<{ id: string; name: string }>>([]);
+  const [catSearchQuery, setCatSearchQuery] = useState("");
+  const [catSearchOpen, setCatSearchOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [tagSearchOpen, setTagSearchOpen] = useState(false);
+  const catSearchRef = useRef<HTMLDivElement>(null);
+  const tagSearchRef = useRef<HTMLDivElement>(null);
 
   const RESULTS_KEY = `ai-results-${articleId ?? "new"}`;
 
@@ -416,6 +425,179 @@ export function UnifiedAiPanel({
       saveSectionStates(newStates);
       return newStates;
     });
+  }, []);
+
+  const createNewTaxonomy = useCallback(
+    async (
+      newCatNames: string[],
+      newTagNames_: string[],
+      existingCatIds: string[],
+      existingTagIds: string[],
+    ) => {
+      const createdCatIds: string[] = [];
+      const failedCatNames: string[] = [];
+      for (const name of newCatNames) {
+        try {
+          const res = await fetchWithCsrf("/api/admin/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.id) createdCatIds.push(data.id);
+            else failedCatNames.push(name);
+          } else failedCatNames.push(name);
+        } catch {
+          failedCatNames.push(name);
+        }
+      }
+
+      const createdTagIds: string[] = [];
+      const failedTagNames: string[] = [];
+      for (const name of newTagNames_) {
+        try {
+          const res = await fetchWithCsrf("/api/admin/tags", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.id) createdTagIds.push(data.id);
+            else failedTagNames.push(name);
+          } else failedTagNames.push(name);
+        } catch {
+          failedTagNames.push(name);
+        }
+      }
+
+      const allCatIds = Array.from(
+        new Set([...selectedCategoryIds, ...existingCatIds, ...createdCatIds]),
+      );
+      onCategoriesChange(allCatIds, failedCatNames);
+      setNewCategoryNames(failedCatNames);
+
+      const allTagIds = Array.from(
+        new Set([...selectedTagIds, ...existingTagIds, ...createdTagIds]),
+      );
+      onTagsChange(allTagIds, failedTagNames);
+      setNewTagNames(failedTagNames);
+
+      if (createdCatIds.length > 0 || createdTagIds.length > 0) {
+        fetch("/api/admin/categories?flat=true")
+          .then((r) => r.json())
+          .then((cats) => {
+            setPreloadedCategories(
+              (cats.categories || []).map((c: { id: string; name: string }) => ({
+                id: c.id,
+                name: c.name,
+              })),
+            );
+          })
+          .catch(() => {});
+        fetch("/api/admin/tags?includeCount=false")
+          .then((r) => r.json())
+          .then((tags) => {
+            setPreloadedTags(
+              (tags.tags || []).map((t: { id: string; name: string }) => ({
+                id: t.id,
+                name: t.name,
+              })),
+            );
+          })
+          .catch(() => {});
+      }
+    },
+    [selectedCategoryIds, selectedTagIds, onCategoriesChange, onTagsChange],
+  );
+
+  const createAndSelectCategory = useCallback(
+    async (name: string) => {
+      try {
+        const res = await fetchWithCsrf("/api/admin/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.id) {
+            onCategoriesChange(
+              [...selectedCategoryIds, data.id],
+              newCategoryNames,
+            );
+            setPreloadedCategories((prev) => [
+              ...prev,
+              { id: data.id, name: data.name },
+            ]);
+          }
+        }
+      } catch {}
+      setCatSearchQuery("");
+      setCatSearchOpen(false);
+    },
+    [selectedCategoryIds, newCategoryNames, onCategoriesChange],
+  );
+
+  const createAndSelectTag = useCallback(
+    async (name: string) => {
+      try {
+        const res = await fetchWithCsrf("/api/admin/tags", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.id) {
+            onTagsChange(
+              [...selectedTagIds, data.id],
+              newTagNames,
+            );
+            setPreloadedTags((prev) => [
+              ...prev,
+              { id: data.id, name: data.name },
+            ]);
+          }
+        }
+      } catch {}
+      setTagSearchQuery("");
+      setTagSearchOpen(false);
+    },
+    [selectedTagIds, newTagNames, onTagsChange],
+  );
+
+  // Preload categories and tags so taxonomy panel works before AI analysis
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/admin/categories?flat=true').then(r => r.json()),
+      fetch('/api/admin/tags?includeCount=false').then(r => r.json()),
+    ]).then(([cats, tags]) => {
+      setPreloadedCategories(
+        (cats.categories || []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))
+      );
+      setPreloadedTags(
+        (tags.tags || []).map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))
+      );
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        catSearchRef.current &&
+        !catSearchRef.current.contains(e.target as Node)
+      )
+        setCatSearchOpen(false);
+      if (
+        tagSearchRef.current &&
+        !tagSearchRef.current.contains(e.target as Node)
+      )
+        setTagSearchOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   useEffect(() => {
@@ -623,25 +805,33 @@ export function UnifiedAiPanel({
             if (data.data.excerpt) {
               onExcerptChange(data.data.excerpt);
             }
-            const aiCatIds = data.data.suggestedCategories
+            const existingCatIds = (data.data.suggestedCategories || [])
               .filter((c: SuggestedCategory) => c.isExisting && c.id)
               .map((c: SuggestedCategory) => c.id as string);
-            const newCats = data.data.suggestedCategories
+            const newCatNames = (data.data.suggestedCategories || [])
               .filter((c: SuggestedCategory) => !c.isExisting)
               .map((c: SuggestedCategory) => c.name);
-            const mergedCatIds = Array.from(new Set([...selectedCategoryIds, ...aiCatIds]));
-            onCategoriesChange(mergedCatIds, newCats);
-            setNewCategoryNames(newCats);
-
-            const aiTagIds = data.data.suggestedTags
+            const existingTagIds = (data.data.suggestedTags || [])
               .filter((t: SuggestedTag) => t.isExisting && t.id)
               .map((t: SuggestedTag) => t.id as string);
-            const newTags = data.data.suggestedTags
+            const newTagNames_ = (data.data.suggestedTags || [])
               .filter((t: SuggestedTag) => !t.isExisting)
               .map((t: SuggestedTag) => t.name);
-            const mergedTagIds = Array.from(new Set([...selectedTagIds, ...aiTagIds]));
-            onTagsChange(mergedTagIds, newTags);
-            setNewTagNames(newTags);
+
+            if (
+              existingCatIds.length > 0 ||
+              newCatNames.length > 0 ||
+              existingTagIds.length > 0 ||
+              newTagNames_.length > 0
+            ) {
+              await createNewTaxonomy(
+                newCatNames,
+                newTagNames_,
+                existingCatIds,
+                existingTagIds,
+              );
+              setSectionStates((prev) => ({ ...prev, taxonomy: true }));
+            }
 
             setAiPhase('complete');
             setAiMessage('اكتمل التحليل');
@@ -739,7 +929,7 @@ export function UnifiedAiPanel({
       setError(err instanceof Error ? err.message : 'حدث خطأ أثناء التحليل');
       setAiPhase('error');
     }
-  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange, editorRef, onTitleSuggestionsReady, onIntroGenerated, onConclusionGenerated, RESULTS_KEY]);
+  }, [title, content, wordCount, onFocusKeywordChange, onSlugChange, onExcerptChange, onMetaTitleChange, onMetaDescriptionChange, onCategoriesChange, onTagsChange, editorRef, onTitleSuggestionsReady, onIntroGenerated, onConclusionGenerated, RESULTS_KEY, createNewTaxonomy]);
 
   const handleRewrite = useCallback(async () => {
     if (!focusKeyword.trim()) {
@@ -784,6 +974,7 @@ export function UnifiedAiPanel({
       );
       const structureTopIssues = structureChecklist
         .filter((item) => !item.passed)
+        .filter((item) => !item.label.includes('رابط داخلي')) // AI can't add real internal links
         .map((item) => item.details ? `${item.label}: ${item.details}` : item.label)
         .slice(0, 5);
 
@@ -1050,11 +1241,11 @@ export function UnifiedAiPanel({
   }, [title, content, editorRef, onContentChange]);
 
   const allCategories = [
-    ...(completionResults?.availableCategories || []),
+    ...(completionResults?.availableCategories || preloadedCategories),
     ...newCategoryNames.map(name => ({ id: `new-${name}`, name })),
   ];
   const allTags = [
-    ...(completionResults?.availableTags || []),
+    ...(completionResults?.availableTags || preloadedTags),
     ...newTagNames.map(name => ({ id: `new-${name}`, name })),
   ];
 
@@ -1596,23 +1787,94 @@ export function UnifiedAiPanel({
             );
           })}
         </div>
-        <input
-          type="text"
-          placeholder="أضف تصنيفاً جديداً... (Enter للإضافة)"
-          dir="rtl"
-          className="mt-2 w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              const val = (e.target as HTMLInputElement).value.trim();
-              if (val && !newCategoryNames.includes(val)) {
-                const updated = [...newCategoryNames, val];
-                setNewCategoryNames(updated);
-                onCategoriesChange(selectedCategoryIds, updated);
-              }
-              (e.target as HTMLInputElement).value = '';
-            }
-          }}
-        />
+        <div ref={catSearchRef} className="relative mt-2">
+          <input
+            type="text"
+            value={catSearchQuery}
+            onChange={(e) => {
+              setCatSearchQuery(e.target.value);
+              setCatSearchOpen(true);
+            }}
+            onFocus={() => setCatSearchOpen(true)}
+            placeholder="ابحث عن تصنيف أو أضف جديداً..."
+            dir="rtl"
+            className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+          />
+          {catSearchOpen && catSearchQuery.trim() && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {allCategories
+                .filter(
+                  (c) =>
+                    !c.id.startsWith("new-") &&
+                    !selectedCategoryIds.includes(c.id) &&
+                    c.name.includes(catSearchQuery.trim()),
+                )
+                .slice(0, 8)
+                .map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      onCategoriesChange(
+                        [...selectedCategoryIds, cat.id],
+                        newCategoryNames,
+                      );
+                      setCatSearchQuery("");
+                      setCatSearchOpen(false);
+                    }}
+                    className="w-full text-right px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 text-muted-foreground"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                      />
+                    </svg>
+                    {cat.name}
+                  </button>
+                ))}
+              {!allCategories.some(
+                (c) => c.name === catSearchQuery.trim(),
+              ) && (
+                <button
+                  onClick={() => createAndSelectCategory(catSearchQuery.trim())}
+                  className="w-full text-right px-3 py-2 text-sm hover:bg-muted text-primary flex items-center gap-2"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  إضافة: &quot;{catSearchQuery.trim()}&quot;
+                </button>
+              )}
+              {allCategories.filter(
+                (c) =>
+                  !c.id.startsWith("new-") &&
+                  c.name.includes(catSearchQuery.trim()),
+              ).length === 0 &&
+                allCategories.some((c) => c.name === catSearchQuery.trim()) && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    لا توجد نتائج
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div>
@@ -1669,23 +1931,89 @@ export function UnifiedAiPanel({
             );
           })}
         </div>
-        <input
-          type="text"
-          placeholder="أضف وسماً جديداً... (Enter للإضافة)"
-          dir="rtl"
-          className="mt-2 w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              const val = (e.target as HTMLInputElement).value.trim();
-              if (val && !newTagNames.includes(val)) {
-                const updated = [...newTagNames, val];
-                setNewTagNames(updated);
-                onTagsChange(selectedTagIds, updated);
-              }
-              (e.target as HTMLInputElement).value = '';
-            }
-          }}
-        />
+        <div ref={tagSearchRef} className="relative mt-2">
+          <input
+            type="text"
+            value={tagSearchQuery}
+            onChange={(e) => {
+              setTagSearchQuery(e.target.value);
+              setTagSearchOpen(true);
+            }}
+            onFocus={() => setTagSearchOpen(true)}
+            placeholder="ابحث عن وسم أو أضف جديداً..."
+            dir="rtl"
+            className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+          />
+          {tagSearchOpen && tagSearchQuery.trim() && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {allTags
+                .filter(
+                  (t) =>
+                    !t.id.startsWith("new-") &&
+                    !selectedTagIds.includes(t.id) &&
+                    t.name.includes(tagSearchQuery.trim()),
+                )
+                .slice(0, 8)
+                .map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => {
+                      onTagsChange([...selectedTagIds, tag.id], newTagNames);
+                      setTagSearchQuery("");
+                      setTagSearchOpen(false);
+                    }}
+                    className="w-full text-right px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 text-muted-foreground"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                      />
+                    </svg>
+                    {tag.name}
+                  </button>
+                ))}
+              {!allTags.some((t) => t.name === tagSearchQuery.trim()) && (
+                <button
+                  onClick={() => createAndSelectTag(tagSearchQuery.trim())}
+                  className="w-full text-right px-3 py-2 text-sm hover:bg-muted text-primary flex items-center gap-2"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  إضافة: &quot;{tagSearchQuery.trim()}&quot;
+                </button>
+              )}
+              {allTags.filter(
+                (t) =>
+                  !t.id.startsWith("new-") &&
+                  t.name.includes(tagSearchQuery.trim()),
+              ).length === 0 &&
+                allTags.some((t) => t.name === tagSearchQuery.trim()) && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    لا توجد نتائج
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

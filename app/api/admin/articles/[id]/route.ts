@@ -6,6 +6,7 @@ import { generateSlug } from '@/lib/utils/slug';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHtml } from '@/lib/security/sanitization';
 import { withAuthCsrf } from '@/lib/security/middleware';
+import { generateAndCacheTts } from '@/lib/tts/service';
 import { z } from 'zod';
 
 const idSchema = z.string().cuid();
@@ -178,7 +179,7 @@ export const PUT = withAuthCsrf(async (
     // Check if article exists and belongs to the current user
     const existingArticle = await prisma.article.findUnique({
       where: { id },
-      select: { id: true, slug: true, authorId: true },
+      select: { id: true, slug: true, authorId: true, status: true, content: true },
     });
 
     if (!existingArticle) {
@@ -368,6 +369,16 @@ export const PUT = withAuthCsrf(async (
         },
       },
     });
+
+    // If article just transitioned to published, fire TTS in background
+    if (status === 'published' && existingArticle.status !== 'published') {
+      const ttsContent = sanitizedContent ?? existingArticle.content;
+      if (ttsContent && article.slug) {
+        generateAndCacheTts(article.slug, ttsContent).catch((err) => {
+          console.error('TTS pre-generation failed:', err);
+        });
+      }
+    }
 
     return NextResponse.json(article);
   } catch (error) {

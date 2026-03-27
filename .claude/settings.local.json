@@ -79,7 +79,11 @@
       "Bash(grep -E '\"\"@google/genai\"\"' package.json)",
       "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website' -type f \\\\\\(-name *auto-save* -o -name *publish* -o -name *featured* \\\\\\) -path */api/*)",
       "Bash(find '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/app' -path *\\\\\\(public\\\\\\) -name *.tsx -o -path *\\\\\\(public\\\\\\) -name *.ts)",
-      "Bash(grep -v \"^--$\")"
+      "Bash(grep -v \"^--$\")",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"availableCategories\\\\|availableTags\" '/c/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/components/admin' --include=*.tsx)",
+      "Bash(grep -n \"structureTopIssues\\\\|buildRewriteArticlePrompt\" \"c:/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/lib/ai\"/*.ts)",
+      "Bash(grep -n \"newCategoryNames\\\\|newTagNames\\\\|createArticleSchema\\\\|updateArticleSchema\" \"c:/Users/mgsay/OneDrive/Desktop/Software development/journalist-website/lib/validations\"/*.ts)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mgsay\\OneDrive\\Desktop\\Software development\\journalist-website\\app\\admin\\articles\\[id]\\ai-complete",

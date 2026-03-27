@@ -6,7 +6,7 @@ export function DarkModeToggle() {
   const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('admin-theme');
+    const stored = localStorage.getItem('cms-theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const resolved = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
     // Apply DOM change synchronously to avoid flash, defer setState to avoid
@@ -20,7 +20,7 @@ export function DarkModeToggle() {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
     document.documentElement.classList.toggle('dark', next === 'dark');
-    localStorage.setItem('admin-theme', next);
+    localStorage.setItem('cms-theme', next);
   };
 
   // Avoid hydration mismatch — render nothing until client-side theme is known
