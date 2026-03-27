@@ -222,11 +222,12 @@ export function TagAutoSuggest({
 
         const data = await response.json();
         if (response.ok) {
-          onTagsChange([...selectedTags, data.id]);
+          const createdTag = data.tag;
+          onTagsChange([...selectedTags, createdTag.id]);
           onTagsDataChange([...tagsData, {
-            id: data.id,
-            name: data.name,
-            slug: data.slug,
+            id: createdTag.id,
+            name: createdTag.name,
+            slug: createdTag.slug,
             articleCount: 0,
           }]);
         }
@@ -275,9 +276,9 @@ export function TagAutoSuggest({
 
       // Add the new tag to selection and data
       const newTag: Tag = {
-        id: data.id,
-        name: data.name,
-        slug: data.slug,
+        id: data.tag.id,
+        name: data.tag.name,
+        slug: data.tag.slug,
         articleCount: 0,
       };
 

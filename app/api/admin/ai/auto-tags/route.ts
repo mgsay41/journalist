@@ -6,6 +6,62 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 
+function normalizeArabic(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/ـ/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function stringSimilarity(str1: string, str2: string): number {
+  const s1 = normalizeArabic(str1);
+  const s2 = normalizeArabic(str2);
+  if (s1 === s2) return 1;
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const shorter = s1.length < s2.length ? s1 : s2;
+    const longer = s1.length >= s2.length ? s1 : s2;
+    return shorter.length / longer.length;
+  }
+  const words1 = s1.split(' ');
+  const words2 = s2.split(' ');
+  const commonWords = words1.filter(w => words2.includes(w));
+  if (commonWords.length === 0) return 0;
+  return (commonWords.length * 2) / (words1.length + words2.length);
+}
+
+function findBestMatch(name: string, existing: Array<{ id: string; name: string }>): { id: string; name: string } | null {
+  let match = existing.find(t => t.name === name);
+  if (match) return match;
+
+  match = existing.find(t => t.name.toLowerCase() === name.toLowerCase());
+  if (match) return match;
+
+  const normalized = normalizeArabic(name);
+  match = existing.find(t => normalizeArabic(t.name) === normalized);
+  if (match) return match;
+
+  match = existing.find(t => {
+    const n = normalizeArabic(t.name);
+    return n.includes(normalized) || normalized.includes(n);
+  });
+  if (match) return match;
+
+  let bestMatch: { item: { id: string; name: string }; score: number } | null = null;
+  for (const item of existing) {
+    const score = stringSimilarity(name, item.name);
+    if (score >= 0.8 && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { item, score };
+    }
+  }
+  return bestMatch?.item || null;
+}
+
 const requestSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
@@ -135,24 +191,23 @@ ${tagList || 'لا توجد وسوم'}
     // Enrich selected tags with IDs
     if (aiResult.selectedTags && Array.isArray(aiResult.selectedTags)) {
       aiResult.selectedTags = aiResult.selectedTags.map((tag: { name: string; confidence: number; relevance: string; reason: string }) => {
-        const existingTag = existingTags.find(t => t.name === tag.name);
+        const match = findBestMatch(tag.name, existingTags);
         return {
           ...tag,
-          id: existingTag?.id || null,
-          isNew: !existingTag,
+          ...(match ? { name: match.name } : {}),
+          id: match?.id || null,
+          isNew: !match,
         };
       });
     }
 
-    // Enrich primary tag with ID
     if (aiResult.primaryTag && aiResult.primaryTag.name) {
-      const primaryExisting = existingTags.find(
-        t => t.name === aiResult.primaryTag.name
-      );
+      const primaryMatch = findBestMatch(aiResult.primaryTag.name, existingTags);
       aiResult.primaryTag = {
         ...aiResult.primaryTag,
-        id: primaryExisting?.id || null,
-        isNew: !primaryExisting,
+        ...(primaryMatch ? { name: primaryMatch.name } : {}),
+        id: primaryMatch?.id || null,
+        isNew: !primaryMatch,
       };
     }
 
